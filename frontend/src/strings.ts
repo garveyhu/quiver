@@ -49,6 +49,60 @@ export const STR = {
   historyCostPrefix: '花费 $',
   historyCostUnknown: '花费未知',
   historyBranchPrefix: '分支：',
+
+  // --- 设置账本（Phase B）---
+  settingsOpen: '设置',
+  settingsOpenTitle: '打开设置账本',
+  settingsTitle: '设置账本',
+  settingsSubtitle: '工坊的规章与度量都记在这本账本里',
+  settingsClose: '合上账本',
+  settingsCloseAria: '关闭设置',
+  settingsSaving: '记录中…',
+  settingsSaved: '已记录',
+  settingsError: '记录失败，请稍后重试',
+
+  // 分组
+  settingsSectionRun: '运行',
+  settingsSectionRunHint: '智能体如何开工',
+  settingsSectionBudget: '预算',
+  settingsSectionBudgetHint: '别让账本透支',
+  settingsSectionAgent: 'Agent',
+  settingsSectionAgentHint: 'claude 在哪',
+  settingsSectionAppearance: '外观',
+  settingsSectionAppearanceHint: '工坊的样子',
+
+  // 运行
+  settingDefaultMode: '默认模式',
+  settingDefaultModeTip: '新任务默认用哪种模式开工。模拟免费、不动真额度；真实会调用官方 claude 消耗订阅额度。',
+  settingDefaultModeSimulate: '模拟',
+  settingDefaultModeReal: '真实',
+  settingModel: '模型',
+  settingModelTip: '真实模式下请求的 Claude 模型。sonnet 更快更省，opus 更强但更贵。',
+  settingMaxWorkers: '并行工人数',
+  settingMaxWorkersTip: '同时干活的弓箭手上限（任务并行度）。当前单任务运行，先记下，多任务队列上线后生效。',
+  settingFakeDelay: '模拟节奏',
+  settingFakeDelayTip: '模拟模式下每行输出之间的停顿（毫秒）。调小更急促，调大更从容。立即生效。',
+
+  // 预算
+  settingMonthlyCap: '月度额度上限',
+  settingMonthlyCapTip: '本月愿意花的额度上限（美元）。留空表示不设上限。用于将来的额度守门。',
+  settingNightlyBudget: '单晚预算',
+  settingNightlyBudgetTip: '一整夜自动运行愿意花的上限（美元）。留空表示不设上限。用于将来的整夜守门。',
+  settingBudgetUnset: '未设上限',
+  settingBudgetClear: '清空',
+
+  // Agent
+  settingAgentBin: 'claude 二进制路径',
+  settingAgentBinTip: 'claude 可执行文件的绝对路径。留空则自动解析（PATH 与常见安装位置）。填错会在运行时报错。',
+  settingAgentBinPlaceholder: '留空 = 自动解析',
+
+  // 外观
+  settingTheme: '主题',
+  settingThemeTip: '工坊配色。cozy 是温暖羊皮纸主题；midnight 是暖色夜间主题。立即生效。',
+  settingThemeCozy: '暖阳',
+  settingThemeMidnight: '夜幕',
+  settingUiScale: '界面缩放',
+  settingUiScaleTip: '整体界面缩放比例。觉得元素太小就调大，想看更多内容就调小。立即生效。',
 } as const;
 
 // 运行历史里 status 字段（与 Rust FinishStatus 标签对齐）的中文展示。
