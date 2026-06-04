@@ -96,6 +96,25 @@ export const STR = {
   settingAgentBinTip: 'claude 可执行文件的绝对路径。留空则自动解析（PATH 与常见安装位置）。填错会在运行时报错。',
   settingAgentBinPlaceholder: '留空 = 自动解析',
 
+  // --- 任务公告板（Phase C）---
+  boardTitle: '任务公告板',
+  boardSubtitle: '把委托钉上板子，弓箭手们会并行接单开工',
+  boardEmpty: '板上还没有委托。写一条任务钉上去，弓箭手就会接单。',
+  boardConcurrencyPrefix: '同时开工上限：',
+  boardConcurrencyUnit: ' 名弓箭手',
+  boardRunningPrefix: '进行中 ',
+  boardQueuedPrefix: '排队 ',
+  enqueueTask: '加入公告板',
+  enqueueHint: '钉上去后自动排队开工',
+  taskCancel: '撤回',
+  taskCancelTitle: '撤回这条尚未开工的委托',
+  taskDragTitle: '拖拽调整接单顺序',
+  taskBranchPrefix: '分支：',
+  taskCostPrefix: '花费 $',
+  taskCostUnknown: '未统计',
+  taskModeSimulate: '模拟',
+  taskModeReal: '真实',
+
   // 外观
   settingTheme: '主题',
   settingThemeTip: '工坊配色。cozy 是温暖羊皮纸主题；midnight 是暖色夜间主题。立即生效。',
@@ -111,6 +130,19 @@ export const RUN_STATUS_LABEL: Record<string, string> = {
   verify_failed: '验证未过',
   failed: '失败',
   needs_rebase: '待变基',
+};
+
+// 公告板任务卡的状态徽章中文展示（与 Rust task.status 词表对齐）。
+// queued | running | verifying | done(=verified) | failed | needs_rebase
+export const TASK_STATUS_LABEL: Record<string, string> = {
+  queued: '待接',
+  running: '进行中',
+  verifying: '验证中',
+  verified: '完成',
+  done: '完成',
+  verify_failed: '验证未过',
+  failed: '失败',
+  needs_rebase: '待整合',
 };
 
 // 各事件类型的中文展示标签（保留底层 kind 作为 key，仅展示文案中文化）。

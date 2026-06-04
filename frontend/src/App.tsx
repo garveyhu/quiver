@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSupervisor } from '@/hooks/useSupervisor';
 import { useSettings } from '@/hooks/useSettings';
+import { useTaskBoard } from '@/hooks/useTaskBoard';
 import { ProjectPicker } from '@/components/ProjectPicker';
 import { RecentProjects } from '@/components/RecentProjects';
 import { RunHistory } from '@/components/RunHistory';
 import { ModeToggle } from '@/components/ModeToggle';
 import { TaskInput } from '@/components/TaskInput';
+import { TaskBoard } from '@/components/board/TaskBoard';
 import { PixelOffice } from '@/components/PixelOffice';
 import { EventLogPanel } from '@/components/EventLogPanel';
 import { SettingsButton } from '@/components/settings/SettingsButton';
@@ -16,18 +18,26 @@ import type { RunMode } from '@/types/run.types';
 export function App() {
   const {
     events,
-    running,
     error,
     projectPath,
     recentProjects,
     history,
     pickProject,
     selectRecentProject,
-    runTask,
   } = useSupervisor();
   const { settings, patch, saveStatus } = useSettings();
+  const {
+    tasks,
+    error: boardError,
+    freshIds,
+    enqueue,
+    reorder,
+    cancel,
+  } = useTaskBoard(projectPath);
   const [mode, setMode] = useState<RunMode>('simulate');
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const maxWorkers = settings?.maxWorkers ?? 1;
 
   // Pre-select the run mode from the saved default — but only once, before the
   // user has touched the toggle, so a manual choice is never overridden.
@@ -59,28 +69,37 @@ export function App() {
       </header>
 
       <section className="app-card">
-        <ProjectPicker projectPath={projectPath} disabled={running} onPick={pickProject} />
+        <ProjectPicker projectPath={projectPath} disabled={false} onPick={pickProject} />
 
         <RecentProjects
           projects={recentProjects}
           activePath={projectPath}
-          disabled={running}
+          disabled={false}
           onSelect={selectRecentProject}
         />
 
-        <ModeToggle mode={mode} disabled={running} onChange={setMode} />
+        <ModeToggle mode={mode} disabled={false} onChange={setMode} />
 
-        <TaskInput running={running} disabled={!projectPath} onRun={prompt => runTask(prompt, mode)} />
+        <TaskInput disabled={!projectPath} onSubmit={prompt => enqueue(prompt, mode)} />
 
+        {projectPath && <p className="app-hint">{STR.enqueueHint}</p>}
         {!projectPath && <p className="app-hint">{STR.noProjectHint}</p>}
 
-        {error && (
+        {(error || boardError) && (
           <p className="app-error">
             {STR.taskFailedPrefix}
-            {error}
+            {error ?? boardError}
           </p>
         )}
       </section>
+
+      <TaskBoard
+        tasks={tasks}
+        freshIds={freshIds}
+        maxWorkers={maxWorkers}
+        onReorder={reorder}
+        onCancel={cancel}
+      />
 
       <section className="app-office">
         <h2 className="app-office-title">{STR.officeTitle}</h2>
