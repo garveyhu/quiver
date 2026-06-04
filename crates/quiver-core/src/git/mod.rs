@@ -265,10 +265,91 @@ impl GitGuard {
         let out = run_git_in(path.as_path(), &["status", "--porcelain"]).await?;
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
     }
+
+    /// Cheap, lock-free conflict probe (DESIGN §7 step 1).
+    ///
+    /// Runs `git merge-tree --write-tree <base> <branch>` to test whether
+    /// merging `branch` into the *current* `base` (normally `main`) would
+    /// conflict — WITHOUT taking the metadata lock and WITHOUT touching the
+    /// working tree, the index, or any ref. `merge-tree` is purely read-only:
+    /// it computes the merge into the object store and reports the result, so it
+    /// is safe to run concurrently with other workers' worktree ops. This avoids
+    /// most of the §7 contention window: a branch that will obviously conflict
+    /// never even reaches the merge lock.
+    ///
+    /// Detection is by exit status (git ≥ 2.38): 0 = clean, non-zero = conflict.
+    pub async fn conflict_probe(
+        &self,
+        base: &str,
+        branch: &str,
+    ) -> anyhow::Result<ConflictProbe> {
+        let out =
+            run_git_status(&self.repo, &["merge-tree", "--write-tree", base, branch]).await?;
+        Ok(if out.status.success() {
+            ConflictProbe::Clean
+        } else {
+            ConflictProbe::Conflict
+        })
+    }
+
+    /// `git merge --no-ff <branch>` into the currently-checked-out `main` of the
+    /// repo root (DESIGN §7 step 3). This is the ref-mutating step, so it runs
+    /// behind the metadata lock — but ONLY for the duration of this one command
+    /// (the caller releases nothing of the §7 merge lock here; that is held
+    /// across the whole pipeline by `merge.rs`). Returns whether the merge
+    /// committed cleanly or produced conflicts (left in the index).
+    pub async fn merge_no_ff(&self, branch: &str, message: &str) -> anyhow::Result<MergeOutcome> {
+        let _lock = self.meta_lock.lock().await;
+        let out = run_git_status(
+            &self.repo,
+            &["merge", "--no-ff", "-m", message, branch],
+        )
+        .await?;
+        Ok(if out.status.success() {
+            MergeOutcome::Merged
+        } else {
+            MergeOutcome::Conflicted
+        })
+    }
+
+    /// `git merge --abort` at the repo root (DESIGN §7 step 6), undoing an
+    /// in-progress merge and restoring `main` to exactly its pre-merge state.
+    /// Ref-mutating → behind the metadata lock for this one command.
+    pub async fn merge_abort(&self) -> anyhow::Result<()> {
+        let _lock = self.meta_lock.lock().await;
+        run_git_status(&self.repo, &["merge", "--abort"]).await?;
+        Ok(())
+    }
+
+    /// The commit SHA the repo's `main` ref currently points at (lock-free read).
+    /// Used to assert `main` is byte-identical before/after an aborted attempt
+    /// (DESIGN §7: a blocked task never mutates `main`).
+    pub async fn head_commit(&self, refname: &str) -> anyhow::Result<String> {
+        let out = run_git(&self.repo, &["rev-parse", refname]).await?;
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    }
+}
+
+/// Result of the lock-free §7 conflict probe.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConflictProbe {
+    /// The merge would apply cleanly against the current base.
+    Clean,
+    /// The merge would conflict — surface for human review, never auto-resolve.
+    Conflict,
+}
+
+/// Result of a `git merge --no-ff` attempt (DESIGN §7 step 3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MergeOutcome {
+    /// The merge committed cleanly onto `main`.
+    Merged,
+    /// The merge produced conflicts and left them in the index (must `--abort`).
+    Conflicted,
 }
 
 /// The unique per-attempt branch name (DESIGN §6.3): `quiver/task-<id>/attempt-<n>`.
-fn attempt_branch(task_id: &str, attempt: u32) -> String {
+pub fn attempt_branch(task_id: &str, attempt: u32) -> String {
     format!("quiver/task-{task_id}/attempt-{attempt}")
 }
 
@@ -307,6 +388,26 @@ async fn run_git_in(dir: &Path, args: &[&str]) -> anyhow::Result<Output> {
     Ok(output)
 }
 
+/// Run a `git` command with `-C <dir>` and return its full [`Output`] WITHOUT
+/// treating a non-zero exit as an error — the caller inspects the exit status
+/// itself. Used by commands whose non-zero exit is a meaningful signal rather
+/// than a failure: `git merge-tree` (exit ≠ 0 == "conflict") and `git merge`
+/// (exit ≠ 0 == "merge produced conflicts"). A genuine spawn failure (git not
+/// found) is still an `Err`.
+async fn run_git_status(dir: &Path, args: &[&str]) -> anyhow::Result<Output> {
+    let dir_str = path_arg(dir)?;
+    let mut full = Vec::with_capacity(args.len() + 2);
+    full.push("-C");
+    full.push(dir_str);
+    full.extend_from_slice(args);
+
+    tokio::process::Command::new("git")
+        .args(&full)
+        .output()
+        .await
+        .map_err(|e| anyhow::anyhow!("failed to spawn git {}: {e}", args.join(" ")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -335,9 +436,35 @@ mod tests {
         run(&["config", "user.email", "test@quiver.local"]);
         run(&["config", "user.name", "Quiver Test"]);
         std::fs::write(path.join("README.md"), "# temp repo\n").expect("write readme");
+        // A multi-line source file so conflict tests can edit "the same line".
+        std::fs::write(path.join("code.txt"), "line1\nline2\nline3\n").expect("write code");
         run(&["add", "."]);
         run(&["commit", "-q", "-m", "initial commit"]);
         dir
+    }
+
+    /// Run a git command in `dir`, asserting success (test helper).
+    fn git_in(dir: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .expect("git");
+        assert!(
+            out.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// Commit `content` to `code.txt` on a fresh branch off `main`, then return
+    /// to `main`. The branch is left in the repo for probing.
+    fn branch_editing_code(repo: &Path, branch: &str, content: &str) {
+        git_in(repo, &["checkout", "-q", "-b", branch, "main"]);
+        std::fs::write(repo.join("code.txt"), content).expect("write code");
+        git_in(repo, &["commit", "-q", "-am", &format!("edit on {branch}")]);
+        git_in(repo, &["checkout", "-q", "main"]);
     }
 
     #[tokio::test]
@@ -557,5 +684,43 @@ mod tests {
             .output()
             .expect("read gc.auto");
         assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "0");
+    }
+
+    // ---- TASK 2.2: lock-free conflict probe (DESIGN §7 step 1) ----
+
+    #[tokio::test]
+    async fn conflict_probe_clean_branch_no_conflict() {
+        let repo = temp_repo();
+        let guard = GitGuard::new(repo.path());
+        // A branch that touches a *different* file than main → no conflict.
+        git_in(repo.path(), &["checkout", "-q", "-b", "clean", "main"]);
+        std::fs::write(repo.path().join("other.txt"), "new file\n").expect("write");
+        git_in(repo.path(), &["add", "."]);
+        git_in(repo.path(), &["commit", "-q", "-m", "add other.txt"]);
+        git_in(repo.path(), &["checkout", "-q", "main"]);
+
+        let probe = guard.conflict_probe("main", "clean").await.expect("probe");
+        assert_eq!(probe, ConflictProbe::Clean);
+
+        // The probe is read-only: main is untouched and no merge is in progress.
+        assert!(!repo.path().join(".git/MERGE_HEAD").exists());
+    }
+
+    #[tokio::test]
+    async fn conflict_probe_detects_same_line_conflict() {
+        let repo = temp_repo();
+        let guard = GitGuard::new(repo.path());
+
+        // A branch edits the same line of code.txt that main will diverge on.
+        branch_editing_code(repo.path(), "feature", "line1\nFEATURE\nline3\n");
+        // main diverges on the SAME line → an irreconcilable conflict.
+        std::fs::write(repo.path().join("code.txt"), "line1\nMAIN\nline3\n").expect("write");
+        git_in(repo.path(), &["commit", "-q", "-am", "main edits line2"]);
+
+        let probe = guard.conflict_probe("main", "feature").await.expect("probe");
+        assert_eq!(probe, ConflictProbe::Conflict);
+
+        // Still read-only: no merge state was created on main.
+        assert!(!repo.path().join(".git/MERGE_HEAD").exists());
     }
 }
