@@ -333,17 +333,35 @@ async fn run_task_inner(
     prompt: String,
     mode: RunMode,
 ) -> anyhow::Result<RunSummary> {
+    // The effective settings (Phase B): a complete row, defaults seeded on first
+    // open. Read once up front so the run honors the user's saved config —
+    // `fake_delay_ms` paces simulate, `model` + `agent_bin_override` steer real.
+    // Missing store (impossible in practice) falls back to defaults.
+    let settings = store
+        .map(|s| s.get_settings())
+        .transpose()?
+        .unwrap_or_default();
+
     // Resolve the agent binary + per-mode run options.
     let (agent_bin, options, verify) = match mode {
-        RunMode::Simulate => (
-            resolve_fake_claude(&app)?,
-            // Simulate keeps the original Phase-3 behavior on the picked repo:
-            // the worktree is torn down after a trivially-passing gate.
-            RunOptions::default(),
-            VerifyCommand::shell("exit 0"),
-        ),
+        RunMode::Simulate => {
+            // Make `fakeDelayMs` take effect: the runner forwards
+            // QUIVER_FAKE_DELAY_MS to the `fake-claude` child via its env
+            // allowlist, so the saved pacing drives the LIVE simulate stream.
+            // SAFETY: set on the parent process env just before the spawn; runs
+            // are sequential (single picked project) so no concurrent run races
+            // this write, and the value is inert for any non-fake binary.
+            std::env::set_var("QUIVER_FAKE_DELAY_MS", settings.fake_delay_ms.to_string());
+            (
+                resolve_agent_bin(&app, &settings, mode)?,
+                // Simulate keeps the original Phase-3 behavior on the picked repo:
+                // the worktree is torn down after a trivially-passing gate.
+                RunOptions::default(),
+                VerifyCommand::shell("exit 0"),
+            )
+        }
         RunMode::Real => {
-            let bin = resolve_real_claude(&app)?;
+            let bin = resolve_agent_bin(&app, &settings, mode)?;
             // §9.3: assert the subscription/OAuth route BEFORE spawning. The
             // child is env_clear'd + allowlisted inside the runner; here we
             // assert none of the API-key/Bedrock/Vertex vars survive into the
@@ -360,8 +378,9 @@ async fn run_task_inner(
                     extra_args: vec![
                         "--permission-mode".to_string(),
                         "acceptEdits".to_string(),
+                        // Make the saved `model` take effect for real runs.
                         "--model".to_string(),
-                        "sonnet".to_string(),
+                        settings.model.clone(),
                     ],
                 },
                 // No real verify command wired yet; a trivially-passing gate so
@@ -515,6 +534,37 @@ fn assert_no_forbidden_env(is_present: impl Fn(&str) -> bool) -> anyhow::Result<
         }
     }
     Ok(())
+}
+
+/// Resolve the agent binary honoring the saved `agent_bin_override` (Phase B)
+/// before the per-mode auto-resolution. A non-empty override that points at an
+/// executable wins for BOTH modes (the user explicitly chose a binary); an empty
+/// override is treated as unset. Otherwise fall back to [`resolve_fake_claude`]
+/// (simulate) / [`resolve_real_claude`] (real).
+fn resolve_agent_bin(
+    app: &AppHandle,
+    settings: &Settings,
+    mode: RunMode,
+) -> anyhow::Result<PathBuf> {
+    if let Some(override_path) = settings
+        .agent_bin_override
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        let p = PathBuf::from(override_path);
+        if is_executable(&p) {
+            return Ok(p);
+        }
+        anyhow::bail!(
+            "设置里的 agent 二进制路径不可执行：{}。请修正或清空该项以自动解析。",
+            p.display()
+        );
+    }
+    match mode {
+        RunMode::Simulate => resolve_fake_claude(app),
+        RunMode::Real => resolve_real_claude(app),
+    }
 }
 
 /// Resolve the free `fake-claude` test double to an ABSOLUTE path (DESIGN §12),
