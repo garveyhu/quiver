@@ -12,7 +12,13 @@ use std::process::Command;
 use quiver_core::event::AgentEventPayload;
 use quiver_core::git::GitGuard;
 use quiver_core::supervisor::{run_task, Cleanup, FailureReason, FinishStatus, TaskSpec};
+use quiver_core::verify::VerifyCommand;
 use tempfile::TempDir;
+
+/// A trivially-passing verify command for tests that don't exercise the gate.
+fn pass() -> VerifyCommand {
+    VerifyCommand::shell("exit 0")
+}
 
 /// Resolve the sibling `fake-claude` binary from this test's own exe path
 /// (`<target>/<profile>/deps/<test>` → `<target>/<profile>/fake-claude`).
@@ -94,7 +100,7 @@ async fn run_task_streams_events_and_leaves_repo_clean() {
         prompt: "do the thing".to_string(),
     };
 
-    let outcome = run_task(&guard, &task, &fake_claude_bin())
+    let outcome = run_task(&guard, &task, &fake_claude_bin(), &pass())
         .await
         .expect("run_task");
 
@@ -110,7 +116,7 @@ async fn run_task_streams_events_and_leaves_repo_clean() {
     assert!(matches!(kinds[2], AgentEventPayload::OutputChunk { .. }));
     assert!(matches!(kinds[3], AgentEventPayload::Result { ok: true, .. }));
 
-    // Stub verify-gate: a Result{ok:true} → Verified.
+    // Verify-gate: Result{ok:true} AND a passing verify command → Verified.
     assert_eq!(outcome.status, FinishStatus::Verified);
     assert!(outcome.failure.is_none());
 
@@ -118,6 +124,54 @@ async fn run_task_streams_events_and_leaves_repo_clean() {
     assert_eq!(outcome.cleanup, Cleanup::Removed);
 
     // Repo is left clean: no stray quiver/... worktrees beyond the main one.
+    assert_no_quiver_worktree_leak(repo.path());
+}
+
+/// TASK 2.1: the agent succeeds (`Result{ok:true}`) but the verify command
+/// fails in the worktree → the run is `VerifyFailed`, not `Verified`. It is
+/// "ran fine, tests red" (§8.1): no failure reason, worktree torn down cleanly.
+#[tokio::test]
+async fn run_task_verify_failed_when_gate_command_fails() {
+    let repo = temp_repo();
+    let wt_root = TempDir::new().expect("wt root");
+    let guard = GitGuard::new(repo.path()).with_worktrees_root(wt_root.path());
+
+    let task = TaskSpec {
+        id: "redtests".to_string(),
+        prompt: "do the thing".to_string(),
+    };
+
+    let outcome = run_task(&guard, &task, &fake_claude_bin(), &VerifyCommand::shell("exit 1"))
+        .await
+        .expect("run_task");
+
+    assert_eq!(outcome.status, FinishStatus::VerifyFailed);
+    assert!(outcome.failure.is_none(), "verify-red is not a run failure");
+    assert_eq!(outcome.cleanup, Cleanup::Removed);
+    assert_no_quiver_worktree_leak(repo.path());
+}
+
+/// TASK 2.1: the agent succeeds AND the verify command passes → `Verified`.
+/// (Mirrors the happy-path test but pins the verify-gate's positive case
+/// explicitly with a trivially-passing command.)
+#[tokio::test]
+async fn run_task_verified_when_gate_command_passes() {
+    let repo = temp_repo();
+    let wt_root = TempDir::new().expect("wt root");
+    let guard = GitGuard::new(repo.path()).with_worktrees_root(wt_root.path());
+
+    let task = TaskSpec {
+        id: "greentests".to_string(),
+        prompt: "do the thing".to_string(),
+    };
+
+    let outcome = run_task(&guard, &task, &fake_claude_bin(), &VerifyCommand::shell("exit 0"))
+        .await
+        .expect("run_task");
+
+    assert_eq!(outcome.status, FinishStatus::Verified);
+    assert!(outcome.failure.is_none());
+    assert_eq!(outcome.cleanup, Cleanup::Removed);
     assert_no_quiver_worktree_leak(repo.path());
 }
 
@@ -135,7 +189,9 @@ async fn run_task_force_cleans_up_on_spawn_failure() {
     };
     let bogus = PathBuf::from("/nonexistent/quiver/definitely-not-a-binary");
 
-    let outcome = run_task(&guard, &task, &bogus).await.expect("run_task");
+    let outcome = run_task(&guard, &task, &bogus, &pass())
+        .await
+        .expect("run_task");
 
     assert_eq!(outcome.status, FinishStatus::Failed);
     assert_eq!(outcome.failure, Some(FailureReason::SpawnFailed));
@@ -158,7 +214,7 @@ async fn run_task_cleans_up_deterministically_on_crash() {
     };
 
     let shim_dir = TempDir::new().expect("shim dir");
-    let outcome = run_task(&guard, &task, &crash_shim(shim_dir.path()))
+    let outcome = run_task(&guard, &task, &crash_shim(shim_dir.path()), &pass())
         .await
         .expect("run_task");
 

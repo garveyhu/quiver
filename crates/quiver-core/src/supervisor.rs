@@ -19,6 +19,7 @@ use crate::event::{AgentEvent, AgentEventPayload};
 use crate::git::{GitGuard, RemoveOutcome};
 use crate::runner::AgentRunner;
 use crate::runner::claude::ClaudeRunner;
+use crate::verify::{VerifyCommand, VerifyResult};
 
 /// The minimal task description Phase 1 needs.
 #[derive(Clone, Debug)]
@@ -27,15 +28,20 @@ pub struct TaskSpec {
     pub prompt: String,
 }
 
-/// Terminal lifecycle status of a run (DESIGN §5.2 `FinishStatus`).
+/// Terminal lifecycle status of a run (DESIGN §5.2, §7 `FinishStatus`).
 ///
-/// Phase 1 stub: the real verify-gate (§7) lands in Phase 2 and will introduce
-/// `Verified` vs `VerifyFailed`. For now a run that produced `Result{ok:true}`
-/// is `Verified`, anything else is `Failed`.
+/// The verify-gate (§7) distinguishes `Verified` from `VerifyFailed`: a run is
+/// `Verified` only if the agent produced `Result{ok:true}` AND the verify
+/// command passed in the worktree. `Failed` is a genuine run failure (crash /
+/// spawn failure / no clean result). `NeedsRebase` is a probe-detected conflict
+/// or a red re-verify against merged `main` — surfaced for human review, NEVER
+/// auto-resolved (§7).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FinishStatus {
     Verified,
+    VerifyFailed,
     Failed,
+    NeedsRebase,
 }
 
 /// Why a run was classified a permanent failure (DESIGN §8.4 record).
@@ -77,18 +83,23 @@ pub struct RunOutcome {
     pub failure: Option<FailureReason>,
 }
 
-/// Run one task to completion in an isolated worktree (DESIGN Phase 1, Tasks
-/// 1.4 + 1.5).
+/// Run one task to completion in an isolated worktree (DESIGN Phase 1 Tasks
+/// 1.4 + 1.5, Phase 2 Task 2.1 verify-gate).
 ///
 /// Steps: (1) disable auto-gc + create the attempt-1 worktree behind the §6
 /// metadata lock; (2) spawn the agent (`ClaudeRunner` pointed at `runner_bin`)
 /// with cwd = the worktree; (3) drain the normalized event stream; (4) classify
-/// the outcome; (5a) success → remove the worktree under the §6.3 dirty guard;
-/// (5b) permanent failure → deterministic §8.4 GC (`prune` + `remove --force`)
-/// and a recorded [`FailureReason`].
+/// the agent outcome; (4b) if the agent produced `Result{ok:true}`, run the
+/// configurable verify-gate (§7) in the worktree — a run is `Verified` only if
+/// the agent succeeded AND the gate passes, otherwise `VerifyFailed`;
+/// (5a) success → remove the worktree under the §6.3 dirty guard; (5b) permanent
+/// failure → deterministic §8.4 GC (`prune` + `remove --force`) and a recorded
+/// [`FailureReason`].
 ///
-/// A spawn failure after the worktree exists still routes through the §8.4 GC,
-/// so the worktree is never leaked.
+/// A `VerifyFailed` run is the §8.1 "ran fine, tests red" case — no restart, no
+/// failure reason; its worktree is torn down under the same dirty guard as a
+/// success. A spawn failure after the worktree exists still routes through the
+/// §8.4 GC, so the worktree is never leaked.
 ///
 /// Takes a shared [`GitGuard`] (not a bare repo path) because §6 mandates ONE
 /// metadata mutex shared across all workers of a run — constructing a fresh
@@ -98,6 +109,7 @@ pub async fn run_task(
     guard: &GitGuard,
     task: &TaskSpec,
     runner_bin: &Path,
+    verify: &VerifyCommand,
 ) -> anyhow::Result<RunOutcome> {
     const ATTEMPT: u32 = 1;
 
@@ -140,16 +152,23 @@ pub async fn run_task(
         events.push(event);
     }
 
-    // (4) Classify (stub verify-gate; real gate is Phase 2).
+    // (4) Agent ran cleanly → run the verify-gate in its worktree (§7 step 1).
     if saw_result_ok {
-        // (5a) Success → gentle, dirty-guarded teardown (§6.3).
+        let verified = verify.run(worktree.as_path()).await? == VerifyResult::Passed;
+        let status = if verified {
+            FinishStatus::Verified
+        } else {
+            FinishStatus::VerifyFailed
+        };
+        // (5a) Both Verified and VerifyFailed are "the run completed" — tear the
+        // worktree down under the §6.3 dirty guard (never force a dirty tree).
         let cleanup = match guard.remove(&worktree).await? {
             RemoveOutcome::Removed => Cleanup::Removed,
             RemoveOutcome::PreservedDirty { status } => Cleanup::PreservedDirty { status },
         };
         return Ok(RunOutcome {
             task_id: task.id.clone(),
-            status: FinishStatus::Verified,
+            status,
             events,
             cleanup,
             failure: None,
