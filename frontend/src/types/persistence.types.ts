@@ -6,22 +6,14 @@ export interface RecentProject {
   lastUsedAt: number;
 }
 
-export interface RunRecord {
-  id: number;
-  project: string;
-  prompt: string;
-  mode: string;
-  status: string;
-  costUsd: number | null;
-  branch: string | null;
-  createdAt: number;
-}
-
-// Returned by the `get_initial_state` command on app load.
+// Returned by the `get_initial_state` command on app load. The legacy
+// single-shot run history was superseded by the durable `task` queue (the
+// 公告板 + 档案库 read it via `list_tasks`), so only the last project + recents
+// are consumed here. The Rust command may still carry a `history` field on the
+// wire; it is intentionally not surfaced to the UI.
 export interface InitialState {
   lastProject: string | null;
   recentProjects: RecentProject[];
-  history: RunRecord[];
 }
 
 // Single-row typed app settings (settings.rs / v1.0 module 1). Returned by

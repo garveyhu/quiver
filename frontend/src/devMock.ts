@@ -190,7 +190,13 @@ function pump(): void {
 function handleCommand(cmd: string, args: Record<string, unknown>): unknown {
   switch (cmd) {
     case 'get_initial_state':
-      return { lastProject: '/Users/demo/repos/quiver', recentProjects: [], history: [] };
+      return {
+        lastProject: '/Users/demo/repos/quiver',
+        recentProjects: [
+          { path: '/Users/demo/repos/quiver', lastUsedAt: now() - 3_600_000 },
+          { path: '/Users/demo/repos/sage', lastUsedAt: now() - 86_400_000 },
+        ],
+      };
     case 'get_settings':
       return {
         defaultMode: 'simulate',

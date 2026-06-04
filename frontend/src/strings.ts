@@ -19,8 +19,6 @@ export const STR = {
     '暂无沙箱（Phase 6），请用你不介意的仓库。' +
     '会消耗你的月度额度。产物只留在分支、不并入 main。',
 
-  runTask: '运行任务',
-  running: '运行中…',
   taskPlaceholder: '读 README.md，用一句话总结这个项目',
   taskInputAriaLabel: '任务描述',
   noProjectHint: '请先选择一个项目',
@@ -43,12 +41,6 @@ export const STR = {
   recentHeader: '最近项目',
   recentEmpty: '还没有最近项目。选择一个 git 仓库后会记录在这里。',
   recentReselectTitle: '点击重新选择该项目',
-
-  historyHeader: '运行历史',
-  historyEmpty: '暂无历史。运行一个任务后会记录在这里，重启也不会丢失。',
-  historyCostPrefix: '花费 $',
-  historyCostUnknown: '花费未知',
-  historyBranchPrefix: '分支：',
 
   // --- 设置账本（Phase B）---
   settingsOpen: '设置',
@@ -170,14 +162,6 @@ export const STR = {
   settingUiScale: '界面缩放',
   settingUiScaleTip: '整体界面缩放比例。觉得元素太小就调大，想看更多内容就调小。立即生效。',
 } as const;
-
-// 运行历史里 status 字段（与 Rust FinishStatus 标签对齐）的中文展示。
-export const RUN_STATUS_LABEL: Record<string, string> = {
-  verified: '已验证',
-  verify_failed: '验证未过',
-  failed: '失败',
-  needs_rebase: '待变基',
-};
 
 // 公告板任务卡的状态徽章中文展示（与 Rust task.status 词表对齐）。
 // queued | running | verifying | done(=verified) | failed | needs_rebase
