@@ -659,10 +659,10 @@ graph TB
     B{{git merge-tree probe vs current main}}:::step
     C{conflict?}:::step
     D[acquire single MERGE LOCK]:::step
-    E[git merge branch into main]:::step
+    E[git merge --no-ff into main · commits immediately]:::step
     F{{RE-RUN verify against merged main}}:::gate
     G([release lock → Finished Verified → XP]):::gate
-    H[git merge --abort]:::bad
+    H[roll back: git reset --hard pre-merge SHA]:::bad
     I([mark NEEDS_REBASE / blocked → morning human review]):::bad
 
     A ==> B ==> C
@@ -684,15 +684,23 @@ Step by step:
    whole fan-out's worktree lifecycle. (If you must reuse one mutex, scope it to only the ref-mutating
    git commands: hold it for `git merge`, release before the re-verify build, and re-acquire only for
    a follow-up ref op.)
-3. **Merge** the branch into `main` (this is the ref-mutating step; if reusing the §6 mutex, this is
-   the only part it must cover).
+3. **Merge** the branch into `main` with `git merge --no-ff` (this is the ref-mutating step; if reusing
+   the §6 mutex, this is the only part it must cover). **Note:** a *clean* `--no-ff` merge **commits
+   immediately** — there is no in-progress merge state afterward, so a later rollback uses
+   `git reset --hard`, not `git merge --abort` (see step 6).
 4. **RE-RUN the verify-gate against the merged `main`** — not the stale per-branch result. This is
    the key step that catches the "A+B green individually, red together" case. It runs under the
    **merge** lock, *not* the git-metadata lock, so other workers' worktree ops stay unblocked.
 5. **Green → release lock → `Finished{Verified}` → XP.** The next queued merge can now proceed
    against the new `main`.
-6. **Conflict (from the probe) or red re-verify → `git merge --abort`**, mark the task
-   `NEEDS_REBASE`/`blocked`, and surface it in the **morning report** for human review.
+6. **Roll back and mark `NEEDS_REBASE`/`blocked`** (surface in the morning report), choosing the
+   rollback by case — verified against the Phase-2 implementation (commit `a829ae4`):
+   - **Probe conflict** → the merge never ran, `main` is untouched → just mark `NEEDS_REBASE` (nothing to undo).
+   - **Red re-verify after a clean merge** → the `--no-ff` merge already committed, so snapshot `main`'s
+     SHA *before* merging and roll back with **`git reset --hard <pre-merge-SHA>`**. `git merge --abort`
+     would fail here (`MERGE_HEAD` missing) and leave `main` advanced.
+   - **Conflict at merge time** (the probe was stale) → there *is* an in-progress conflicted merge →
+     **`git merge --abort`**.
 
 **Hard rule: never auto-resolve a conflict overnight.** No auto-rebase, no "accept theirs," no LLM
 conflict resolution while you sleep. A blocked task waits for a human. The whole point of running
