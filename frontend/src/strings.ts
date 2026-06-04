@@ -29,6 +29,9 @@ export const STR = {
 
   eventsHeader: '智能体事件',
   eventsEmpty: '暂无事件。运行一个任务，看智能体开工。',
+
+  officeTitle: '工坊',
+  officeEmpty: '工坊空荡荡。运行一个任务，弓箭手就会就位开工。',
 } as const;
 
 // 各事件类型的中文展示标签（保留底层 kind 作为 key，仅展示文案中文化）。
