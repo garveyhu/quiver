@@ -22,7 +22,7 @@ use tauri_plugin_dialog::DialogExt;
 
 use quiver_core::event::{AgentEvent, AgentEventPayload};
 use quiver_core::git::GitGuard;
-use quiver_core::store::{InitialState, NewRun, Store};
+use quiver_store::{InitialState, NewRun, Store};
 use quiver_core::supervisor::{
     run_task_streaming, Cleanup, FinishStatus, RunOptions, RunOutcome, TaskSpec,
 };

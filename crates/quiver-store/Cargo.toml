@@ -1,0 +1,15 @@
+[package]
+name = "quiver-store"
+version = "0.0.0"
+edition = "2021"
+description = "Quiver — durable SQLite persistence (picked project, recents, run history)"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+anyhow = "1"
+# Embedded durable state (DESIGN §11). `bundled` compiles SQLite from source so
+# there is no system libsqlite3 dependency on any target.
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+[dev-dependencies]
+tempfile = "3"

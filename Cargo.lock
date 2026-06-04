@@ -2418,6 +2418,7 @@ dependencies = [
  "anyhow",
  "fix-path-env",
  "quiver-core",
+ "quiver-store",
  "serde",
  "serde_json",
  "tauri",
@@ -2432,12 +2433,21 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "rusqlite",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
+]
+
+[[package]]
+name = "quiver-store"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "rusqlite",
+ "serde",
+ "tempfile",
 ]
 
 [[package]]
