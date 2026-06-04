@@ -59,6 +59,15 @@ fn branch_adding_file(repo: &Path, branch: &str, name: &str) {
     git(repo, &["checkout", "-q", "main"]);
 }
 
+/// Commit `content` to `code.txt` on a fresh branch off `main`, then return to
+/// `main`. Editing the same line that a later `main` change touches conflicts.
+fn branch_editing_code(repo: &Path, branch: &str, content: &str) {
+    git(repo, &["checkout", "-q", "-b", branch, "main"]);
+    std::fs::write(repo.join("code.txt"), content).expect("write code");
+    git(repo, &["commit", "-q", "-am", &format!("edit on {branch}")]);
+    git(repo, &["checkout", "-q", "main"]);
+}
+
 /// TASK 2.3: a normal, non-conflicting merge whose re-verify passes → `Merged`,
 /// and `main` advances to a new commit that actually contains the branch's work.
 #[tokio::test]
@@ -153,5 +162,50 @@ async fn a_plus_b_green_alone_red_together_second_is_aborted() {
         "B's work must be reverted off main's working tree"
     );
     // No half-merge state left behind.
+    assert!(!repo.path().join(".git/MERGE_HEAD").exists());
+}
+
+/// TASK 2.5: a probe-detected conflict ends `NeedsRebase` and `main` is
+/// BYTE-IDENTICAL to before the attempt — never auto-resolved (§7 hard rule).
+#[tokio::test]
+async fn conflicting_branch_needs_rebase_and_main_is_byte_identical() {
+    let repo = temp_repo();
+    let guard = GitGuard::new(repo.path());
+    let merge_lock = MergeLock::new();
+
+    // Branch edits line2 of code.txt; main then diverges on the SAME line →
+    // an irreconcilable conflict the probe catches before any ref is touched.
+    branch_editing_code(repo.path(), "quiver/task-x/attempt-1", "line1\nBRANCH\nline3\n");
+    std::fs::write(repo.path().join("code.txt"), "line1\nMAIN\nline3\n").expect("write");
+    git(repo.path(), &["commit", "-q", "-am", "main diverges on line2"]);
+
+    let main_before = rev_parse(repo.path(), "main");
+
+    let report = merge_and_reverify(
+        &merge_lock,
+        &guard,
+        "quiver/task-x/attempt-1",
+        "main",
+        "merge task-x",
+        // Verify would pass — but the conflict probe short-circuits before it.
+        &VerifyCommand::shell("exit 0"),
+    )
+    .await
+    .expect("merge");
+
+    assert_eq!(report.decision, MergeDecision::NeedsRebase);
+    assert_eq!(report.reason, Some(RebaseReason::ProbeConflict));
+
+    // main is exactly as it was — no merge attempt mutated it.
+    assert_eq!(
+        rev_parse(repo.path(), "main"),
+        main_before,
+        "a conflicting branch must leave main byte-identical"
+    );
+    assert_eq!(
+        std::fs::read_to_string(repo.path().join("code.txt")).unwrap(),
+        "line1\nMAIN\nline3\n",
+        "main's content must be untouched by the aborted attempt"
+    );
     assert!(!repo.path().join(".git/MERGE_HEAD").exists());
 }
