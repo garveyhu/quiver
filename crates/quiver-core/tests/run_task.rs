@@ -294,7 +294,7 @@ async fn run_task_keep_branch_preserves_worktree_and_does_not_touch_main() {
         &task,
         &fake_claude_bin(),
         &pass(),
-        RunOptions { keep_branch: true },
+        RunOptions { keep_branch: true, ..Default::default() },
     )
     .await
     .expect("run_task_with_options");
@@ -337,7 +337,7 @@ async fn run_task_keep_branch_still_gcs_a_crash() {
         &task,
         &crash_shim(shim_dir.path()),
         &pass(),
-        RunOptions { keep_branch: true },
+        RunOptions { keep_branch: true, ..Default::default() },
     )
     .await
     .expect("run_task_with_options");

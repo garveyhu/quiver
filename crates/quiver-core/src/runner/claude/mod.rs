@@ -26,15 +26,31 @@ const ENV_ALLOWLIST: &[&str] = &["PATH", "HOME", "USER", "TERM"];
 /// Spawns the official `claude` CLI and streams its `stream-json` stdout as
 /// normalized [`AgentEvent`]s (DESIGN §4.2 mode 1, §5.3). Subscription auth is
 /// the soul path; the OAuth-route assertion (§9.3) is stubbed in Phase 0.
+///
+/// Extra CLI args (`--permission-mode`, `--model`, …) are configurable so the
+/// Tauri shell can pass real-mode flags without the `fake-claude` test double
+/// needing to understand them (it scans-and-ignores unknown args).
 pub struct ClaudeRunner {
     task_id: String,
+    extra_args: Vec<String>,
 }
 
 impl ClaudeRunner {
     pub fn new(task_id: impl Into<String>) -> Self {
         Self {
             task_id: task_id.into(),
+            extra_args: Vec::new(),
         }
+    }
+
+    /// Append extra CLI args (e.g. `["--permission-mode", "acceptEdits",
+    /// "--model", "sonnet"]`) passed verbatim after the base flags.
+    pub fn with_extra_args(
+        mut self,
+        args: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        self.extra_args = args.into_iter().map(Into::into).collect();
+        self
     }
 }
 
@@ -48,6 +64,7 @@ impl AgentRunner for ClaudeRunner {
             .arg("--output-format")
             .arg("stream-json")
             .arg("--verbose")
+            .args(&self.extra_args)
             .current_dir(cwd)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())

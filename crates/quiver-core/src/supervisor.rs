@@ -37,17 +37,15 @@ pub struct TaskSpec {
 /// the agent's work is left on its attempt branch + worktree, untouched, and is
 /// NEVER merged into the user's `main`. The branch name is reported so the UI can
 /// tell the user where to find the work.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RunOptions {
     /// Keep the worktree + attempt branch on a successful run instead of removing
     /// it. Set for real-agent runs so the user's `main` is never auto-touched.
     pub keep_branch: bool,
-}
-
-impl Default for RunOptions {
-    fn default() -> Self {
-        Self { keep_branch: false }
-    }
+    /// Extra CLI args forwarded verbatim to the agent binary (e.g.
+    /// `--permission-mode acceptEdits --model sonnet` for a real run). Ignored by
+    /// the `fake-claude` test double.
+    pub extra_args: Vec<String>,
 }
 
 /// Terminal lifecycle status of a run (DESIGN §5.2, §7 `FinishStatus`).
@@ -175,7 +173,7 @@ pub async fn run_task_with_options(
 
     // (2) Spawn the agent in the worktree. A spawn failure here must still GC
     // the worktree we just created (§8.4) — never leak it.
-    let runner = ClaudeRunner::new(task.id.clone());
+    let runner = ClaudeRunner::new(task.id.clone()).with_extra_args(options.extra_args.iter());
     let mut rx = match runner
         .spawn(&task.prompt, worktree.as_path(), runner_bin)
         .await
