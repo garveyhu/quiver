@@ -10,6 +10,9 @@ serde_json = "1"
 async-trait = "0.1"
 thiserror = "1"
 anyhow = "1"
+# Embedded durable state (DESIGN §11). `bundled` compiles SQLite from source so
+# there is no system libsqlite3 dependency on any target.
+rusqlite = { version = "0.31", features = ["bundled"] }
 
 [dev-dependencies]
 tempfile = "3"
