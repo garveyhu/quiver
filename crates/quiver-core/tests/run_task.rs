@@ -199,6 +199,41 @@ async fn run_task_force_cleans_up_on_spawn_failure() {
     assert_no_quiver_worktree_leak(repo.path());
 }
 
+/// The agent succeeds (`Result{ok:true}`) but the configured verify command
+/// cannot be spawned (a non-existent binary — `verify.run` returns `Err`, the
+/// §7 "misconfigured gate" hard error, distinct from a red test). This must NOT
+/// surface as an `Err` from `run_task`: a verify-tool misconfiguration is a task
+/// outcome, so the worktree is §8.4 force-GC'd and a terminal `RunOutcome` with
+/// `FinishStatus::Failed` + a classified reason is returned. Never a leak.
+#[tokio::test]
+async fn run_task_force_cleans_up_when_verify_command_cannot_spawn() {
+    let repo = temp_repo();
+    let wt_root = TempDir::new().expect("wt root");
+    let guard = GitGuard::new(repo.path()).with_worktrees_root(wt_root.path());
+
+    let task = TaskSpec {
+        id: "badverify".to_string(),
+        prompt: "do the thing".to_string(),
+    };
+    // The agent runs fine; the verify gate points at a binary that does not
+    // exist, so `verify.run(...)` returns Err (spawn failure).
+    let unspawnable =
+        VerifyCommand::new(["/nonexistent/quiver/definitely-not-a-verify-tool"]).expect("argv");
+
+    let outcome = run_task(&guard, &task, &fake_claude_bin(), &unspawnable)
+        .await
+        .expect("run_task must not propagate the verify spawn failure as Err");
+
+    // Terminal failure outcome, classified — not a panic, not an Err.
+    assert_eq!(outcome.status, FinishStatus::Failed);
+    assert_eq!(outcome.failure, Some(FailureReason::VerifyError));
+    assert_eq!(outcome.cleanup, Cleanup::ForcedRemoved);
+
+    // No orphan worktree, no stale lock — the §8.4 invariant holds.
+    assert_no_quiver_worktree_leak(repo.path());
+    assert!(!repo.path().join(".git/index.lock").exists());
+}
+
 /// A crashed agent (`fake-claude --scenario crash`: emits init, then exits
 /// non-zero with no clean `result`): deterministic GC, no leak, and the outcome
 /// carries the classified failure.

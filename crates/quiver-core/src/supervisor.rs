@@ -54,6 +54,11 @@ pub enum FailureReason {
     /// The stream ended with no successful `Result` and no explicit error
     /// (e.g. a non-zero exit with a truncated stream).
     NoResult,
+    /// The configured verify command could not be spawned (e.g. a bogus path).
+    /// A misconfigured gate is a hard error distinct from a red test (§7), but
+    /// it is still a *task* outcome — not a supervisor crash — so the worktree
+    /// is §8.4 GC'd and the run is recorded `Failed`, never leaked.
+    VerifyError,
 }
 
 /// How the worktree teardown actually went.
@@ -154,7 +159,24 @@ pub async fn run_task(
 
     // (4) Agent ran cleanly → run the verify-gate in its worktree (§7 step 1).
     if saw_result_ok {
-        let verified = verify.run(worktree.as_path()).await? == VerifyResult::Passed;
+        // An un-spawnable verify command is a misconfigured gate (§7 hard error,
+        // distinct from a red test) — but still a task outcome, not a supervisor
+        // crash. Route it through the §8.4 GC like the spawn-fail path so the
+        // worktree is never leaked, and record it as a classified failure.
+        let verify_result = match verify.run(worktree.as_path()).await {
+            Ok(result) => result,
+            Err(_verify_err) => {
+                guard.force_remove(&worktree).await?;
+                return Ok(RunOutcome {
+                    task_id: task.id.clone(),
+                    status: FinishStatus::Failed,
+                    events,
+                    cleanup: Cleanup::ForcedRemoved,
+                    failure: Some(FailureReason::VerifyError),
+                });
+            }
+        };
+        let verified = verify_result == VerifyResult::Passed;
         let status = if verified {
             FinishStatus::Verified
         } else {
