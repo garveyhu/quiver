@@ -4,6 +4,7 @@ import { useSettings } from '@/hooks/useSettings';
 import { useTaskBoard } from '@/hooks/useTaskBoard';
 import { useArchive } from '@/hooks/useArchive';
 import { useReplay } from '@/hooks/useReplay';
+import { useTabAlerts } from '@/hooks/useTabAlerts';
 import { ProjectPicker } from '@/components/ProjectPicker';
 import { RecentProjects } from '@/components/RecentProjects';
 import { ModeToggle } from '@/components/ModeToggle';
@@ -16,6 +17,7 @@ import { SettingsPanel } from '@/components/settings/SettingsPanel';
 import { SceneTabs, type Scene } from '@/components/SceneTabs';
 import { ArchiveView } from '@/components/archive/ArchiveView';
 import { LogbookViewer } from '@/components/archive/LogbookViewer';
+import { CozyEmpty } from '@/components/CozyEmpty';
 import { STR } from '@/strings';
 import type { RunMode } from '@/types/run.types';
 import type { StoredEvent, TaskRecord } from '@/types/persistence.types';
@@ -39,6 +41,10 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [scene, setScene] = useState<Scene>('workshop');
   const [openRecord, setOpenRecord] = useState<TaskRecord | null>(null);
+
+  // Cross-tab "有更新" journal-flash: a run finishing on another tab pulses a
+  // badge on the board/archive tabs until you visit them.
+  const { alerts } = useTabAlerts(scene);
 
   const maxWorkers = settings?.maxWorkers ?? 1;
 
@@ -98,8 +104,13 @@ export function App() {
 
         <TaskInput disabled={!projectPath} onSubmit={prompt => enqueue(prompt, mode)} />
 
-        {projectPath && <p className="app-hint">{STR.enqueueHint}</p>}
-        {!projectPath && <p className="app-hint">{STR.noProjectHint}</p>}
+        {projectPath ? (
+          <p className="app-hint">{STR.enqueueHint}</p>
+        ) : (
+          <div className="first-run">
+            <CozyEmpty glyph="🗂️" title={STR.firstRunTitle} hint={STR.firstRunHint} />
+          </div>
+        )}
 
         {(error || boardError) && (
           <p className="app-error">
@@ -109,7 +120,7 @@ export function App() {
         )}
       </section>
 
-      <SceneTabs scene={scene} onChange={setScene} />
+      <SceneTabs scene={scene} onChange={setScene} alerts={alerts} />
 
       {/* The workshop + board panels stay MOUNTED across tab switches (hidden via
           CSS, not unmounted) so the live Phaser scene and the event stream keep

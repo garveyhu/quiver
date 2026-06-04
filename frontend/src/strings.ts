@@ -10,6 +10,8 @@ export const STR = {
   pickProject: '选择项目',
   projectPathPrefix: '项目：',
   noProjectSelected: '尚未选择 git 仓库',
+  firstRunTitle: '先挑一个工坊',
+  firstRunHint: '选一个 git 仓库当作你的工坊，弓箭手就能在里面接单干活。',
 
   modeAriaLabel: '运行模式',
   modeSimulate: '模拟运行（免费）',
@@ -21,7 +23,6 @@ export const STR = {
 
   taskPlaceholder: '读 README.md，用一句话总结这个项目',
   taskInputAriaLabel: '任务描述',
-  noProjectHint: '请先选择一个项目',
 
   taskFailedPrefix: '任务失败：',
 
@@ -29,7 +30,8 @@ export const STR = {
   eventsEmpty: '暂无事件。运行一个任务，看智能体开工。',
 
   officeTitle: '工坊',
-  officeEmpty: '工坊空荡荡。运行一个任务，弓箭手就会就位开工。',
+  officeEmptyTitle: '工坊静悄悄',
+  officeEmpty: '炉火正暖，工位空着。写一条委托钉上公告板，弓箭手就会就位开工。',
   officeHint: '悬停查看动作 · 点击展开事件流 · 拖拽可挪动工位',
 
   workerDetailTitle: '工位详情',
@@ -91,7 +93,8 @@ export const STR = {
   // --- 任务公告板（Phase C）---
   boardTitle: '任务公告板',
   boardSubtitle: '把委托钉上板子，弓箭手们会并行接单开工',
-  boardEmpty: '板上还没有委托。写一条任务钉上去，弓箭手就会接单。',
+  boardEmptyTitle: '公告板空着',
+  boardEmpty: '还没有委托钉上来。写一条任务钉上去，弓箭手就会接单开工。',
   boardConcurrencyPrefix: '同时开工上限：',
   boardConcurrencyUnit: ' 名弓箭手',
   boardRunningPrefix: '进行中 ',
@@ -114,6 +117,7 @@ export const STR = {
   navWorkshopTip: '看弓箭手实时干活与当前任务队列',
   navBoardTip: '把委托钉上公告板、排队、调整顺序',
   navArchiveTip: '翻阅过往委托记录，点开看完整 I/O 卷轴',
+  tabHasUpdate: '有更新 — 一次运行刚刚完成',
 
   // --- 档案库 / 书架（Phase D）---
   archiveTitle: '委托档案库',

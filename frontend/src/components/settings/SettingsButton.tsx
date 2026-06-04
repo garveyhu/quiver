@@ -14,7 +14,8 @@ export function SettingsButton({ onClick }: SettingsButtonProps) {
     <button
       type="button"
       className="settings-fixture"
-      title={STR.settingsOpenTitle}
+      data-tip={STR.settingsOpenTitle}
+      data-tip-pos="bottom"
       aria-label={STR.settingsOpenTitle}
       onClick={onClick}
     >

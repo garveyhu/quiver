@@ -26,12 +26,47 @@
   --parchment: #f6ead0; /* aged paper panel fill */
   --parchment-edge: #d8c193; /* parchment border */
 
-  --radius-card: 16px;
+  /* corner-radius scale — one coherent ramp across every surface.
+     panel > card > control > pill, so nested elements always read tighter. */
+  --radius-panel: 18px;
+  --radius-card: 14px;
   --radius-ctrl: 12px;
+  --radius-chip: 8px;
+  --radius-pill: 999px;
+
+  /* spacing scale — 4px base, used for panel padding + gaps */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+
+  /* motion — one timing language so transitions feel like one product.
+     fast = press/hover, base = hover lifts/colour, slow = panels/overlays */
+  --ease-cozy: cubic-bezier(0.2, 0.8, 0.3, 1);
+  --t-fast: 0.1s;
+  --t-base: 0.16s;
+  --t-slow: 0.24s;
+
   --shadow-card: 0 6px 20px rgba(122, 79, 46, 0.08);
   --shadow-soft: 0 2px 8px rgba(122, 79, 46, 0.06);
   /* a cozy carved-wood frame for game panels */
   --shadow-wood: 0 8px 24px rgba(79, 48, 24, 0.22), inset 0 0 0 3px rgba(255, 250, 240, 0.55);
+
+  /* themed soft surfaces for status feedback (error / success), so chips and
+     banners track the active palette instead of hardcoding light-mode pinks. */
+  --error-soft: #fbe9e4;
+  --error-edge: #efc6bb;
+  --ok-soft: #bfe3cb;
+  --ok-edge: #97cfaa;
+  --ok-ink: #1c3d28;
+
+  /* a soft top-down "sheen" laid over panels for the carved-wood lighting.
+     In the night palette it must NOT be a cream wash (which greys out the
+     dark UI) — both themes override the two stops below. */
+  --sheen-top: rgba(255, 253, 248, 0.7);
+  --sheen-bottom: rgba(246, 234, 208, 0.55);
 
   /* UI scale factor, driven by the settings ledger (1 = 100%). */
   --ui-scale: 1;
@@ -68,6 +103,17 @@
   --wood-dark: #3a2414;
   --parchment: #f0e2c8;
   --parchment-edge: #b89a6a;
+
+  /* dimmed feedback surfaces for the night palette */
+  --error-soft: #43271f;
+  --error-edge: #6e3a2c;
+  --ok-soft: #2c4634;
+  --ok-edge: #3e6049;
+  --ok-ink: #bfe3cb;
+
+  /* a warm, near-transparent sheen so dark panels keep depth without greying */
+  --sheen-top: rgba(255, 244, 224, 0.06);
+  --sheen-bottom: rgba(0, 0, 0, 0.08);
 
   color-scheme: dark;
 }
@@ -130,13 +176,11 @@ body {
 /* wooden game panel: carved timber frame around a warm parchment field */
 .app-card {
   position: relative;
-  background:
-    linear-gradient(180deg, rgba(255, 253, 248, 0.7), rgba(246, 234, 208, 0.55)),
-    var(--bg-card);
+  background: linear-gradient(180deg, var(--sheen-top), var(--sheen-bottom)), var(--bg-card);
   border: 3px solid var(--wood);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-panel);
   box-shadow: var(--shadow-wood);
-  padding: 24px;
+  padding: var(--space-6);
 }
 
 /* a hairline inner parchment ring for the carved-wood look */
@@ -145,7 +189,7 @@ body {
   position: absolute;
   inset: 4px;
   border: 1px solid var(--parchment-edge);
-  border-radius: calc(var(--radius-card) - 6px);
+  border-radius: calc(var(--radius-panel) - 6px);
   pointer-events: none;
 }
 
@@ -166,13 +210,19 @@ body {
   border-radius: var(--radius-ctrl);
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition: background var(--t-base), border-color var(--t-base), color var(--t-base),
+    transform var(--t-fast);
 }
 
 .project-pick-btn:hover:not(:disabled) {
   background: var(--accent-soft);
   border-color: var(--accent);
   color: var(--leather);
+  transform: translateY(-1px);
+}
+
+.project-pick-btn:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .project-pick-btn:disabled {
@@ -302,8 +352,9 @@ body {
   padding: 10px 14px;
   color: var(--error);
   font-size: 13px;
-  background: #fbe9e4;
-  border: 1px solid #efc6bb;
+  background: var(--error-soft);
+  border: 1px solid var(--error-edge);
+  border-left: 4px solid var(--error);
   border-radius: var(--radius-ctrl);
 }
 
@@ -319,7 +370,7 @@ body {
     radial-gradient(circle at 20% 15%, rgba(255, 250, 240, 0.12), transparent 60%),
     linear-gradient(180deg, #7d5230, #5e3c20);
   border: 5px solid var(--wood);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-panel);
   box-shadow: var(--shadow-wood), inset 0 0 0 2px rgba(0, 0, 0, 0.2);
 }
 
@@ -373,14 +424,9 @@ body {
 
 .task-board-empty {
   margin: 6px 0 4px;
-  padding: 18px;
-  text-align: center;
-  font-style: italic;
-  font-size: 13px;
-  color: rgba(246, 234, 208, 0.8);
   background: rgba(0, 0, 0, 0.18);
   border: 1px dashed rgba(216, 193, 147, 0.45);
-  border-radius: 12px;
+  border-radius: var(--radius-ctrl);
 }
 
 /* the cards grid — responsive auto-fill so 1..N commissions tile cozily */
@@ -536,7 +582,7 @@ body {
 }
 
 .task-cancel:hover {
-  background: #fbe9e4;
+  background: var(--error-soft);
   color: var(--error);
   border-color: var(--error);
 }
@@ -603,7 +649,7 @@ body {
   height: 480px;
   background: var(--wood-dark);
   border: 5px solid var(--wood);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-panel);
   box-shadow:
     var(--shadow-wood),
     inset 0 0 0 2px rgba(0, 0, 0, 0.25);
@@ -617,21 +663,6 @@ body {
 
 .pixel-office-canvas canvas {
   display: block;
-}
-
-.pixel-office-empty {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0;
-  padding: 0 24px;
-  text-align: center;
-  color: var(--parchment);
-  font-style: italic;
-  font-size: 14px;
-  pointer-events: none;
 }
 
 /* live interaction hint, pinned to the workshop's lower-left */
@@ -929,12 +960,13 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background var(--t-base), border-color var(--t-base), transform var(--t-fast);
 }
 
 .recent-item:hover:not(:disabled) {
   background: var(--accent-soft);
   border-color: var(--accent);
+  transform: translateX(2px);
 }
 
 .recent-item:disabled {
@@ -1120,9 +1152,9 @@ body {
 }
 
 .settings-savechip-saved {
-  color: #1c3d28;
-  background: #bfe3cb;
-  border-color: #97cfaa;
+  color: var(--ok-ink);
+  background: var(--ok-soft);
+  border-color: var(--ok-edge);
 }
 
 .settings-savechip-error {
@@ -1457,11 +1489,13 @@ body {
   border: none;
   border-radius: calc(var(--radius-ctrl) - 4px);
   cursor: pointer;
-  transition: background 0.18s ease, color 0.18s ease, transform 0.1s ease;
+  transition: background var(--t-slow) ease, color var(--t-slow) ease,
+    transform var(--t-fast) ease;
 }
 
 .scene-tab:hover {
   background: rgba(255, 250, 240, 0.16);
+  transform: translateY(-1px);
 }
 
 .scene-tab:active {
@@ -1478,7 +1512,7 @@ body {
    so the live Phaser scene + event stream survive a tab switch. */
 .scene-panel {
   margin-top: 20px;
-  animation: scene-fade 0.22s ease both;
+  animation: scene-fade var(--t-slow) var(--ease-cozy) both;
 }
 
 .scene-hidden {
@@ -1501,12 +1535,11 @@ body {
    ============================================================ */
 .archive-view {
   position: relative;
-  background: linear-gradient(180deg, rgba(255, 253, 248, 0.7), rgba(246, 234, 208, 0.55)),
-    var(--bg-card);
+  background: linear-gradient(180deg, var(--sheen-top), var(--sheen-bottom)), var(--bg-card);
   border: 3px solid var(--wood);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-panel);
   box-shadow: var(--shadow-wood);
-  padding: 22px;
+  padding: var(--space-6);
 }
 
 .archive-head {
@@ -2041,4 +2074,189 @@ body {
 
 .replay-stop:hover {
   background: var(--wood-dark);
+}
+
+/* ============================================================
+   Phase E — unified Stardew-style tooltip (`data-tip`)
+   ------------------------------------------------------------
+   One cozy parchment bubble for the whole app. Any element with a
+   `data-tip="..."` attribute gets the same hover/focus tooltip the
+   settings ledger pioneered — so tabs, cards, and HUD buttons all
+   speak the same visual language instead of raw browser titles.
+   ============================================================ */
+[data-tip] {
+  position: relative;
+}
+
+[data-tip]::after,
+[data-tip]::before {
+  position: absolute;
+  bottom: calc(100% + 9px);
+  left: 50%;
+  z-index: 60;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-base) ease, transform var(--t-base) ease;
+}
+
+/* the bubble */
+[data-tip]::after {
+  content: attr(data-tip);
+  transform: translateX(-50%) translateY(4px);
+  width: max-content;
+  max-width: 240px;
+  padding: 8px 11px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: normal;
+  text-align: center;
+  color: var(--text);
+  background: var(--parchment);
+  border: 2px solid var(--wood);
+  border-radius: var(--radius-chip);
+  box-shadow: var(--shadow-soft);
+}
+
+/* the little stem pointing down at the element */
+[data-tip]::before {
+  content: '';
+  transform: translateX(-50%) translateY(4px);
+  border: 6px solid transparent;
+  border-top-color: var(--wood);
+  bottom: calc(100% + 3px);
+}
+
+[data-tip]:hover::after,
+[data-tip]:hover::before,
+[data-tip]:focus-visible::after,
+[data-tip]:focus-visible::before {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* a few anchors want the bubble below (top-of-screen fixtures) */
+[data-tip-pos='bottom']::after,
+[data-tip-pos='bottom']::before {
+  bottom: auto;
+  top: calc(100% + 9px);
+}
+[data-tip-pos='bottom']::before {
+  top: calc(100% + 3px);
+  border-top-color: transparent;
+  border-bottom-color: var(--wood);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-tip]::after,
+  [data-tip]::before {
+    transition: opacity var(--t-fast) ease;
+  }
+}
+
+/* ============================================================
+   Phase E — tab "有更新" badge (journal-flash)
+   ------------------------------------------------------------
+   When a run finishes while you're on another tab, that tab grows
+   a gently pulsing amber dot so the update is felt, not missed.
+   ============================================================ */
+.scene-tab {
+  position: relative;
+}
+
+.scene-tab-badge {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 9px;
+  height: 9px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--wood-dark);
+  animation: tab-badge-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes tab-badge-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.7;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene-tab-badge {
+    animation: none;
+  }
+}
+
+/* ============================================================
+   Phase E — cozy empty / first-run states
+   ------------------------------------------------------------
+   A friendly parchment placard instead of a blank panel: an icon,
+   a headline, and a soft hint. Reused by the workshop, board, and
+   first-run project prompt.
+   ============================================================ */
+.cozy-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-5);
+  text-align: center;
+}
+
+.cozy-empty-glyph {
+  font-size: 34px;
+  line-height: 1;
+  filter: saturate(0.7);
+  opacity: 0.85;
+}
+
+.cozy-empty-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--leather);
+}
+
+.cozy-empty-hint {
+  margin: 0;
+  max-width: 34ch;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+
+/* a parchment placard variant for the cream first-run card */
+.first-run {
+  margin-top: var(--space-4);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-card);
+  background: var(--accent-soft);
+}
+
+/* on dark notice-board fields the empty placard needs parchment ink */
+.task-board .cozy-empty-title {
+  color: var(--parchment);
+}
+.task-board .cozy-empty-hint {
+  color: rgba(246, 234, 208, 0.78);
+}
+
+/* the workshop's empty placard sits centred over the dim stage */
+.pixel-office .cozy-empty {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.pixel-office .cozy-empty-title,
+.pixel-office .cozy-empty-hint {
+  color: var(--parchment);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
 }

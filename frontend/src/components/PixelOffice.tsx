@@ -5,6 +5,7 @@ import { OfficeScene } from '@/office/OfficeScene';
 import { createWorker, reduceWorker } from '@/office/poseMachine';
 import type { WorkerView } from '@/office/types';
 import { WorkerDetail } from '@/components/WorkerDetail';
+import { CozyEmpty } from '@/components/CozyEmpty';
 import { STR } from '@/strings';
 
 interface PixelOfficeProps {
@@ -110,7 +111,9 @@ export function PixelOffice({ events }: PixelOfficeProps) {
     <div className="pixel-office">
       <div ref={hostRef} className="pixel-office-canvas" />
 
-      {!hasWorkers && <p className="pixel-office-empty">{STR.officeEmpty}</p>}
+      {!hasWorkers && (
+        <CozyEmpty glyph="🏹" title={STR.officeEmptyTitle} hint={STR.officeEmpty} />
+      )}
       {hasWorkers && <p className="pixel-office-hint">{STR.officeHint}</p>}
 
       {hoveredView && hoveredView.taskId !== selected && (

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { type Pose, type WorkerView } from '@/office/types';
+import { play } from '@/utils/sound';
 
 // Cozy warm palette mirrored from styles.css (the few colours the canvas needs;
 // the CSS vars are the source of truth).
@@ -457,6 +458,7 @@ export class OfficeScene extends Phaser.Scene {
   // --- juice --------------------------------------------------------------
 
   private celebrate(node: ArcherNode, view: WorkerView): void {
+    play('complete'); // cozy completion chime (no-op until audio ships)
     const x = node.container.x;
     const y = node.container.y;
 

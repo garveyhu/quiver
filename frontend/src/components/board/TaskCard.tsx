@@ -86,7 +86,7 @@ export function TaskCard({
           <button
             type="button"
             className="task-cancel"
-            title={STR.taskCancelTitle}
+            data-tip={STR.taskCancelTitle}
             aria-label={STR.taskCancel}
             onClick={() => onCancel(task.id)}
           >

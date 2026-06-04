@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { TaskRecord } from '@/types/persistence.types';
 import type { RunMode } from '@/types/run.types';
+import { play } from '@/utils/sound';
 
 // IPC contract with src-tauri/src/lib.rs + scheduler.rs — keep names in sync.
 const TASK_UPDATED = 'task-updated';
@@ -87,6 +88,7 @@ export function useTaskBoard(projectPath: string | null): TaskBoardState {
       setError(null);
       try {
         await invoke<TaskRecord>(ENQUEUE_TASK, { prompt, mode });
+        play('pin'); // cozy "委托钉上板子" cue (no-op until audio ships)
         await refresh();
       } catch (e) {
         setError(typeof e === 'string' ? e : String(e));

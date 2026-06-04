@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { STR } from '@/strings';
 import type { TaskRecord } from '@/types/persistence.types';
 import { TaskCard } from '@/components/board/TaskCard';
+import { CozyEmpty } from '@/components/CozyEmpty';
 
 interface TaskBoardProps {
   tasks: TaskRecord[];
@@ -79,7 +80,9 @@ export function TaskBoard({ tasks, freshIds, maxWorkers, onReorder, onCancel }: 
       </header>
 
       {tasks.length === 0 ? (
-        <p className="task-board-empty">{STR.boardEmpty}</p>
+        <div className="task-board-empty">
+          <CozyEmpty glyph="📌" title={STR.boardEmptyTitle} hint={STR.boardEmpty} />
+        </div>
       ) : (
         <ul className="task-board-list">
           {tasks.map(task => (
