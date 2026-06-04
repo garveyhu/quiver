@@ -16,14 +16,20 @@
 //! - [`schema`] — the idempotent migration runner. New tables go here.
 //! - [`projects`] — `app_config` (single picked project) + `recent_projects`.
 //! - [`history`] — append-only `run_history`.
+//! - [`settings`] — single-row typed app config (v1.0 spec module 1).
+//! - [`events`] — append-only `agent_event` source-of-truth log (§11).
+//! - [`tasks`] — the `task` queue + lifecycle board (v1.0 spec module 5).
 //!
 //! rusqlite is synchronous; the connection is guarded by a `Mutex`. All calls are
 //! short (single statements over a tiny local file) so holding the lock briefly
 //! on the Tauri command thread is fine — no `.await` is held across it.
 
+mod events;
 mod history;
 mod projects;
 mod schema;
+mod settings;
+mod tasks;
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -31,8 +37,11 @@ use std::sync::Mutex;
 use rusqlite::Connection;
 use serde::Serialize;
 
+pub use events::{NewEvent, StoredEvent};
 pub use history::{NewRun, RunRecord};
 pub use projects::RecentProject;
+pub use settings::{Settings, SettingsPatch};
+pub use tasks::{NewTask, TaskRecord};
 
 /// A SQLite-backed durable store. Cheap to construct; holds one pooled connection
 /// behind a `Mutex`. New persistence concerns (memory, workflow state) get their
