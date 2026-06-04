@@ -27,8 +27,10 @@ function describe(event: AgentEvent): string {
       return `result ok=${event.ok} · turns ${event.numTurns} · cost ${formatCost(event.costUsd)}`;
     case 'error':
       return `[${event.code}] ${event.message}`;
-    case 'finished':
-      return `finished: ${event.status} · total cost ${formatCost(event.costUsd)}`;
+    case 'finished': {
+      const base = `finished: ${event.status} · total cost ${formatCost(event.costUsd)}`;
+      return event.branch ? `${base} · work left on branch ${event.branch} (not merged)` : base;
+    }
   }
 }
 

@@ -24,8 +24,10 @@ export type AgentEvent = AgentEventEnvelope &
     | { kind: 'error'; code: string; message: string }
     // Synthesized by the Tauri command after run_task returns, carrying the
     // terminal FinishStatus (Verified | VerifyFailed | Failed | NeedsRebase).
-    // Not a quiver-core AgentEvent variant — see src-tauri/src/lib.rs.
-    | { kind: 'finished'; status: string; costUsd: number | null }
+    // `branch` is set only when the work was left un-merged on a branch
+    // (real-mode safety). Not a quiver-core AgentEvent variant — see
+    // src-tauri/src/lib.rs.
+    | { kind: 'finished'; status: string; costUsd: number | null; branch: string | null }
   );
 
 export type AgentEventKind = AgentEvent['kind'];

@@ -51,6 +51,90 @@ body {
   font-size: 13px;
 }
 
+.project-picker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.project-pick-btn {
+  padding: 8px 14px;
+  font: inherit;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--bg-panel);
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.project-pick-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.project-pick-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.project-path {
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-path-empty {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.mode-toggle {
+  margin-bottom: 14px;
+}
+
+.mode-options {
+  display: flex;
+  gap: 8px;
+}
+
+.mode-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-dim);
+  background: var(--bg-panel);
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.mode-option.mode-active {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.mode-warning {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--bg);
+  background: var(--accent);
+  border-radius: 6px;
+}
+
+.app-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
 .task-input {
   display: flex;
   gap: 8px;
