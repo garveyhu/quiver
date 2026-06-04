@@ -3,7 +3,8 @@ import { useSupervisor } from '@/hooks/useSupervisor';
 import { ProjectPicker } from '@/components/ProjectPicker';
 import { ModeToggle } from '@/components/ModeToggle';
 import { TaskInput } from '@/components/TaskInput';
-import { EventList } from '@/components/EventList';
+import { PixelOffice } from '@/components/PixelOffice';
+import { EventLogPanel } from '@/components/EventLogPanel';
 import { STR } from '@/strings';
 import type { RunMode } from '@/types/run.types';
 
@@ -13,8 +14,6 @@ export function App() {
 
   return (
     <main className="app">
-      <div className="app-accent" aria-hidden="true" />
-
       <header className="app-header">
         <h1 className="app-brand">{STR.brand}</h1>
         <p className="app-tagline">{STR.tagline}</p>
@@ -37,12 +36,12 @@ export function App() {
         )}
       </section>
 
-      <section className="app-stream">
-        <h2 className="app-stream-title">
-          {STR.eventsHeader} <span className="app-count">({events.length})</span>
-        </h2>
-        <EventList events={events} />
+      <section className="app-office">
+        <h2 className="app-office-title">{STR.officeTitle}</h2>
+        <PixelOffice events={events} />
       </section>
+
+      <EventLogPanel events={events} />
     </main>
   );
 }

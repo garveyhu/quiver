@@ -51,17 +51,9 @@ body {
 
 .app {
   position: relative;
-  max-width: 860px;
+  max-width: 960px;
   margin: 0 auto;
   padding: 48px 24px 64px;
-}
-
-/* thin warm accent strip across the very top */
-.app-accent {
-  position: fixed;
-  inset: 0 0 auto 0;
-  height: 4px;
-  background: linear-gradient(90deg, var(--accent) 0%, var(--leather) 100%);
 }
 
 .app-header {
@@ -250,15 +242,88 @@ body {
   border-radius: var(--radius-ctrl);
 }
 
-.app-stream {
+/* --- pixel office (primary view) --- */
+.app-office {
   margin-top: 32px;
 }
 
-.app-stream-title {
+.app-office-title {
+  margin: 0 0 12px;
   font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.5px;
   color: var(--leather);
+}
+
+.pixel-office {
+  position: relative;
+  width: 100%;
+  height: 460px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.pixel-office-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.pixel-office-canvas canvas {
+  display: block;
+}
+
+.pixel-office-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0 24px;
+  text-align: center;
+  color: var(--text-dim);
+  font-style: italic;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+/* --- demoted, collapsible event log --- */
+.event-log-panel {
+  margin-top: 20px;
+}
+
+.event-log-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--leather);
+  background: var(--bg-row-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-ctrl);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.event-log-toggle:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.event-log-caret {
+  color: var(--accent);
+}
+
+.event-log-body {
+  margin-top: 12px;
 }
 
 .app-count {
