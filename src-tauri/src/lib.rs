@@ -20,10 +20,11 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
-use quiver_core::event::AgentEvent;
+use quiver_core::event::{AgentEvent, AgentEventPayload};
 use quiver_core::git::GitGuard;
+use quiver_core::store::{InitialState, NewRun, Store};
 use quiver_core::supervisor::{
-    run_task_with_options, Cleanup, FinishStatus, RunOptions, RunOutcome, TaskSpec,
+    run_task_streaming, Cleanup, FinishStatus, RunOptions, RunOutcome, TaskSpec,
 };
 use quiver_core::verify::VerifyCommand;
 
@@ -51,12 +52,24 @@ enum RunMode {
     Real,
 }
 
-/// Per-app state: the user-picked project (a git repo) all runs operate on.
-/// Guarded by a std `Mutex` since it is only touched briefly on the command
-/// thread (no `.await` held across the lock).
+/// Per-app state: the user-picked project (a git repo) all runs operate on, plus
+/// the durable SQLite [`Store`] (DESIGN §11). The project path is guarded by a std
+/// `Mutex` since it is only touched briefly on the command thread (no `.await`
+/// held across the lock); the store is installed once in `setup` via `OnceLock`.
 #[derive(Default)]
 struct AppState {
     project_path: Mutex<Option<PathBuf>>,
+    store: std::sync::OnceLock<Store>,
+}
+
+impl AppState {
+    /// The durable store, installed in `setup`. Errors (surfaced to the UI) if a
+    /// command runs before setup wired it — which should never happen in practice.
+    fn store(&self) -> Result<&Store, String> {
+        self.store
+            .get()
+            .ok_or_else(|| "持久化存储尚未初始化".to_string())
+    }
 }
 
 /// A terminal event synthesized AFTER `run_task` returns, carrying the §5.2
@@ -97,6 +110,36 @@ async fn pick_project(app: AppHandle, state: State<'_, AppState>) -> Result<Opti
         .into_path()
         .map_err(|e| format!("could not resolve the chosen folder: {e}"))?;
 
+    select_validated_project(&state, path).map(Some)
+}
+
+/// Re-select a project the user picked before (from the recent list) WITHOUT the
+/// folder dialog. Validates it is still a git repo, stores it in app state, and
+/// refreshes its recent-list timestamp. Returns the (re-validated) path.
+#[tauri::command]
+fn select_recent_project(state: State<'_, AppState>, path: String) -> Result<String, String> {
+    select_validated_project(&state, PathBuf::from(path))
+}
+
+/// Load the durable startup bundle (DESIGN §11): the last-picked project, the
+/// recent-projects list, and run history. Called once on app load to restore
+/// everything that survived a restart.
+#[tauri::command]
+fn get_initial_state(state: State<'_, AppState>) -> Result<InitialState, String> {
+    let store = state.store()?;
+    let initial = store.initial_state().map_err(|e| format!("{e:#}"))?;
+    // Restore the last project into in-memory state so a `run_task_cmd`
+    // immediately after load works without an explicit re-pick.
+    if let Some(last) = &initial.last_project {
+        *state.project_path.lock().expect("project_path lock") = Some(PathBuf::from(last));
+    }
+    Ok(initial)
+}
+
+/// Validate `path` is a git repo, store it as the picked project (in memory +
+/// durable last_project), and touch its recent-projects entry. Shared by
+/// [`pick_project`] and [`select_recent_project`]. Returns the path string.
+fn select_validated_project(state: &AppState, path: PathBuf) -> Result<String, String> {
     if !path.join(".git").exists() {
         return Err(format!(
             "{} 这不是一个 git 仓库（没有 .git 目录）。请选择一个 git 仓库。",
@@ -104,8 +147,21 @@ async fn pick_project(app: AppHandle, state: State<'_, AppState>) -> Result<Opti
         ));
     }
 
+    let path_str = path.display().to_string();
     *state.project_path.lock().expect("project_path lock") = Some(path.clone());
-    Ok(Some(path.display().to_string()))
+
+    // Durable: remember it as the last project + bump it in the recent list. A
+    // store error here is non-fatal to the pick itself — surface it so the user
+    // knows persistence failed, but the in-memory selection already succeeded.
+    let store = state.store()?;
+    store
+        .set_last_project(&path_str)
+        .map_err(|e| format!("{e:#}"))?;
+    store
+        .touch_recent_project(&path_str, now_ms())
+        .map_err(|e| format!("{e:#}"))?;
+
+    Ok(path_str)
 }
 
 /// Run one task end to end against the picked repo and stream its events to the
@@ -129,10 +185,44 @@ async fn run_task_cmd(
         return Err("请先选择一个项目——尚未选择 git 仓库。".to_string());
     };
 
-    run_task_inner(app, project, prompt, mode).await.map_err(|e| {
-        // Sanitized surface (DESIGN §9): never leak a stack/SQL detail to the UI.
-        format!("{e:#}")
-    })
+    let summary = run_task_inner(app, project.clone(), prompt.clone(), mode)
+        .await
+        .map_err(|e| {
+            // Sanitized surface (DESIGN §9): never leak a stack/SQL detail to the UI.
+            format!("{e:#}")
+        })?;
+
+    // Persist the finished run to history (DESIGN §11). A store error here is
+    // non-fatal — the run already streamed + finished; surface it but don't fail
+    // the command after the work is done.
+    if let Ok(store) = state.store() {
+        let _ = store.record_run(&NewRun {
+            project: project.display().to_string(),
+            prompt,
+            mode: mode_label(mode).to_string(),
+            status: summary.status,
+            cost_usd: summary.cost_usd,
+            branch: summary.branch,
+            created_at: now_ms(),
+        });
+    }
+
+    Ok(())
+}
+
+/// What a finished run yields for the history record (DESIGN §11).
+struct RunSummary {
+    status: String,
+    cost_usd: Option<f64>,
+    branch: Option<String>,
+}
+
+/// The persisted label for a run mode.
+fn mode_label(mode: RunMode) -> &'static str {
+    match mode {
+        RunMode::Simulate => "simulate",
+        RunMode::Real => "real",
+    }
 }
 
 async fn run_task_inner(
@@ -140,7 +230,7 @@ async fn run_task_inner(
     project: PathBuf,
     prompt: String,
     mode: RunMode,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<RunSummary> {
     // Resolve the agent binary + per-mode run options.
     let (agent_bin, options, verify) = match mode {
         RunMode::Simulate => (
@@ -189,38 +279,52 @@ async fn run_task_inner(
         prompt,
     };
 
-    let outcome: RunOutcome =
-        run_task_with_options(&guard, &task, &agent_bin, &verify, options).await?;
-
-    // Stream each collected AgentEvent to the UI.
+    // TRUE live streaming (Problem 1): emit each AgentEvent to the UI the MOMENT
+    // it is produced, via the streaming supervisor's per-event callback — not in a
+    // post-run batch. `last_cost` is updated as the Result event flows through.
     let mut last_cost: Option<f64> = None;
-    for event in &outcome.events {
-        if let quiver_core::event::AgentEventPayload::Result { cost_usd, .. } = &event.payload {
-            last_cost = *cost_usd;
-        }
-        emit_agent_event(&app, event)?;
-    }
+    let outcome: RunOutcome = run_task_streaming(
+        &guard,
+        &task,
+        &agent_bin,
+        &verify,
+        options,
+        |event: &AgentEvent| {
+            if let AgentEventPayload::Result { cost_usd, .. } = &event.payload {
+                last_cost = *cost_usd;
+            }
+            // A failed emit (window gone) is not worth aborting the run over — the
+            // event is still recorded in the outcome / history. Best-effort live UI.
+            let _ = emit_agent_event(&app, event);
+        },
+    )
+    .await?;
 
-    // Terminal lifecycle cap. Surface the branch only when the work was left on
-    // one (real-mode, no merge).
+    // Terminal lifecycle cap, emitted AFTER the gate (as before). Surface the
+    // branch only when the work was left on one (real-mode, no merge).
     let branch = match outcome.cleanup {
         Cleanup::PreservedBranch => Some(outcome.branch.clone()),
         _ => None,
     };
+    let status_label = finish_status_label(outcome.status).to_string();
     let finished = FinishedEvent {
         task_id: outcome.task_id,
         seq: outcome.events.len() as u64,
         ts_ms: now_ms(),
         runner: "claude_cli",
         kind: "finished",
-        status: finish_status_label(outcome.status).to_string(),
+        status: status_label.clone(),
         cost_usd: last_cost,
-        branch,
+        branch: branch.clone(),
     };
     app.emit(AGENT_EVENT_CHANNEL, &finished)
         .map_err(|e| anyhow::anyhow!("emit finished failed: {e}"))?;
 
-    Ok(())
+    Ok(RunSummary {
+        status: status_label,
+        cost_usd: last_cost,
+        branch,
+    })
 }
 
 /// Emit one normalized `AgentEvent` over the `agent-event` channel.
@@ -382,9 +486,28 @@ pub fn run() {
             // Eagerly grab the main window handle so a missing-window config
             // fails loudly here rather than silently at first emit.
             let _ = app.get_webview_window("main");
+
+            // Open the durable SQLite store (DESIGN §11) under the app data dir
+            // and install it into AppState so commands can read/write history.
+            let data_dir = app
+                .path()
+                .app_data_dir()
+                .map_err(|e| format!("could not resolve app data dir: {e}"))?;
+            let db_path = Store::default_db_path(&data_dir);
+            let store = Store::open(&db_path)
+                .map_err(|e| format!("could not open quiver.sqlite at {}: {e:#}", db_path.display()))?;
+            let state = app.state::<AppState>();
+            // The store is installed exactly once at setup; a second set never
+            // happens, so ignore the (impossible) already-set return.
+            let _ = state.store.set(store);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![pick_project, run_task_cmd])
+        .invoke_handler(tauri::generate_handler![
+            pick_project,
+            select_recent_project,
+            get_initial_state,
+            run_task_cmd
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Quiver");
 }
