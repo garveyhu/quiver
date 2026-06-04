@@ -1503,3 +1503,578 @@ body {
   background: var(--accent-soft);
   color: var(--leather);
 }
+
+/* ============================================================
+   Phase D — scene tabs (工坊 / 公告板 / 档案)
+   ============================================================ */
+.scene-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 28px 0 0;
+  padding: 6px;
+  background: linear-gradient(180deg, var(--wood), var(--wood-dark));
+  border-radius: var(--radius-ctrl);
+  box-shadow: var(--shadow-soft), inset 0 0 0 2px rgba(255, 250, 240, 0.12);
+}
+
+.scene-tab {
+  flex: 1;
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--parchment);
+  background: rgba(0, 0, 0, 0.12);
+  border: none;
+  border-radius: calc(var(--radius-ctrl) - 4px);
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, transform 0.1s ease;
+}
+
+.scene-tab:hover {
+  background: rgba(255, 250, 240, 0.16);
+}
+
+.scene-tab:active {
+  transform: translateY(1px);
+}
+
+.scene-tab-active {
+  color: var(--wood-dark);
+  background: var(--parchment);
+  box-shadow: 0 2px 8px rgba(79, 48, 24, 0.25), inset 0 0 0 1px var(--parchment-edge);
+}
+
+/* Panels keep their place when active; hidden ones stay mounted but out of flow
+   so the live Phaser scene + event stream survive a tab switch. */
+.scene-panel {
+  margin-top: 20px;
+  animation: scene-fade 0.22s ease both;
+}
+
+.scene-hidden {
+  display: none;
+}
+
+@keyframes scene-fade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================================================
+   Phase D — 档案库 / 书架 (run archive shelf)
+   ============================================================ */
+.archive-view {
+  position: relative;
+  background: linear-gradient(180deg, rgba(255, 253, 248, 0.7), rgba(246, 234, 208, 0.55)),
+    var(--bg-card);
+  border: 3px solid var(--wood);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-wood);
+  padding: 22px;
+}
+
+.archive-head {
+  margin-bottom: 16px;
+}
+
+.archive-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--leather);
+}
+
+.archive-subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.archive-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed var(--border-strong);
+}
+
+.archive-search {
+  flex: 1 1 220px;
+  min-width: 160px;
+  padding: 9px 13px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg-row);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-ctrl);
+}
+
+.archive-search:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.archive-search::placeholder {
+  color: var(--text-dim);
+}
+
+.archive-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.archive-filter select {
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg-row-alt);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-ctrl);
+  cursor: pointer;
+}
+
+.archive-filter-label {
+  font-weight: 600;
+}
+
+.archive-count {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--leather);
+}
+
+.archive-empty {
+  margin: 24px 0;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+.archive-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.archive-entry {
+  margin: 0;
+}
+
+.archive-entry-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  position: relative;
+  padding: 0;
+  background: var(--parchment);
+  border: 1px solid var(--parchment-edge);
+  border-radius: 8px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform 0.12s ease, box-shadow 0.16s ease;
+}
+
+.archive-entry-btn:hover {
+  transform: translateX(3px);
+  box-shadow: var(--shadow-soft);
+}
+
+/* the bound-book spine down the left edge */
+.archive-entry-spine {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 8px;
+  background: linear-gradient(180deg, var(--leather), var(--wood-dark));
+}
+
+.archive-entry-body {
+  padding: 12px 14px 12px 22px;
+}
+
+.archive-entry-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.archive-entry-project {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sage);
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archive-entry-prompt {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.archive-entry-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.archive-entry-cost {
+  font-weight: 600;
+  color: var(--leather);
+}
+
+.archive-entry-branch {
+  font-family: 'SF Mono', ui-monospace, monospace;
+  color: var(--sage);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 50%;
+}
+
+/* ============================================================
+   Phase D — 卷轴 / Logbook (full I/O viewer modal)
+   ============================================================ */
+.logbook-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(58, 36, 20, 0.45);
+  backdrop-filter: blur(2px);
+  animation: logbook-overlay-in 0.2s ease both;
+}
+
+@keyframes logbook-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.logbook-scroll {
+  display: flex;
+  flex-direction: column;
+  width: min(820px, 100%);
+  max-height: 88vh;
+  background: linear-gradient(180deg, var(--parchment), var(--bg-card));
+  border: 3px solid var(--wood);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-wood), 0 24px 60px rgba(58, 36, 20, 0.4);
+  overflow: hidden;
+  animation: logbook-unroll 0.26s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+@keyframes logbook-unroll {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.logbook-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 22px;
+  background: linear-gradient(180deg, var(--wood), var(--wood-dark));
+  color: var(--parchment);
+}
+
+.logbook-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.logbook-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.logbook-total {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--parchment);
+  opacity: 0.92;
+  padding: 2px 8px;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 999px;
+}
+
+.logbook-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.logbook-replay,
+.logbook-close {
+  padding: 7px 13px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--radius-ctrl);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.logbook-replay {
+  color: var(--wood-dark);
+  background: var(--accent);
+  border: 1px solid var(--accent-hover);
+}
+
+.logbook-replay:hover {
+  background: var(--accent-hover);
+}
+
+.logbook-close {
+  color: var(--parchment);
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(255, 250, 240, 0.2);
+}
+
+.logbook-close:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.logbook-replay:active,
+.logbook-close:active {
+  transform: translateY(1px);
+}
+
+.logbook-commission {
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--parchment-edge);
+  background: rgba(255, 253, 248, 0.5);
+}
+
+.logbook-field {
+  margin-bottom: 12px;
+}
+
+.logbook-field-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-dim);
+}
+
+.logbook-field-prompt {
+  margin: 4px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.logbook-field-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  align-items: baseline;
+}
+
+.logbook-field-grid .logbook-field-label {
+  display: inline;
+}
+
+.logbook-field-value {
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logbook-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 22px 22px;
+}
+
+.logbook-timeline-title {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--leather);
+}
+
+.logbook-loading,
+.logbook-empty {
+  margin: 24px 0;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+.logbook-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative;
+}
+
+/* a vertical thread the events hang off */
+.logbook-timeline::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  background: var(--parchment-edge);
+}
+
+.logbook-row {
+  position: relative;
+  padding: 0 0 14px 30px;
+}
+
+.logbook-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logbook-row-glyph {
+  position: absolute;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--parchment-edge);
+  border-radius: 50%;
+}
+
+.logbook-row-kind {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--leather);
+}
+
+.logbook-row-time {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: 'SF Mono', ui-monospace, monospace;
+}
+
+.logbook-row-desc {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.logbook-row-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+}
+
+.logbook-row-detail-error {
+  color: var(--error);
+}
+
+.logbook-kv {
+  font-size: 12px;
+  color: var(--text-dim);
+  padding: 2px 7px;
+  background: var(--bg-row-alt);
+  border-radius: 6px;
+}
+
+.logbook-tool {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-on-accent);
+  padding: 2px 8px;
+  background: var(--sage);
+  border-radius: 6px;
+}
+
+.logbook-summary {
+  font-size: 12px;
+  font-family: 'SF Mono', ui-monospace, monospace;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.logbook-output {
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-family: 'SF Mono', ui-monospace, monospace;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg-row);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* tint the output_chunk node so the agent's "voice" stands out */
+.logbook-row-output_chunk .logbook-row-glyph {
+  border-color: var(--accent);
+}
+.logbook-row-error .logbook-row-glyph {
+  border-color: var(--error);
+}
+.logbook-row-finished .logbook-row-glyph {
+  border-color: var(--ok);
+}

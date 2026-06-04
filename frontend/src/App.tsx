@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useSupervisor } from '@/hooks/useSupervisor';
 import { useSettings } from '@/hooks/useSettings';
 import { useTaskBoard } from '@/hooks/useTaskBoard';
+import { useArchive } from '@/hooks/useArchive';
 import { ProjectPicker } from '@/components/ProjectPicker';
 import { RecentProjects } from '@/components/RecentProjects';
-import { RunHistory } from '@/components/RunHistory';
 import { ModeToggle } from '@/components/ModeToggle';
 import { TaskInput } from '@/components/TaskInput';
 import { TaskBoard } from '@/components/board/TaskBoard';
@@ -12,19 +12,16 @@ import { PixelOffice } from '@/components/PixelOffice';
 import { EventLogPanel } from '@/components/EventLogPanel';
 import { SettingsButton } from '@/components/settings/SettingsButton';
 import { SettingsPanel } from '@/components/settings/SettingsPanel';
+import { SceneTabs, type Scene } from '@/components/SceneTabs';
+import { ArchiveView } from '@/components/archive/ArchiveView';
+import { LogbookViewer } from '@/components/archive/LogbookViewer';
 import { STR } from '@/strings';
 import type { RunMode } from '@/types/run.types';
+import type { TaskRecord } from '@/types/persistence.types';
 
 export function App() {
-  const {
-    events,
-    error,
-    projectPath,
-    recentProjects,
-    history,
-    pickProject,
-    selectRecentProject,
-  } = useSupervisor();
+  const { events, error, projectPath, recentProjects, pickProject, selectRecentProject } =
+    useSupervisor();
   const { settings, patch, saveStatus } = useSettings();
   const {
     tasks,
@@ -34,8 +31,12 @@ export function App() {
     reorder,
     cancel,
   } = useTaskBoard(projectPath);
+  const { records, error: archiveError, loadEvents } = useArchive();
+
   const [mode, setMode] = useState<RunMode>('simulate');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [scene, setScene] = useState<Scene>('workshop');
+  const [openRecord, setOpenRecord] = useState<TaskRecord | null>(null);
 
   const maxWorkers = settings?.maxWorkers ?? 1;
 
@@ -93,24 +94,42 @@ export function App() {
         )}
       </section>
 
-      <TaskBoard
-        tasks={tasks}
-        freshIds={freshIds}
-        maxWorkers={maxWorkers}
-        onReorder={reorder}
-        onCancel={cancel}
-      />
+      <SceneTabs scene={scene} onChange={setScene} />
 
-      <section className="app-office">
-        <h2 className="app-office-title">{STR.officeTitle}</h2>
-        <PixelOffice events={events} />
-      </section>
+      {/* The workshop + board panels stay MOUNTED across tab switches (hidden via
+          CSS, not unmounted) so the live Phaser scene and the event stream keep
+          running regardless of which scene is shown. */}
+      <div className={`scene-panel ${scene === 'workshop' ? '' : 'scene-hidden'}`}>
+        <section className="app-office">
+          <h2 className="app-office-title">{STR.officeTitle}</h2>
+          <PixelOffice events={events} />
+        </section>
+        <EventLogPanel events={events} />
+      </div>
 
-      <section className="app-card app-history-card">
-        <RunHistory history={history} />
-      </section>
+      <div className={`scene-panel ${scene === 'board' ? '' : 'scene-hidden'}`}>
+        <TaskBoard
+          tasks={tasks}
+          freshIds={freshIds}
+          maxWorkers={maxWorkers}
+          onReorder={reorder}
+          onCancel={cancel}
+        />
+      </div>
 
-      <EventLogPanel events={events} />
+      {scene === 'archive' && (
+        <div className="scene-panel">
+          <ArchiveView records={records} error={archiveError} onOpen={setOpenRecord} />
+        </div>
+      )}
+
+      {openRecord && (
+        <LogbookViewer
+          record={openRecord}
+          loadEvents={loadEvents}
+          onClose={() => setOpenRecord(null)}
+        />
+      )}
 
       {settingsOpen && settings && (
         <SettingsPanel

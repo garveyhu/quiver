@@ -36,6 +36,18 @@ const tasks: MockTask[] = [];
 let running = 0;
 let seq = 1000;
 
+// Per-task event log so `get_task_events` can replay a finished run's full I/O in
+// the Logbook (mirrors the durable §11 agent_event table).
+interface MockStoredEvent {
+  taskId: string;
+  seq: number;
+  tsMs: number;
+  runner: string;
+  kind: string;
+  payloadJson: string;
+}
+const eventLog: Record<string, MockStoredEvent[]> = {};
+
 function now(): number {
   return Date.now();
 }
@@ -44,16 +56,87 @@ function emitBoard(): void {
   void emit('task-updated', '');
 }
 
+/** Record an event into the per-task log (so the Logbook can replay it later). */
+function recordEvent(
+  taskId: string,
+  kind: string,
+  extra: Record<string, unknown>,
+  tsMs: number,
+): void {
+  const payload = { taskId, seq: seq, tsMs, runner: 'claude_cli', kind, ...extra };
+  (eventLog[taskId] ??= []).push({
+    taskId,
+    seq,
+    tsMs,
+    runner: 'claude_cli',
+    kind,
+    payloadJson: JSON.stringify(payload),
+  });
+}
+
 function agentEvent(taskId: string, kind: string, extra: Record<string, unknown>): void {
+  const tsMs = now();
+  recordEvent(taskId, kind, extra, tsMs);
   void emit('agent-event', {
     taskId,
     seq: seq++,
-    tsMs: now(),
+    tsMs,
     runner: 'claude_cli',
     kind,
     ...extra,
   });
 }
+
+/** Seed a finished historical run (task + full event log) for the 档案库 demo. */
+function seedHistory(
+  id: string,
+  project: string,
+  prompt: string,
+  modeName: string,
+  status: string,
+  cost: number,
+  branch: string | null,
+  ageMs: number,
+): void {
+  const created = now() - ageMs;
+  tasks.push({
+    id,
+    project,
+    prompt,
+    mode: modeName,
+    status,
+    costUsd: cost,
+    branch,
+    position: tasks.length,
+    createdAt: created,
+    updatedAt: created + 5000,
+  });
+  let t = created;
+  const step = (kind: string, extra: Record<string, unknown>) => {
+    recordEvent(id, kind, extra, t);
+    seq++;
+    t += 1100;
+  };
+  step('worker_started', { model: 'claude-sonnet-4-5', authMode: 'subscription' });
+  step('tool_use', { tool: 'Read', summary: 'README.md' });
+  step('tool_use', { tool: 'Bash', summary: 'cargo build --workspace' });
+  step('output_chunk', { text: `分析「${prompt}」并实现改动…\n读取相关文件、定位修改点、应用补丁。` });
+  step('tool_use', { tool: 'Edit', summary: 'src/lib.rs（+18 −4）' });
+  step('output_chunk', { text: '改动完成，运行测试验证。' });
+  const ok = status === 'verified';
+  step('result', { ok, costUsd: cost, numTurns: 4 });
+  if (!ok) {
+    step('error', { code: 'verify_failed', message: '验证未通过：2 个测试失败' });
+  }
+  step('finished', { status, costUsd: cost, branch });
+}
+
+const DEMO_PROJECT = '/Users/demo/repos/quiver';
+const DEMO_PROJECT_2 = '/Users/demo/repos/sage';
+seedHistory('arc-1', DEMO_PROJECT, '为召回模块接入 bge-reranker 二阶段重排', 'real', 'verified', 0.42, 'quiver/arc-1/attempt-1', 86_400_000);
+seedHistory('arc-2', DEMO_PROJECT, '把运行历史改成可搜索的档案库', 'simulate', 'verified', 0.07, null, 43_200_000);
+seedHistory('arc-3', DEMO_PROJECT_2, '修复 token 过期后无法刷新的问题', 'real', 'failed', 0.19, null, 21_600_000);
+seedHistory('arc-4', DEMO_PROJECT, '给公告板卡片加拖拽排序', 'simulate', 'verified', 0.05, null, 7_200_000);
 
 function wait(ms: number): Promise<void> {
   return new Promise(r => setTimeout(r, ms));
@@ -120,8 +203,19 @@ function handleCommand(cmd: string, args: Record<string, unknown>): unknown {
         theme: 'cozy',
         uiScale: 1,
       };
-    case 'list_tasks':
-      return [...tasks].sort((a, b) => a.position - b.position || a.createdAt - b.createdAt);
+    case 'list_tasks': {
+      // `list_tasks` filters by project/status; the archive passes both null to
+      // get every run across projects (the bulletin board passes a project).
+      const project = args.project == null ? null : String(args.project);
+      const status = args.status == null ? null : String(args.status);
+      return [...tasks]
+        .filter(t => (project == null || t.project === project) && (status == null || t.status === status))
+        .sort((a, b) => a.position - b.position || a.createdAt - b.createdAt);
+    }
+    case 'get_task_events': {
+      const id = String(args.taskId ?? '');
+      return [...(eventLog[id] ?? [])].sort((a, b) => a.seq - b.seq);
+    }
     case 'enqueue_task_cmd': {
       const id = `task-${now()}-${tasks.length}`;
       const task: MockTask = {
