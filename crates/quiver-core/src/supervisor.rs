@@ -181,6 +181,8 @@ pub async fn run_task_with_options(
         Ok(rx) => rx,
         Err(_spawn_err) => {
             guard.force_remove(&worktree).await?;
+            // A non-kept failed attempt leaves no orphan branch either (§8.4).
+            guard.delete_branch(&branch).await?;
             return Ok(RunOutcome {
                 task_id: task.id.clone(),
                 status: FinishStatus::Failed,
@@ -215,6 +217,7 @@ pub async fn run_task_with_options(
             Ok(result) => result,
             Err(_verify_err) => {
                 guard.force_remove(&worktree).await?;
+                guard.delete_branch(&branch).await?;
                 return Ok(RunOutcome {
                     task_id: task.id.clone(),
                     status: FinishStatus::Failed,
@@ -237,10 +240,20 @@ pub async fn run_task_with_options(
         // run completed" — tear the worktree down under the §6.3 dirty guard
         // (never force a dirty tree).
         let cleanup = if options.keep_branch {
+            // Real-agent safety mode: leave the work on its (uniquely-named)
+            // attempt branch + worktree, never merged into the user's `main`.
             Cleanup::PreservedBranch
         } else {
             match guard.remove(&worktree).await? {
-                RemoveOutcome::Removed => Cleanup::Removed,
+                RemoveOutcome::Removed => {
+                    // `worktree remove` leaves the branch ref behind; delete it so
+                    // a non-kept run leaves NO `quiver/*` branch and the next run
+                    // on the same repo can't collide at `worktree add`.
+                    guard.delete_branch(&branch).await?;
+                    Cleanup::Removed
+                }
+                // A dirty tree is preserved (§6.3) — keep its branch too so the
+                // uncommitted work stays reachable for human review.
                 RemoveOutcome::PreservedDirty { status } => Cleanup::PreservedDirty { status },
             }
         };
@@ -262,6 +275,8 @@ pub async fn run_task_with_options(
         FailureReason::NoResult
     };
     guard.force_remove(&worktree).await?;
+    // An abandoned attempt leaves no orphan branch behind (§8.4).
+    guard.delete_branch(&branch).await?;
     Ok(RunOutcome {
         task_id: task.id.clone(),
         status: FinishStatus::Failed,
@@ -270,4 +285,241 @@ pub async fn run_task_with_options(
         failure: Some(failure),
         branch,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use tempfile::TempDir;
+
+    /// Locate the built `fake-claude` binary. It lives in the same
+    /// `target/<profile>/` dir as the test executable (sibling crate in the
+    /// workspace), so walk up from the test exe's directory and probe.
+    fn fake_claude_bin() -> PathBuf {
+        let mut dir = std::env::current_exe().expect("current_exe");
+        // current_exe = target/<profile>/deps/<test-hash>; the binary is one or
+        // two levels up. Walk up looking for `fake-claude`.
+        while dir.pop() {
+            let candidate = dir.join("fake-claude");
+            if candidate.is_file() {
+                return candidate;
+            }
+        }
+        panic!("fake-claude binary not found near the test exe — run `cargo build` first");
+    }
+
+    /// A temp git repo with an initial commit on `main`. Returns the kept-alive
+    /// temp dir.
+    fn temp_repo() -> TempDir {
+        let dir = TempDir::new().expect("tempdir");
+        let path = dir.path();
+        let run = |args: &[&str]| {
+            let out = std::process::Command::new("git")
+                .args(args)
+                .current_dir(path)
+                .output()
+                .expect("git");
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        run(&["init", "-q", "-b", "main"]);
+        run(&["config", "user.email", "test@quiver.local"]);
+        run(&["config", "user.name", "Quiver Test"]);
+        std::fs::write(path.join("README.md"), "# temp repo\n").expect("write readme");
+        run(&["add", "."]);
+        run(&["commit", "-q", "-m", "initial commit"]);
+        dir
+    }
+
+    /// All local `quiver/*` branches in the repo.
+    fn quiver_branches(repo: &Path) -> Vec<String> {
+        let out = std::process::Command::new("git")
+            .args([
+                "-C",
+                repo.to_str().unwrap(),
+                "branch",
+                "--list",
+                "quiver/*",
+                "--format=%(refname:short)",
+            ])
+            .output()
+            .expect("git branch --list");
+        String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .map(str::to_string)
+            .collect()
+    }
+
+    /// Worktree count reported by git (main + any attempt worktrees).
+    fn worktree_count(repo: &Path) -> usize {
+        let out = std::process::Command::new("git")
+            .args(["-C", repo.to_str().unwrap(), "worktree", "list"])
+            .output()
+            .expect("worktree list");
+        String::from_utf8_lossy(&out.stdout).lines().count()
+    }
+
+    fn head_sha(repo: &Path) -> String {
+        let out = std::process::Command::new("git")
+            .args(["-C", repo.to_str().unwrap(), "rev-parse", "main"])
+            .output()
+            .expect("rev-parse");
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    /// Two consecutive simulate-style runs on the SAME repo BOTH succeed — the
+    /// repeat-run bug fix: a unique task id per run + branch deletion on cleanup
+    /// means the 2nd `git worktree add` never collides on an existing branch.
+    #[tokio::test]
+    async fn two_consecutive_simulate_runs_both_succeed_no_branch_litter() {
+        let repo = temp_repo();
+        let wt_root = TempDir::new().expect("wt root");
+        let guard = GitGuard::new(repo.path()).with_worktrees_root(wt_root.path());
+        let bin = fake_claude_bin();
+        let verify = VerifyCommand::shell("exit 0");
+
+        let main_before = head_sha(repo.path());
+
+        // Run 1 — a unique id, as run_task_cmd would generate.
+        let task1 = TaskSpec {
+            id: "task-1001".to_string(),
+            prompt: "first".to_string(),
+        };
+        let out1 = run_task_with_options(&guard, &task1, &bin, &verify, RunOptions::default())
+            .await
+            .expect("run 1 ok");
+        assert_eq!(out1.status, FinishStatus::Verified);
+        assert_eq!(out1.cleanup, Cleanup::Removed);
+
+        // Run 2 — a DIFFERENT unique id. Must also succeed (the old fixed-id bug
+        // failed here at `git worktree add`: branch already exists).
+        let task2 = TaskSpec {
+            id: "task-1002".to_string(),
+            prompt: "second".to_string(),
+        };
+        let out2 = run_task_with_options(&guard, &task2, &bin, &verify, RunOptions::default())
+            .await
+            .expect("run 2 ok");
+        assert_eq!(out2.status, FinishStatus::Verified);
+        assert_eq!(out2.cleanup, Cleanup::Removed);
+
+        // No `quiver/*` branch litter, no leftover worktrees, main untouched.
+        assert!(
+            quiver_branches(repo.path()).is_empty(),
+            "non-keep runs must leave NO quiver/* branches, got: {:?}",
+            quiver_branches(repo.path())
+        );
+        assert_eq!(worktree_count(repo.path()), 1, "only main worktree should remain");
+        assert_eq!(head_sha(repo.path()), main_before, "main must be byte-identical");
+    }
+
+    /// Even reusing the SAME task id across two non-keep runs must not collide:
+    /// the first run deletes its branch on cleanup, so the second can recreate it.
+    #[tokio::test]
+    async fn same_task_id_reused_after_cleanup_succeeds() {
+        let repo = temp_repo();
+        let wt_root = TempDir::new().expect("wt root");
+        let guard = GitGuard::new(repo.path()).with_worktrees_root(wt_root.path());
+        let bin = fake_claude_bin();
+        let verify = VerifyCommand::shell("exit 0");
+        let task = TaskSpec {
+            id: "samerepeat".to_string(),
+            prompt: "p".to_string(),
+        };
+
+        let out1 = run_task_with_options(&guard, &task, &bin, &verify, RunOptions::default())
+            .await
+            .expect("run 1");
+        assert_eq!(out1.cleanup, Cleanup::Removed);
+        // Branch from run 1 must be gone before run 2 needs to create it.
+        assert!(quiver_branches(repo.path()).is_empty());
+
+        let out2 = run_task_with_options(&guard, &task, &bin, &verify, RunOptions::default())
+            .await
+            .expect("run 2 must not collide on the reused branch name");
+        assert_eq!(out2.status, FinishStatus::Verified);
+        assert_eq!(out2.cleanup, Cleanup::Removed);
+        assert!(quiver_branches(repo.path()).is_empty());
+    }
+
+    /// A `keep_branch` run (real mode) PRESERVES its uniquely-named attempt branch
+    /// and worktree — intentional, never merged into `main`.
+    #[tokio::test]
+    async fn keep_branch_run_preserves_its_branch() {
+        let repo = temp_repo();
+        let wt_root = TempDir::new().expect("wt root");
+        let guard = GitGuard::new(repo.path()).with_worktrees_root(wt_root.path());
+        let bin = fake_claude_bin();
+        let verify = VerifyCommand::shell("exit 0");
+        let task = TaskSpec {
+            id: "kept-7".to_string(),
+            prompt: "p".to_string(),
+        };
+
+        let out = run_task_with_options(
+            &guard,
+            &task,
+            &bin,
+            &verify,
+            RunOptions {
+                keep_branch: true,
+                extra_args: Vec::new(),
+            },
+        )
+        .await
+        .expect("keep-branch run");
+
+        assert_eq!(out.cleanup, Cleanup::PreservedBranch);
+        let expected = attempt_branch(&task.id, 1);
+        assert_eq!(out.branch, expected);
+        assert!(
+            quiver_branches(repo.path()).contains(&expected),
+            "keep_branch must preserve the attempt branch, got: {:?}",
+            quiver_branches(repo.path())
+        );
+    }
+
+    /// A crashed (permanently-failed) non-keep run is GC'd: no orphan branch and
+    /// no leftover worktree.
+    #[tokio::test]
+    async fn crashed_run_leaves_no_branch_or_worktree() {
+        let repo = temp_repo();
+        let wt_root = TempDir::new().expect("wt root");
+        let guard = GitGuard::new(repo.path()).with_worktrees_root(wt_root.path());
+        let bin = fake_claude_bin();
+        let verify = VerifyCommand::shell("exit 0");
+        let task = TaskSpec {
+            id: "boom".to_string(),
+            // fake-claude reads `--scenario crash` from extra_args and dies non-zero.
+            prompt: "p".to_string(),
+        };
+
+        let out = run_task_with_options(
+            &guard,
+            &task,
+            &bin,
+            &verify,
+            RunOptions {
+                keep_branch: false,
+                extra_args: vec!["--scenario".to_string(), "crash".to_string()],
+            },
+        )
+        .await
+        .expect("crashed run still returns an outcome");
+
+        assert_eq!(out.status, FinishStatus::Failed);
+        assert_eq!(out.cleanup, Cleanup::ForcedRemoved);
+        assert!(
+            quiver_branches(repo.path()).is_empty(),
+            "abandoned attempt must leave no quiver/* branch"
+        );
+        assert_eq!(worktree_count(repo.path()), 1, "no leftover worktree");
+    }
 }

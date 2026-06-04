@@ -260,6 +260,21 @@ impl GitGuard {
         Ok(())
     }
 
+    /// Force-delete an attempt branch (`git branch -D <branch>`) behind the
+    /// metadata lock (DESIGN §6.3 — a ref mutation on the shared `.git`).
+    ///
+    /// Used after a non-`keep_branch` run's worktree is removed: `git worktree
+    /// remove` tears down the checkout but LEAVES the branch ref, so without this
+    /// the next run on the same repo collides at `worktree add` (branch already
+    /// exists) and `quiver/task-*` branches accumulate in the user's repo. `-D`
+    /// (force) because the branch holds the attempt's commits that were never
+    /// merged into `main` — they are being deliberately discarded.
+    pub async fn delete_branch(&self, branch: &str) -> anyhow::Result<()> {
+        let _lock = self.meta_lock.lock().await;
+        self.run_meta(&["branch", "-D", branch]).await?;
+        Ok(())
+    }
+
     /// `git status --porcelain` run *inside* the worktree. Non-empty = dirty.
     async fn worktree_status(&self, path: &WorktreePath) -> anyhow::Result<String> {
         let out = run_git_in(path.as_path(), &["status", "--porcelain"]).await?;

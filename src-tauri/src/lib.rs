@@ -181,7 +181,11 @@ async fn run_task_inner(
 
     let guard = GitGuard::new(project);
     let task = TaskSpec {
-        id: "task".to_string(),
+        // A unique id per invocation so the per-attempt branch
+        // (`quiver/task-<id>/attempt-1`) never collides across runs on the same
+        // picked repo — a fixed id let the 2nd run fail at `git worktree add`
+        // because the branch ref left behind by an earlier run still existed.
+        id: format!("task-{}", now_ms()),
         prompt,
     };
 
