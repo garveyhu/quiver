@@ -1,0 +1,8 @@
+[package]
+name = "fake-claude"
+version = "0.0.0"
+edition = "2021"
+
+[[bin]]
+name = "fake-claude"
+path = "src/main.rs"
