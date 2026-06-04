@@ -16,7 +16,7 @@
 use std::path::Path;
 
 use crate::event::{AgentEvent, AgentEventPayload};
-use crate::git::{GitGuard, RemoveOutcome};
+use crate::git::{attempt_branch, GitGuard, RemoveOutcome};
 use crate::runner::AgentRunner;
 use crate::runner::claude::ClaudeRunner;
 use crate::verify::{VerifyCommand, VerifyResult};
@@ -26,6 +26,28 @@ use crate::verify::{VerifyCommand, VerifyResult};
 pub struct TaskSpec {
     pub id: String,
     pub prompt: String,
+}
+
+/// Knobs that change what `run_task` does with a *successful* run's worktree.
+///
+/// The default (`keep_branch: false`) is the original Phase-1/2 behavior: a clean
+/// worktree is removed after the verify-gate (and, in the full pipeline, the
+/// branch would be merged into `main`). `keep_branch: true` is the SAFETY mode
+/// for running a real agent on the user's own repo with NO sandbox yet (Phase 6):
+/// the agent's work is left on its attempt branch + worktree, untouched, and is
+/// NEVER merged into the user's `main`. The branch name is reported so the UI can
+/// tell the user where to find the work.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RunOptions {
+    /// Keep the worktree + attempt branch on a successful run instead of removing
+    /// it. Set for real-agent runs so the user's `main` is never auto-touched.
+    pub keep_branch: bool,
+}
+
+impl Default for RunOptions {
+    fn default() -> Self {
+        Self { keep_branch: false }
+    }
 }
 
 /// Terminal lifecycle status of a run (DESIGN §5.2, §7 `FinishStatus`).
@@ -74,6 +96,9 @@ pub enum Cleanup {
     PreservedDirty { status: String },
     /// Failed attempt deterministically force-removed (§8.4).
     ForcedRemoved,
+    /// Deliberately kept by `RunOptions::keep_branch` (real-agent safety mode):
+    /// the worktree + attempt branch are left in place, NOT merged into `main`.
+    PreservedBranch,
 }
 
 /// What `run_task` produced: the ordered events, the terminal status, the
@@ -86,6 +111,10 @@ pub struct RunOutcome {
     pub cleanup: Cleanup,
     /// `Some` iff `status == Failed`.
     pub failure: Option<FailureReason>,
+    /// The attempt branch the agent's work lives on (`quiver/task-<id>/attempt-N`).
+    /// Always populated; load-bearing when `cleanup == PreservedBranch` so the UI
+    /// can point the user at the un-merged work.
+    pub branch: String,
 }
 
 /// Run one task to completion in an isolated worktree (DESIGN Phase 1 Tasks
@@ -116,7 +145,27 @@ pub async fn run_task(
     runner_bin: &Path,
     verify: &VerifyCommand,
 ) -> anyhow::Result<RunOutcome> {
+    run_task_with_options(guard, task, runner_bin, verify, RunOptions::default()).await
+}
+
+/// `run_task` with explicit [`RunOptions`].
+///
+/// Behaves identically to [`run_task`] except for the disposition of a
+/// *successful* run's worktree: with `options.keep_branch == true` the verified
+/// (or verify-failed) worktree + attempt branch are LEFT IN PLACE
+/// ([`Cleanup::PreservedBranch`]) and NEVER merged into `main` — the real-agent
+/// safety path (§9: no sandbox yet, so the user's `main` is never auto-touched).
+/// Failure paths (spawn fail, crash, verify-tool misconfig) still §8.4 GC the
+/// worktree regardless of `keep_branch`: a failed attempt is always abandoned.
+pub async fn run_task_with_options(
+    guard: &GitGuard,
+    task: &TaskSpec,
+    runner_bin: &Path,
+    verify: &VerifyCommand,
+    options: RunOptions,
+) -> anyhow::Result<RunOutcome> {
     const ATTEMPT: u32 = 1;
+    let branch = attempt_branch(&task.id, ATTEMPT);
 
     // Harden the shared object store for the run (§6.3).
     guard.disable_auto_gc().await?;
@@ -140,6 +189,7 @@ pub async fn run_task(
                 events: Vec::new(),
                 cleanup: Cleanup::ForcedRemoved,
                 failure: Some(FailureReason::SpawnFailed),
+                branch,
             });
         }
     };
@@ -173,6 +223,7 @@ pub async fn run_task(
                     events,
                     cleanup: Cleanup::ForcedRemoved,
                     failure: Some(FailureReason::VerifyError),
+                    branch,
                 });
             }
         };
@@ -182,11 +233,18 @@ pub async fn run_task(
         } else {
             FinishStatus::VerifyFailed
         };
-        // (5a) Both Verified and VerifyFailed are "the run completed" — tear the
-        // worktree down under the §6.3 dirty guard (never force a dirty tree).
-        let cleanup = match guard.remove(&worktree).await? {
-            RemoveOutcome::Removed => Cleanup::Removed,
-            RemoveOutcome::PreservedDirty { status } => Cleanup::PreservedDirty { status },
+        // (5a) Worktree disposition. In keep-branch mode (real-agent safety) we
+        // leave the work on its branch + worktree untouched and never merge into
+        // the user's `main`. Otherwise both Verified and VerifyFailed are "the
+        // run completed" — tear the worktree down under the §6.3 dirty guard
+        // (never force a dirty tree).
+        let cleanup = if options.keep_branch {
+            Cleanup::PreservedBranch
+        } else {
+            match guard.remove(&worktree).await? {
+                RemoveOutcome::Removed => Cleanup::Removed,
+                RemoveOutcome::PreservedDirty { status } => Cleanup::PreservedDirty { status },
+            }
         };
         return Ok(RunOutcome {
             task_id: task.id.clone(),
@@ -194,10 +252,12 @@ pub async fn run_task(
             events,
             cleanup,
             failure: None,
+            branch,
         });
     }
 
-    // (5b) Permanent failure → deterministic §8.4 GC + classified reason.
+    // (5b) Permanent failure → deterministic §8.4 GC + classified reason. A
+    // failed attempt is always abandoned, even in keep_branch mode.
     let failure = if saw_error {
         FailureReason::AgentCrashed
     } else {
@@ -210,5 +270,6 @@ pub async fn run_task(
         events,
         cleanup: Cleanup::ForcedRemoved,
         failure: Some(failure),
+        branch,
     })
 }

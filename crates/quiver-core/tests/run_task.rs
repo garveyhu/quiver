@@ -11,7 +11,9 @@ use std::process::Command;
 
 use quiver_core::event::AgentEventPayload;
 use quiver_core::git::GitGuard;
-use quiver_core::supervisor::{run_task, Cleanup, FailureReason, FinishStatus, TaskSpec};
+use quiver_core::supervisor::{
+    run_task, run_task_with_options, Cleanup, FailureReason, FinishStatus, RunOptions, TaskSpec,
+};
 use quiver_core::verify::VerifyCommand;
 use tempfile::TempDir;
 
@@ -266,6 +268,103 @@ async fn run_task_cleans_up_deterministically_on_crash() {
     // No orphan worktree, no stale lock.
     assert_no_quiver_worktree_leak(repo.path());
     assert!(!repo.path().join(".git/index.lock").exists());
+}
+
+/// SAFETY (real-agent mode): with `RunOptions::keep_branch`, a verified run must
+/// LEAVE the agent's work on its attempt branch + worktree and NOT merge into
+/// `main`. The outcome reports the branch name and `Cleanup::PreservedBranch`,
+/// the worktree directory still exists, the attempt branch is still listed, and
+/// `main` is byte-identical to before the run.
+#[tokio::test]
+async fn run_task_keep_branch_preserves_worktree_and_does_not_touch_main() {
+    let repo = temp_repo();
+    let wt_root = TempDir::new().expect("wt root");
+    let guard = GitGuard::new(repo.path()).with_worktrees_root(wt_root.path());
+
+    let main_before = git(repo.path(), &["rev-parse", "main"]);
+    let main_before = String::from_utf8_lossy(&main_before.stdout).trim().to_string();
+
+    let task = TaskSpec {
+        id: "keepme".to_string(),
+        prompt: "do the thing on a branch".to_string(),
+    };
+
+    let outcome = run_task_with_options(
+        &guard,
+        &task,
+        &fake_claude_bin(),
+        &pass(),
+        RunOptions { keep_branch: true },
+    )
+    .await
+    .expect("run_task_with_options");
+
+    // Verified, but the worktree/branch is deliberately preserved (not merged).
+    assert_eq!(outcome.status, FinishStatus::Verified);
+    assert!(outcome.failure.is_none());
+    assert_eq!(outcome.cleanup, Cleanup::PreservedBranch);
+    assert_eq!(outcome.branch, "quiver/task-keepme/attempt-1");
+
+    // The branch is still present in the repo (the work is recoverable).
+    let branches = git(repo.path(), &["branch", "--list", "quiver/task-keepme/attempt-1"]);
+    assert!(
+        String::from_utf8_lossy(&branches.stdout).contains("quiver/task-keepme/attempt-1"),
+        "attempt branch should be preserved"
+    );
+
+    // `main` is byte-identical to before the run — nothing was auto-merged.
+    let main_after = git(repo.path(), &["rev-parse", "main"]);
+    let main_after = String::from_utf8_lossy(&main_after.stdout).trim().to_string();
+    assert_eq!(main_before, main_after, "main must NOT move in keep_branch mode");
+}
+
+/// A failed run in keep_branch mode is STILL abandoned (§8.4): keep_branch only
+/// preserves *successful* work, never a crashed attempt.
+#[tokio::test]
+async fn run_task_keep_branch_still_gcs_a_crash() {
+    let repo = temp_repo();
+    let wt_root = TempDir::new().expect("wt root");
+    let guard = GitGuard::new(repo.path()).with_worktrees_root(wt_root.path());
+
+    let task = TaskSpec {
+        id: "keepboom".to_string(),
+        prompt: "crash please".to_string(),
+    };
+    let shim_dir = TempDir::new().expect("shim dir");
+
+    let outcome = run_task_with_options(
+        &guard,
+        &task,
+        &crash_shim(shim_dir.path()),
+        &pass(),
+        RunOptions { keep_branch: true },
+    )
+    .await
+    .expect("run_task_with_options");
+
+    assert_eq!(outcome.status, FinishStatus::Failed);
+    assert_eq!(outcome.failure, Some(FailureReason::NoResult));
+    assert_eq!(outcome.cleanup, Cleanup::ForcedRemoved);
+    assert_no_quiver_worktree_leak(repo.path());
+}
+
+/// The default `run_task` path still reports the attempt branch even though it
+/// removes the worktree (the branch field is always populated).
+#[tokio::test]
+async fn run_task_reports_attempt_branch() {
+    let repo = temp_repo();
+    let wt_root = TempDir::new().expect("wt root");
+    let guard = GitGuard::new(repo.path()).with_worktrees_root(wt_root.path());
+
+    let task = TaskSpec {
+        id: "named".to_string(),
+        prompt: "do the thing".to_string(),
+    };
+
+    let outcome = run_task(&guard, &task, &fake_claude_bin(), &pass())
+        .await
+        .expect("run_task");
+    assert_eq!(outcome.branch, "quiver/task-named/attempt-1");
 }
 
 /// Assert `git worktree list` shows only the main worktree — no quiver/... leak.
