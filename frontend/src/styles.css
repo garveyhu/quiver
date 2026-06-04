@@ -21,10 +21,17 @@
   --error: #c0492f; /* warm red */
   --ok: #4f7a5b;
 
+  --wood: #6b4424; /* timber panel edge */
+  --wood-dark: #4f3018; /* deep timber */
+  --parchment: #f6ead0; /* aged paper panel fill */
+  --parchment-edge: #d8c193; /* parchment border */
+
   --radius-card: 16px;
   --radius-ctrl: 12px;
   --shadow-card: 0 6px 20px rgba(122, 79, 46, 0.08);
   --shadow-soft: 0 2px 8px rgba(122, 79, 46, 0.06);
+  /* a cozy carved-wood frame for game panels */
+  --shadow-wood: 0 8px 24px rgba(79, 48, 24, 0.22), inset 0 0 0 3px rgba(255, 250, 240, 0.55);
 
   font-family: 'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', -apple-system,
     BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -67,7 +74,7 @@ body {
   font-weight: 800;
   letter-spacing: -0.5px;
   color: var(--accent);
-  text-shadow: 0 2px 0 rgba(122, 79, 46, 0.12);
+  text-shadow: 0 2px 0 rgba(122, 79, 46, 0.18), 0 4px 12px rgba(224, 153, 46, 0.25);
 }
 
 .app-tagline {
@@ -76,12 +83,26 @@ body {
   font-size: 14px;
 }
 
+/* wooden game panel: carved timber frame around a warm parchment field */
 .app-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.7), rgba(246, 234, 208, 0.55)),
+    var(--bg-card);
+  border: 3px solid var(--wood);
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-wood);
   padding: 24px;
+}
+
+/* a hairline inner parchment ring for the carved-wood look */
+.app-card::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: 1px solid var(--parchment-edge);
+  border-radius: calc(var(--radius-card) - 6px);
+  pointer-events: none;
 }
 
 .project-picker {
@@ -247,22 +268,31 @@ body {
   margin-top: 32px;
 }
 
+/* notice-board style header for the workshop */
 .app-office-title {
+  display: inline-block;
   margin: 0 0 12px;
+  padding: 6px 16px;
   font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  color: var(--leather);
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--parchment);
+  background: linear-gradient(180deg, var(--wood), var(--wood-dark));
+  border-radius: 10px 10px 4px 4px;
+  box-shadow: var(--shadow-soft), inset 0 1px 0 rgba(255, 250, 240, 0.25);
 }
 
+/* the workshop "stage": a heavy carved timber frame around the live scene */
 .pixel-office {
   position: relative;
   width: 100%;
-  height: 460px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  height: 480px;
+  background: var(--wood-dark);
+  border: 5px solid var(--wood);
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
+  box-shadow:
+    var(--shadow-wood),
+    inset 0 0 0 2px rgba(0, 0, 0, 0.25);
   overflow: hidden;
 }
 
@@ -284,10 +314,178 @@ body {
   margin: 0;
   padding: 0 24px;
   text-align: center;
-  color: var(--text-dim);
+  color: var(--parchment);
   font-style: italic;
   font-size: 14px;
   pointer-events: none;
+}
+
+/* live interaction hint, pinned to the workshop's lower-left */
+.pixel-office-hint {
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
+  margin: 0;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--parchment);
+  background: rgba(79, 48, 24, 0.6);
+  border: 1px solid rgba(216, 193, 147, 0.4);
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+/* hover tooltip bubble */
+.worker-tooltip {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  max-width: 60%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  background: var(--parchment);
+  border: 2px solid var(--wood);
+  border-radius: 10px;
+  box-shadow: var(--shadow-soft);
+  pointer-events: none;
+}
+
+.worker-tooltip-action {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.worker-tooltip-cost {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--leather);
+}
+
+/* click-through detail panel: a parchment scroll over the scene's right edge */
+.worker-detail {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  background: var(--parchment);
+  border: 3px solid var(--wood);
+  border-radius: 12px;
+  box-shadow: var(--shadow-wood);
+  overflow: hidden;
+}
+
+.worker-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, var(--wood), var(--wood-dark));
+}
+
+.worker-detail-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--parchment);
+}
+
+.worker-detail-close {
+  font: inherit;
+  font-size: 12px;
+  color: var(--parchment);
+  background: rgba(255, 250, 240, 0.15);
+  border: 1px solid rgba(255, 250, 240, 0.35);
+  border-radius: 8px;
+  padding: 2px 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.worker-detail-close:hover {
+  background: rgba(255, 250, 240, 0.3);
+}
+
+.worker-detail-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 6px;
+}
+
+.worker-detail-pose {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-on-accent);
+  background: var(--accent);
+  padding: 2px 10px;
+  border-radius: 999px;
+}
+
+.worker-detail-cost {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--leather);
+}
+
+.worker-detail-action {
+  margin: 0 12px 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text);
+  background: rgba(255, 253, 248, 0.7);
+  border: 1px solid var(--parchment-edge);
+  border-radius: 8px;
+  word-break: break-word;
+}
+
+.worker-detail-log {
+  flex: 1;
+  list-style: none;
+  margin: 0;
+  padding: 0 8px 10px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.worker-detail-log-empty {
+  padding: 8px 4px;
+  font-style: italic;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.worker-detail-log-row {
+  display: grid;
+  grid-template-columns: 18px 56px 1fr;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 6px;
+  font-size: 11px;
+  background: rgba(255, 253, 248, 0.55);
+  border: 1px solid var(--parchment-edge);
+  border-radius: 6px;
+}
+
+.worker-detail-log-glyph {
+  text-align: center;
+}
+
+.worker-detail-log-kind {
+  font-weight: 700;
+  color: var(--sage);
+}
+
+.worker-detail-log-text {
+  color: var(--text);
+  word-break: break-word;
+  font-family: 'SF Mono', 'JetBrains Mono', ui-monospace, Menlo, monospace;
 }
 
 /* --- demoted, collapsible event log --- */

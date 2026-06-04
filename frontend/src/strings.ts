@@ -32,6 +32,13 @@ export const STR = {
 
   officeTitle: '工坊',
   officeEmpty: '工坊空荡荡。运行一个任务，弓箭手就会就位开工。',
+  officeHint: '悬停查看动作 · 点击展开事件流 · 拖拽可挪动工位',
+
+  workerDetailTitle: '工位详情',
+  workerDetailClose: '收起',
+  workerDetailCost: '花费',
+  workerDetailLogEmpty: '暂无事件。',
+  workerDetailCostUnknown: '未统计',
 
   recentHeader: '最近项目',
   recentEmpty: '还没有最近项目。选择一个 git 仓库后会记录在这里。',
