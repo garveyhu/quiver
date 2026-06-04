@@ -10,10 +10,90 @@
 //! [`GitGuard`] owns that mutex and is the only door to the shared `.git`. It
 //! shells out to the `git` CLI (no `git2` crate, per the design constraint).
 
+use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::process::Output;
+use std::time::Duration;
 
 use tokio::sync::Mutex;
+
+/// Bounded retry + exponential backoff for transient git lock contention
+/// (DESIGN §6.3). Concurrent ops behind the metadata lock shouldn't collide, but
+/// background tooling (or a not-yet-released `index.lock`) can still cause a
+/// transient failure; we retry a few times before surfacing it as a task error.
+#[derive(Clone, Copy, Debug)]
+pub struct RetryConfig {
+    /// Total attempts (1 = no retry).
+    pub max_attempts: u32,
+    /// Backoff before the 1st retry; doubles each subsequent retry.
+    pub base_delay: Duration,
+}
+
+impl Default for RetryConfig {
+    fn default() -> Self {
+        Self {
+            max_attempts: 5,
+            base_delay: Duration::from_millis(50),
+        }
+    }
+}
+
+impl RetryConfig {
+    /// Backoff with no sleeping — for tests that exercise the retry count without
+    /// the wall-clock cost.
+    #[cfg(test)]
+    fn instant(max_attempts: u32) -> Self {
+        Self {
+            max_attempts,
+            base_delay: Duration::ZERO,
+        }
+    }
+}
+
+/// Does this git error message look like a transient lock contention we should
+/// retry (DESIGN §6.3)? Matches the strings git emits when a `.git` lock file is
+/// held: `index.lock`, `config.lock`, or "could not lock"/"Unable to create ...
+/// lock". A non-lock error (real failure) returns false → surfaced immediately.
+fn is_transient_lock_error(msg: &str) -> bool {
+    let m = msg.to_ascii_lowercase();
+    m.contains("index.lock")
+        || m.contains("config.lock")
+        || m.contains("could not lock")
+        || m.contains("unable to create")
+        || m.contains("file exists") && m.contains(".lock")
+}
+
+/// Run `op` with bounded retry + exponential backoff, retrying ONLY on errors
+/// classified transient by `is_transient`. Surfaces the last error once attempts
+/// are exhausted, or any non-transient error immediately.
+async fn retry_on_lock<T, F, Fut>(
+    cfg: RetryConfig,
+    is_transient: fn(&str) -> bool,
+    mut op: F,
+) -> anyhow::Result<T>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = anyhow::Result<T>>,
+{
+    let mut delay = cfg.base_delay;
+    let mut attempt = 1;
+    loop {
+        match op().await {
+            Ok(v) => return Ok(v),
+            Err(e) => {
+                let transient = is_transient(&e.to_string());
+                if !transient || attempt >= cfg.max_attempts {
+                    return Err(e);
+                }
+                if !delay.is_zero() {
+                    tokio::time::sleep(delay).await;
+                }
+                delay = delay.saturating_mul(2);
+                attempt += 1;
+            }
+        }
+    }
+}
 
 /// Newtype for a worktree's checkout directory, so callers can't confuse it with
 /// the repo root or an arbitrary path.
@@ -52,6 +132,8 @@ pub struct GitGuard {
     /// Where per-attempt worktree directories are created. Kept OUTSIDE the
     /// repo's working tree so the checkouts don't show up as untracked files.
     worktrees_root: PathBuf,
+    /// Retry/backoff policy for transient git lock contention (§6.3).
+    retry: RetryConfig,
     /// The single git-metadata lock. Held only for the duration of a metadata
     /// command, never across an agent run or a build.
     meta_lock: Mutex<()>,
@@ -67,6 +149,7 @@ impl GitGuard {
         Self {
             repo,
             worktrees_root,
+            retry: RetryConfig::default(),
             meta_lock: Mutex::new(()),
         }
     }
@@ -77,9 +160,35 @@ impl GitGuard {
         self
     }
 
+    /// Override the retry/backoff policy (e.g. for tests).
+    pub fn with_retry(mut self, retry: RetryConfig) -> Self {
+        self.retry = retry;
+        self
+    }
+
     /// The repo root this guard serializes.
     pub fn repo(&self) -> &Path {
         &self.repo
+    }
+
+    /// Disable background auto-gc on the repo for the duration of a run
+    /// (DESIGN §6.3): `git config gc.auto 0`. Background `git gc` repacking the
+    /// shared object store mid-run is a needless source of contention/corruption.
+    /// This is a config write (a `.git` metadata mutation), so it runs behind the
+    /// metadata lock.
+    pub async fn disable_auto_gc(&self) -> anyhow::Result<()> {
+        let _lock = self.meta_lock.lock().await;
+        self.run_meta(&["config", "gc.auto", "0"]).await?;
+        Ok(())
+    }
+
+    /// Run a shared-`.git` metadata command at the repo root with retry/backoff.
+    /// Caller must already hold `meta_lock`.
+    async fn run_meta(&self, args: &[&str]) -> anyhow::Result<Output> {
+        retry_on_lock(self.retry, is_transient_lock_error, || {
+            run_git(&self.repo, args)
+        })
+        .await
     }
 
     /// Create a worktree for one attempt of a task (DESIGN §6.1, §6.3).
@@ -108,7 +217,8 @@ impl GitGuard {
     ) -> anyhow::Result<WorktreePath> {
         let _lock = self.meta_lock.lock().await;
         let dir_str = path_arg(dir)?;
-        run_git(&self.repo, &["worktree", "add", dir_str, "-b", branch]).await?;
+        self.run_meta(&["worktree", "add", dir_str, "-b", branch])
+            .await?;
         Ok(WorktreePath(dir.to_path_buf()))
     }
 
@@ -128,7 +238,7 @@ impl GitGuard {
 
         let dir_str = path_arg(path.as_path())?;
         let _lock = self.meta_lock.lock().await;
-        run_git(&self.repo, &["worktree", "remove", dir_str]).await?;
+        self.run_meta(&["worktree", "remove", dir_str]).await?;
         Ok(RemoveOutcome::Removed)
     }
 
@@ -333,5 +443,79 @@ mod tests {
         assert!(wt.as_path().join("scratch.txt").exists());
         let branches = worktree_branches(repo.path());
         assert!(branches.contains(&"quiver/task-dirty/attempt-1".to_string()));
+    }
+
+    #[test]
+    fn classifies_transient_lock_errors() {
+        assert!(is_transient_lock_error(
+            "fatal: Unable to create '/r/.git/index.lock': File exists."
+        ));
+        assert!(is_transient_lock_error("could not lock config file"));
+        assert!(is_transient_lock_error("error: config.lock held"));
+        // A real failure is NOT transient — must surface immediately.
+        assert!(!is_transient_lock_error("fatal: not a git repository"));
+        assert!(!is_transient_lock_error("merge conflict in foo.rs"));
+    }
+
+    #[tokio::test]
+    async fn retry_succeeds_after_n_transient_lock_errors() {
+        use std::cell::Cell;
+        let calls = Cell::new(0u32);
+        // Fail with a lock error the first 2 times, succeed on the 3rd.
+        let result = retry_on_lock(RetryConfig::instant(5), is_transient_lock_error, || {
+            let n = calls.get() + 1;
+            calls.set(n);
+            async move {
+                if n < 3 {
+                    Err(anyhow::anyhow!("fatal: Unable to create '.git/index.lock': File exists."))
+                } else {
+                    Ok(n)
+                }
+            }
+        })
+        .await;
+        assert_eq!(result.unwrap(), 3);
+        assert_eq!(calls.get(), 3, "should retry exactly until success");
+    }
+
+    #[tokio::test]
+    async fn retry_surfaces_after_exhausting_attempts() {
+        use std::cell::Cell;
+        let calls = Cell::new(0u32);
+        let result: anyhow::Result<()> =
+            retry_on_lock(RetryConfig::instant(3), is_transient_lock_error, || {
+                calls.set(calls.get() + 1);
+                async { Err(anyhow::anyhow!("could not lock index.lock")) }
+            })
+            .await;
+        assert!(result.is_err(), "exhausted retries must surface the error");
+        assert_eq!(calls.get(), 3, "should attempt exactly max_attempts times");
+    }
+
+    #[tokio::test]
+    async fn retry_does_not_retry_non_transient_error() {
+        use std::cell::Cell;
+        let calls = Cell::new(0u32);
+        let result: anyhow::Result<()> =
+            retry_on_lock(RetryConfig::instant(5), is_transient_lock_error, || {
+                calls.set(calls.get() + 1);
+                async { Err(anyhow::anyhow!("fatal: not a git repository")) }
+            })
+            .await;
+        assert!(result.is_err());
+        assert_eq!(calls.get(), 1, "a non-transient error surfaces on the first try");
+    }
+
+    #[tokio::test]
+    async fn disable_auto_gc_sets_repo_config() {
+        let repo = temp_repo();
+        let guard = GitGuard::new(repo.path());
+        guard.disable_auto_gc().await.expect("disable auto gc");
+
+        let out = std::process::Command::new("git")
+            .args(["-C", repo.path().to_str().unwrap(), "config", "--get", "gc.auto"])
+            .output()
+            .expect("read gc.auto");
+        assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "0");
     }
 }
