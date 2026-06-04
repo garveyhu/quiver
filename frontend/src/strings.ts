@@ -160,6 +160,7 @@ export const STR = {
   logbookReplay: '在工坊回放',
   logbookReplayTip: '让弓箭手按原始节奏重演这次运行（仅视觉，不消耗额度）',
   logbookReplaying: '回放中…',
+  replayStop: '停止回放',
 
   // 外观
   settingTheme: '主题',

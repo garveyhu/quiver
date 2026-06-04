@@ -3,6 +3,7 @@ import { useSupervisor } from '@/hooks/useSupervisor';
 import { useSettings } from '@/hooks/useSettings';
 import { useTaskBoard } from '@/hooks/useTaskBoard';
 import { useArchive } from '@/hooks/useArchive';
+import { useReplay } from '@/hooks/useReplay';
 import { ProjectPicker } from '@/components/ProjectPicker';
 import { RecentProjects } from '@/components/RecentProjects';
 import { ModeToggle } from '@/components/ModeToggle';
@@ -17,7 +18,7 @@ import { ArchiveView } from '@/components/archive/ArchiveView';
 import { LogbookViewer } from '@/components/archive/LogbookViewer';
 import { STR } from '@/strings';
 import type { RunMode } from '@/types/run.types';
-import type { TaskRecord } from '@/types/persistence.types';
+import type { StoredEvent, TaskRecord } from '@/types/persistence.types';
 
 export function App() {
   const { events, error, projectPath, recentProjects, pickProject, selectRecentProject } =
@@ -32,6 +33,7 @@ export function App() {
     cancel,
   } = useTaskBoard(projectPath);
   const { records, error: archiveError, loadEvents } = useArchive();
+  const replay = useReplay();
 
   const [mode, setMode] = useState<RunMode>('simulate');
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -39,6 +41,19 @@ export function App() {
   const [openRecord, setOpenRecord] = useState<TaskRecord | null>(null);
 
   const maxWorkers = settings?.maxWorkers ?? 1;
+
+  // While a Logbook re-enactment is playing (or its final frame is still on
+  // screen), the workshop shows the replay's time-scaled events instead of the
+  // live stream. It returns to the live stream once the replay is cleared.
+  const officeEvents = replay.events.length > 0 ? replay.events : events;
+
+  // "回放": start the re-enactment, close the scroll, and hop to the workshop so
+  // the archer is visible doing the run again.
+  const handleReplay = (stored: StoredEvent[]) => {
+    setOpenRecord(null);
+    setScene('workshop');
+    replay.start(stored);
+  };
 
   // Pre-select the run mode from the saved default — but only once, before the
   // user has touched the toggle, so a manual choice is never overridden.
@@ -102,9 +117,17 @@ export function App() {
       <div className={`scene-panel ${scene === 'workshop' ? '' : 'scene-hidden'}`}>
         <section className="app-office">
           <h2 className="app-office-title">{STR.officeTitle}</h2>
-          <PixelOffice events={events} />
+          {replay.events.length > 0 && (
+            <div className="replay-banner">
+              <span>{replay.active ? STR.logbookReplaying : STR.logbookReplay}</span>
+              <button type="button" className="replay-stop" onClick={replay.stop}>
+                {STR.replayStop}
+              </button>
+            </div>
+          )}
+          <PixelOffice events={officeEvents} />
         </section>
-        <EventLogPanel events={events} />
+        <EventLogPanel events={officeEvents} />
       </div>
 
       <div className={`scene-panel ${scene === 'board' ? '' : 'scene-hidden'}`}>
@@ -128,6 +151,7 @@ export function App() {
           record={openRecord}
           loadEvents={loadEvents}
           onClose={() => setOpenRecord(null)}
+          onReplay={handleReplay}
         />
       )}
 

@@ -2078,3 +2078,39 @@ body {
 .logbook-row-finished .logbook-row-glyph {
   border-color: var(--ok);
 }
+
+/* ============================================================
+   Phase D — 回放 (Logbook re-enactment banner in the workshop)
+   ============================================================ */
+.replay-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--wood-dark);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-ctrl);
+  animation: scene-fade 0.2s ease both;
+}
+
+.replay-stop {
+  padding: 5px 11px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-on-accent);
+  background: var(--leather);
+  border: none;
+  border-radius: var(--radius-ctrl);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.replay-stop:hover {
+  background: var(--wood-dark);
+}
