@@ -4,6 +4,7 @@ import { ProjectPicker } from '@/components/ProjectPicker';
 import { ModeToggle } from '@/components/ModeToggle';
 import { TaskInput } from '@/components/TaskInput';
 import { EventList } from '@/components/EventList';
+import { STR } from '@/strings';
 import type { RunMode } from '@/types/run.types';
 
 export function App() {
@@ -12,28 +13,33 @@ export function App() {
 
   return (
     <main className="app">
+      <div className="app-accent" aria-hidden="true" />
+
       <header className="app-header">
-        <h1>Quiver</h1>
-        <p className="app-tagline">
-          Pick a git repo → describe a task → Simulate (free) or Real Claude → watch the events.
-        </p>
+        <h1 className="app-brand">{STR.brand}</h1>
+        <p className="app-tagline">{STR.tagline}</p>
       </header>
 
-      <ProjectPicker projectPath={projectPath} disabled={running} onPick={pickProject} />
+      <section className="app-card">
+        <ProjectPicker projectPath={projectPath} disabled={running} onPick={pickProject} />
 
-      <ModeToggle mode={mode} disabled={running} onChange={setMode} />
+        <ModeToggle mode={mode} disabled={running} onChange={setMode} />
 
-      <TaskInput running={running} disabled={!projectPath} onRun={prompt => runTask(prompt, mode)} />
+        <TaskInput running={running} disabled={!projectPath} onRun={prompt => runTask(prompt, mode)} />
 
-      {!projectPath && (
-        <p className="app-hint">Pick a project to enable Run.</p>
-      )}
+        {!projectPath && <p className="app-hint">{STR.noProjectHint}</p>}
 
-      {error && <p className="app-error">Task failed: {error}</p>}
+        {error && (
+          <p className="app-error">
+            {STR.taskFailedPrefix}
+            {error}
+          </p>
+        )}
+      </section>
 
       <section className="app-stream">
-        <h2>
-          Agent events <span className="app-count">({events.length})</span>
+        <h2 className="app-stream-title">
+          {STR.eventsHeader} <span className="app-count">({events.length})</span>
         </h2>
         <EventList events={events} />
       </section>

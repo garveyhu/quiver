@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { STR } from '@/strings';
 
 interface TaskInputProps {
   running: boolean;
@@ -7,10 +8,10 @@ interface TaskInputProps {
   onRun: (prompt: string) => void;
 }
 
-const DEFAULT_PROMPT = 'Read README.md and reply with one sentence.';
+const DEFAULT_PROMPT: string = STR.taskPlaceholder;
 
 export function TaskInput({ running, disabled, onRun }: TaskInputProps) {
-  const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
+  const [prompt, setPrompt] = useState<string>(DEFAULT_PROMPT);
 
   const canRun = !running && !disabled && prompt.trim().length > 0;
 
@@ -26,12 +27,12 @@ export function TaskInput({ running, disabled, onRun }: TaskInputProps) {
         type="text"
         value={prompt}
         onChange={e => setPrompt(e.target.value)}
-        placeholder="Describe a task for the agent…"
+        placeholder={STR.taskPlaceholder}
         disabled={running}
-        aria-label="Task prompt"
+        aria-label={STR.taskInputAriaLabel}
       />
       <button type="submit" disabled={!canRun}>
-        {running ? 'Running…' : 'Run task'}
+        {running ? STR.running : STR.runTask}
       </button>
     </form>
   );

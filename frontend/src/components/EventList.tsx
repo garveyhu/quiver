@@ -1,5 +1,6 @@
 import type { AgentEvent } from '@/types/agentEvent.types';
 import { EventRow } from '@/components/EventRow';
+import { STR } from '@/strings';
 
 interface EventListProps {
   events: AgentEvent[];
@@ -7,7 +8,7 @@ interface EventListProps {
 
 export function EventList({ events }: EventListProps) {
   if (events.length === 0) {
-    return <p className="event-empty">No events yet. Run a task to watch the soul work.</p>;
+    return <p className="event-empty">{STR.eventsEmpty}</p>;
   }
   return (
     <ul className="event-list">

@@ -99,7 +99,7 @@ async fn pick_project(app: AppHandle, state: State<'_, AppState>) -> Result<Opti
 
     if !path.join(".git").exists() {
         return Err(format!(
-            "{} is not a git repository (no .git directory). Pick a git repo.",
+            "{} 这不是一个 git 仓库（没有 .git 目录）。请选择一个 git 仓库。",
             path.display()
         ));
     }
@@ -126,7 +126,7 @@ async fn run_task_cmd(
         .expect("project_path lock")
         .clone();
     let Some(project) = project else {
-        return Err("Pick a project first — no git repo selected.".to_string());
+        return Err("请先选择一个项目——尚未选择 git 仓库。".to_string());
     };
 
     run_task_inner(app, project, prompt, mode).await.map_err(|e| {
