@@ -242,6 +242,24 @@ impl GitGuard {
         Ok(RemoveOutcome::Removed)
     }
 
+    /// Deterministically discard a failed attempt's worktree (DESIGN §8.4).
+    ///
+    /// This is the deliberate abandon path — distinct from [`GitGuard::remove`]'s
+    /// dirty-tree guard (§6.3). When a task is permanently failed we've already
+    /// decided to throw the attempt away, so we `git worktree prune` (clear any
+    /// stale admin entry) then `git worktree remove --force <dir>` (discard the
+    /// checkout even if the crashed agent left it dirty). Both ref-mutating
+    /// commands run behind the metadata lock with retry/backoff, so a crash never
+    /// leaks an orphan worktree or a stale lock.
+    pub async fn force_remove(&self, path: &WorktreePath) -> anyhow::Result<()> {
+        let dir_str = path_arg(path.as_path())?;
+        let _lock = self.meta_lock.lock().await;
+        self.run_meta(&["worktree", "prune"]).await?;
+        self.run_meta(&["worktree", "remove", "--force", dir_str])
+            .await?;
+        Ok(())
+    }
+
     /// `git status --porcelain` run *inside* the worktree. Non-empty = dirty.
     async fn worktree_status(&self, path: &WorktreePath) -> anyhow::Result<String> {
         let out = run_git_in(path.as_path(), &["status", "--porcelain"]).await?;
@@ -443,6 +461,28 @@ mod tests {
         assert!(wt.as_path().join("scratch.txt").exists());
         let branches = worktree_branches(repo.path());
         assert!(branches.contains(&"quiver/task-dirty/attempt-1".to_string()));
+    }
+
+    #[tokio::test]
+    async fn force_remove_discards_even_a_dirty_worktree_no_leak() {
+        let repo = temp_repo();
+        let wt_root = TempDir::new().expect("wt root");
+        let guard = GitGuard::new(repo.path()).with_worktrees_root(wt_root.path());
+
+        let wt = guard.create("crashed", 1).await.expect("create");
+        // Simulate a crashed agent leaving uncommitted work behind.
+        std::fs::write(wt.as_path().join("partial.txt"), "half-written\n").expect("dirty");
+
+        // Deliberate abandon (§8.4): force-remove despite the dirty tree.
+        guard.force_remove(&wt).await.expect("force remove");
+
+        assert!(!wt.as_path().exists(), "forced worktree dir should be gone");
+        let branches = worktree_branches(repo.path());
+        assert!(
+            !branches.contains(&"quiver/task-crashed/attempt-1".to_string()),
+            "no orphan worktree should remain after force_remove"
+        );
+        assert!(!repo.path().join(".git/index.lock").exists());
     }
 
     #[test]

@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use quiver_core::event::AgentEventPayload;
-use quiver_core::git::{GitGuard, RemoveOutcome};
-use quiver_core::supervisor::{run_task, FinishStatus, TaskSpec};
+use quiver_core::git::GitGuard;
+use quiver_core::supervisor::{run_task, Cleanup, FailureReason, FinishStatus, TaskSpec};
 use tempfile::TempDir;
 
 /// Resolve the sibling `fake-claude` binary from this test's own exe path
@@ -29,6 +29,29 @@ fn fake_claude_bin() -> PathBuf {
         bin.display()
     );
     bin
+}
+
+/// `ClaudeRunner` does not forward a `--scenario` flag, so to drive the crash
+/// scenario through the real `run_task` → spawn path we write a tiny executable
+/// shim into `dir` that execs `fake-claude --scenario crash "$@"`. Returns the
+/// shim path. (`fake-claude` scans all its args for `--scenario`, so prepending
+/// it plus the runner's own flags works.)
+fn crash_shim(dir: &Path) -> PathBuf {
+    let real = fake_claude_bin();
+    let shim = dir.join("fake-claude-crash.sh");
+    let script = format!(
+        "#!/bin/sh\nexec \"{}\" --scenario crash \"$@\"\n",
+        real.display()
+    );
+    std::fs::write(&shim, script).expect("write shim");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(&shim).expect("stat shim").permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&shim, perms).expect("chmod shim");
+    }
+    shim
 }
 
 /// Run a git command in `dir`, asserting success.
@@ -89,17 +112,82 @@ async fn run_task_streams_events_and_leaves_repo_clean() {
 
     // Stub verify-gate: a Result{ok:true} → Verified.
     assert_eq!(outcome.status, FinishStatus::Verified);
+    assert!(outcome.failure.is_none());
 
     // Clean worktree → removed, not preserved.
-    assert_eq!(outcome.cleanup, RemoveOutcome::Removed);
+    assert_eq!(outcome.cleanup, Cleanup::Removed);
 
     // Repo is left clean: no stray quiver/... worktrees beyond the main one.
-    let list = git(repo.path(), &["worktree", "list", "--porcelain"]);
+    assert_no_quiver_worktree_leak(repo.path());
+}
+
+/// A bogus runner binary path: the worktree was created, the spawn fails, and
+/// the §8.4 GC must still run so nothing leaks.
+#[tokio::test]
+async fn run_task_force_cleans_up_on_spawn_failure() {
+    let repo = temp_repo();
+    let wt_root = TempDir::new().expect("wt root");
+    let guard = GitGuard::new(repo.path()).with_worktrees_root(wt_root.path());
+
+    let task = TaskSpec {
+        id: "ghost".to_string(),
+        prompt: "never runs".to_string(),
+    };
+    let bogus = PathBuf::from("/nonexistent/quiver/definitely-not-a-binary");
+
+    let outcome = run_task(&guard, &task, &bogus).await.expect("run_task");
+
+    assert_eq!(outcome.status, FinishStatus::Failed);
+    assert_eq!(outcome.failure, Some(FailureReason::SpawnFailed));
+    assert_eq!(outcome.cleanup, Cleanup::ForcedRemoved);
+    assert_no_quiver_worktree_leak(repo.path());
+}
+
+/// A crashed agent (`fake-claude --scenario crash`: emits init, then exits
+/// non-zero with no clean `result`): deterministic GC, no leak, and the outcome
+/// carries the classified failure.
+#[tokio::test]
+async fn run_task_cleans_up_deterministically_on_crash() {
+    let repo = temp_repo();
+    let wt_root = TempDir::new().expect("wt root");
+    let guard = GitGuard::new(repo.path()).with_worktrees_root(wt_root.path());
+
+    let task = TaskSpec {
+        id: "boom".to_string(),
+        prompt: "crash please".to_string(),
+    };
+
+    let shim_dir = TempDir::new().expect("shim dir");
+    let outcome = run_task(&guard, &task, &crash_shim(shim_dir.path()))
+        .await
+        .expect("run_task");
+
+    // The init line still produced a WorkerStarted before the crash.
+    assert!(matches!(
+        outcome.events.first().map(|e| &e.payload),
+        Some(AgentEventPayload::WorkerStarted { .. })
+    ));
+    // No clean result → permanent failure, recorded reason.
+    assert_eq!(outcome.status, FinishStatus::Failed);
+    assert_eq!(outcome.failure, Some(FailureReason::NoResult));
+    assert_eq!(outcome.cleanup, Cleanup::ForcedRemoved);
+
+    // No orphan worktree, no stale lock.
+    assert_no_quiver_worktree_leak(repo.path());
+    assert!(!repo.path().join(".git/index.lock").exists());
+}
+
+/// Assert `git worktree list` shows only the main worktree — no quiver/... leak.
+fn assert_no_quiver_worktree_leak(repo: &Path) {
+    let list = git(repo, &["worktree", "list", "--porcelain"]);
     let listing = String::from_utf8_lossy(&list.stdout);
     assert!(
         !listing.contains("quiver/"),
         "no quiver worktree should remain:\n{listing}"
     );
     let worktree_count = listing.lines().filter(|l| l.starts_with("worktree ")).count();
-    assert_eq!(worktree_count, 1, "only the main worktree should remain:\n{listing}");
+    assert_eq!(
+        worktree_count, 1,
+        "only the main worktree should remain:\n{listing}"
+    );
 }

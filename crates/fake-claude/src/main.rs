@@ -7,9 +7,9 @@
 //! is reasonable. This lets the core loop be exercised for free and
 //! deterministically in CI (DESIGN §13.1).
 //!
-//! A `--scenario <name>` flag selects the script. Only `happy` is implemented;
-//! `verify_fail` / `crash` / `credit_exhausted` are reserved for later phases
-//! and currently fall back to `happy`.
+//! A `--scenario <name>` flag selects the script. `happy` (default) and `crash`
+//! are implemented; `verify_fail` / `credit_exhausted` are reserved for later
+//! phases and currently fall back to `happy`.
 
 use std::process::ExitCode;
 
@@ -17,8 +17,15 @@ fn main() -> ExitCode {
     let scenario = parse_scenario(std::env::args().skip(1));
 
     match scenario.as_str() {
+        // Permanently-failed run (DESIGN §8.4): emit the init line so a worker
+        // appears, then die non-zero with NO clean `result` line. Exercises the
+        // deterministic crash-cleanup path in the supervisor.
+        "crash" => {
+            emit_init();
+            return ExitCode::FAILURE;
+        }
         // Reserved for later phases (DESIGN §13.1). Fall back to happy for now.
-        "verify_fail" | "crash" | "credit_exhausted" => emit_happy(),
+        "verify_fail" | "credit_exhausted" => emit_happy(),
         // Default scripted success path.
         _ => emit_happy(),
     }
@@ -43,17 +50,24 @@ fn parse_scenario(args: impl Iterator<Item = String>) -> String {
     "happy".to_string()
 }
 
-/// Print the happy-path `stream-json` sequence:
-/// init → tool_use → tool_result → assistant text → result/success.
-fn emit_happy() {
-    const SESSION_ID: &str = "fake-session-0001";
-    const MODEL: &str = "claude-sonnet-4-5";
-    const TOOL_USE_ID: &str = "toolu_fake_0001";
+const SESSION_ID: &str = "fake-session-0001";
+const MODEL: &str = "claude-sonnet-4-5";
 
-    // 1. system / init line — carries session_id + model.
+/// Print the `system / init` line — carries session_id + model. Shared by the
+/// happy and crash scripts so both produce a `WorkerStarted` event.
+fn emit_init() {
     println!(
         r#"{{"type":"system","subtype":"init","session_id":"{SESSION_ID}","model":"{MODEL}","cwd":"/tmp/fake-worktree","tools":["Edit","Read","Bash"],"permissionMode":"acceptEdits","apiKeySource":"none"}}"#
     );
+}
+
+/// Print the happy-path `stream-json` sequence:
+/// init → tool_use → tool_result → assistant text → result/success.
+fn emit_happy() {
+    const TOOL_USE_ID: &str = "toolu_fake_0001";
+
+    // 1. system / init line — carries session_id + model.
+    emit_init();
 
     // 2. assistant line containing a tool_use (Edit).
     println!(
