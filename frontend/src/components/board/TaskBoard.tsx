@@ -25,9 +25,12 @@ const POSITION_EPSILON = 0.5;
  * `task-updated` stream the parent hook listens to.
  */
 export function TaskBoard({ tasks, freshIds, maxWorkers, onReorder, onCancel }: TaskBoardProps) {
+  // The drag source/target are kept in refs (not state) so the dragend handler
+  // reads the CURRENT source even when dragstart/dragend fire in the same
+  // synchronous event burst — React state would still be stale there. A separate
+  // `dragId` state drives only the visual dimming of the source card.
   const [dragId, setDragId] = useState<string | null>(null);
-  // The id currently hovered as a drop target, kept in a ref so the dragenter
-  // handler doesn't churn renders on every pixel.
+  const dragIdRef = useRef<string | null>(null);
   const overIdRef = useRef<string | null>(null);
 
   const runningCount = useMemo(
@@ -36,15 +39,21 @@ export function TaskBoard({ tasks, freshIds, maxWorkers, onReorder, onCancel }: 
   );
   const queuedCount = useMemo(() => tasks.filter(t => t.status === 'queued').length, [tasks]);
 
+  const handleDragStart = (id: string) => {
+    dragIdRef.current = id;
+    setDragId(id);
+  };
+
   const handleDragEnter = (id: string) => {
     overIdRef.current = id;
   };
 
   const handleDragEnd = () => {
-    const source = dragId;
+    const source = dragIdRef.current;
     const target = overIdRef.current;
-    setDragId(null);
+    dragIdRef.current = null;
     overIdRef.current = null;
+    setDragId(null);
     if (!source || !target || source === target) return;
     const targetTask = tasks.find(t => t.id === target);
     if (!targetTask) return;
@@ -80,7 +89,7 @@ export function TaskBoard({ tasks, freshIds, maxWorkers, onReorder, onCancel }: 
               fresh={freshIds.has(task.id)}
               dragging={dragId === task.id}
               onCancel={onCancel}
-              onDragStart={setDragId}
+              onDragStart={handleDragStart}
               onDragEnter={handleDragEnter}
               onDragEnd={handleDragEnd}
             />
