@@ -1,0 +1,29 @@
+[package]
+name = "quiver-app"
+version = "0.0.0"
+edition = "2021"
+description = "Quiver — gamified overnight supervisor for headless coding agents"
+default-run = "quiver-app"
+
+# The Tauri app's library + binary. `main.rs` is a thin shim that calls into the
+# lib so the same code is testable and reusable (Tauri 2 convention).
+[lib]
+name = "quiver_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+tempfile = "3"
+# §12: repair the sparse launchd PATH so child processes (git, the agent binary)
+# are findable when launched from a packaged .app via Finder. Distributed only as
+# a git dependency by the Tauri team — it is not published to crates.io.
+fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs", branch = "dev" }
+
+# The pure-Rust supervisor — path dependency on the workspace crate.
+quiver-core = { path = "../crates/quiver-core" }
