@@ -32,7 +32,25 @@ export const STR = {
 
   officeTitle: '工坊',
   officeEmpty: '工坊空荡荡。运行一个任务，弓箭手就会就位开工。',
+
+  recentHeader: '最近项目',
+  recentEmpty: '还没有最近项目。选择一个 git 仓库后会记录在这里。',
+  recentReselectTitle: '点击重新选择该项目',
+
+  historyHeader: '运行历史',
+  historyEmpty: '暂无历史。运行一个任务后会记录在这里，重启也不会丢失。',
+  historyCostPrefix: '花费 $',
+  historyCostUnknown: '花费未知',
+  historyBranchPrefix: '分支：',
 } as const;
+
+// 运行历史里 status 字段（与 Rust FinishStatus 标签对齐）的中文展示。
+export const RUN_STATUS_LABEL: Record<string, string> = {
+  verified: '已验证',
+  verify_failed: '验证未过',
+  failed: '失败',
+  needs_rebase: '待变基',
+};
 
 // 各事件类型的中文展示标签（保留底层 kind 作为 key，仅展示文案中文化）。
 export const EVENT_KIND_LABEL: Record<AgentEvent['kind'], string> = {

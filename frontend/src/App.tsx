@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useSupervisor } from '@/hooks/useSupervisor';
 import { ProjectPicker } from '@/components/ProjectPicker';
+import { RecentProjects } from '@/components/RecentProjects';
+import { RunHistory } from '@/components/RunHistory';
 import { ModeToggle } from '@/components/ModeToggle';
 import { TaskInput } from '@/components/TaskInput';
 import { PixelOffice } from '@/components/PixelOffice';
@@ -9,7 +11,17 @@ import { STR } from '@/strings';
 import type { RunMode } from '@/types/run.types';
 
 export function App() {
-  const { events, running, error, projectPath, pickProject, runTask } = useSupervisor();
+  const {
+    events,
+    running,
+    error,
+    projectPath,
+    recentProjects,
+    history,
+    pickProject,
+    selectRecentProject,
+    runTask,
+  } = useSupervisor();
   const [mode, setMode] = useState<RunMode>('simulate');
 
   return (
@@ -21,6 +33,13 @@ export function App() {
 
       <section className="app-card">
         <ProjectPicker projectPath={projectPath} disabled={running} onPick={pickProject} />
+
+        <RecentProjects
+          projects={recentProjects}
+          activePath={projectPath}
+          disabled={running}
+          onSelect={selectRecentProject}
+        />
 
         <ModeToggle mode={mode} disabled={running} onChange={setMode} />
 
@@ -39,6 +58,10 @@ export function App() {
       <section className="app-office">
         <h2 className="app-office-title">{STR.officeTitle}</h2>
         <PixelOffice events={events} />
+      </section>
+
+      <section className="app-card app-history-card">
+        <RunHistory history={history} />
       </section>
 
       <EventLogPanel events={events} />
