@@ -27,3 +27,4 @@ fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs", branch =
 
 # The pure-Rust supervisor — path dependency on the workspace crate.
 quiver-core = { path = "../crates/quiver-core" }
+tauri-plugin-dialog = "2.7.1"

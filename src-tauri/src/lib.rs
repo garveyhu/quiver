@@ -1,40 +1,71 @@
 //! Quiver Tauri app crate (DESIGN §3 three-layer architecture).
 //!
 //! This is the Rust "core" half of the Tauri app. It owns the Tauri runtime,
-//! the IPC surface the React/Phaser UI talks to, and the resolution of the agent
-//! binary's absolute path (§12). The actual supervisor logic — worktrees, the
-//! verify-gate, merge — lives in the pure-Rust `quiver-core` crate; this crate
-//! only wires it to the window.
+//! the IPC surface the React/Phaser UI talks to, the picked-project app state,
+//! and the resolution of the agent binary's absolute path (§12). The actual
+//! supervisor logic — worktrees, the verify-gate, merge — lives in the pure-Rust
+//! `quiver-core` crate; this crate only wires it to the window.
 //!
-//! Phase 3 wires exactly ONE command, `run_demo_task`, which proves the whole
-//! seam end to end against the free, deterministic `fake-claude` binary:
-//! temp repo → worktree → run → verify → stream `AgentEvent`s to the UI.
+//! Commands:
+//! - `pick_project()` — open a folder dialog, validate the chosen dir is a git
+//!   repo, store it in app state, return its path.
+//! - `run_task_cmd({ prompt, mode })` — run one task against the picked repo in
+//!   either `simulate` (free `fake-claude`, default) or `real` (the official
+//!   `claude` binary, subscription/OAuth, §9.3 env-scrubbed, NO auto-merge) mode.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::sync::Mutex;
 
-use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager};
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_dialog::DialogExt;
 
 use quiver_core::event::AgentEvent;
 use quiver_core::git::GitGuard;
-use quiver_core::supervisor::{run_task, FinishStatus, RunOutcome, TaskSpec};
+use quiver_core::supervisor::{
+    run_task_with_options, Cleanup, FinishStatus, RunOptions, RunOutcome, TaskSpec,
+};
 use quiver_core::verify::VerifyCommand;
 
 /// The Tauri event channel the UI subscribes to (see `useSupervisor.ts`).
 const AGENT_EVENT_CHANNEL: &str = "agent-event";
 
+/// Env vars that, if present, mean the `claude` CLI would NOT be on the
+/// subscription/OAuth route (§9.3). In `real` (subscription) mode we assert NONE
+/// of these are present in the scrubbed child env before spawning — if any is,
+/// we refuse to launch rather than silently spend on a key/Bedrock/Vertex route.
+const FORBIDDEN_SUBSCRIPTION_ENV: &[&str] = &[
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+    "CLAUDE_CODE_USE_BEDROCK",
+    "CLAUDE_CODE_USE_VERTEX",
+    "CLAUDE_CODE_USE_FOUNDRY",
+];
+
+/// The run mode chosen in the UI (§4.2). `Simulate` is the free default;
+/// `Real` spawns the official `claude` binary on the subscription route.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+enum RunMode {
+    Simulate,
+    Real,
+}
+
+/// Per-app state: the user-picked project (a git repo) all runs operate on.
+/// Guarded by a std `Mutex` since it is only touched briefly on the command
+/// thread (no `.await` held across the lock).
+#[derive(Default)]
+struct AppState {
+    project_path: Mutex<Option<PathBuf>>,
+}
+
 /// A terminal event synthesized AFTER `run_task` returns, carrying the §5.2
-/// `FinishStatus` and the run's summed cost. `run_task` owns the whole event
-/// stream and returns it as `outcome.events`; it does not expose a per-event
-/// callback, so Phase 3 emits the collected events (instant & deterministic with
-/// `fake-claude`) and then this lifecycle cap. It is NOT a `quiver-core`
-/// `AgentEvent` variant — it mirrors the wire envelope so the UI can render it in
-/// the same list (matched by `kind: "finished"` in `agentEvent.types.ts`).
+/// `FinishStatus`, the run's summed cost, the run mode, and — for real-mode runs
+/// left un-merged — the attempt branch the work lives on.
 ///
-/// TODO(phase-4): when the supervisor grows a live per-event sink (a coalesced
-/// emitter / Tauri Channel per DESIGN §3), emit each event as it arrives instead
-/// of after the run, and emit the real terminal `Finished{status}` from the core.
+/// It is NOT a `quiver-core` `AgentEvent` variant — it mirrors the wire envelope
+/// so the UI can render it in the same list (matched by `kind: "finished"` in
+/// `agentEvent.types.ts`).
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct FinishedEvent {
@@ -45,45 +76,119 @@ struct FinishedEvent {
     kind: &'static str,
     status: String,
     cost_usd: Option<f64>,
+    /// `Some` when the work was left on a branch (real-mode, no merge).
+    branch: Option<String>,
 }
 
-/// Run one demo task end to end and stream its events to the UI.
-///
-/// Steps: (1) create a throwaway temp git repo with an initial commit; (2) build
-/// a `TaskSpec`; (3) resolve the agent binary to an ABSOLUTE path (§12; defaults
-/// to the built `fake-claude`); (4) `run_task` with a trivially-passing verify
-/// gate; (5) emit each collected `AgentEvent` over `agent-event`; (6) emit a
-/// synthesized `finished` event; (7) drop the temp dir (cleanup).
+/// Open a folder dialog, validate the chosen directory is a git repo, store it
+/// in app state, and return its absolute path. Returns `Ok(None)` if the user
+/// cancels the dialog. Errors (surfaced to the UI) if the chosen dir is not a
+/// git repo.
 #[tauri::command]
-async fn run_demo_task(app: AppHandle, prompt: String) -> Result<(), String> {
-    run_demo_task_inner(app, prompt).await.map_err(|e| {
+async fn pick_project(app: AppHandle, state: State<'_, AppState>) -> Result<Option<String>, String> {
+    // The dialog plugin's blocking picker must not run on the async command's
+    // executor; `blocking_pick_folder` spawns the native dialog and waits.
+    let chosen = app.dialog().file().blocking_pick_folder();
+    let Some(folder) = chosen else {
+        return Ok(None); // user cancelled
+    };
+
+    let path: PathBuf = folder
+        .into_path()
+        .map_err(|e| format!("could not resolve the chosen folder: {e}"))?;
+
+    if !path.join(".git").exists() {
+        return Err(format!(
+            "{} is not a git repository (no .git directory). Pick a git repo.",
+            path.display()
+        ));
+    }
+
+    *state.project_path.lock().expect("project_path lock") = Some(path.clone());
+    Ok(Some(path.display().to_string()))
+}
+
+/// Run one task end to end against the picked repo and stream its events to the
+/// UI. `mode` selects the free `fake-claude` double (`simulate`) or the real
+/// `claude` binary (`real`).
+#[tauri::command]
+async fn run_task_cmd(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    prompt: String,
+    mode: RunMode,
+) -> Result<(), String> {
+    // Resolve the picked project up front so a clear "pick a project first"
+    // error reaches the UI for both modes.
+    let project = state
+        .project_path
+        .lock()
+        .expect("project_path lock")
+        .clone();
+    let Some(project) = project else {
+        return Err("Pick a project first — no git repo selected.".to_string());
+    };
+
+    run_task_inner(app, project, prompt, mode).await.map_err(|e| {
         // Sanitized surface (DESIGN §9): never leak a stack/SQL detail to the UI.
-        // The full chain stays in the (eventual) log; the UI gets the message.
         format!("{e:#}")
     })
 }
 
-async fn run_demo_task_inner(app: AppHandle, prompt: String) -> anyhow::Result<()> {
-    let agent_bin = resolve_agent_bin(&app)?;
+async fn run_task_inner(
+    app: AppHandle,
+    project: PathBuf,
+    prompt: String,
+    mode: RunMode,
+) -> anyhow::Result<()> {
+    // Resolve the agent binary + per-mode run options.
+    let (agent_bin, options, verify) = match mode {
+        RunMode::Simulate => (
+            resolve_fake_claude(&app)?,
+            // Simulate keeps the original Phase-3 behavior on the picked repo:
+            // the worktree is torn down after a trivially-passing gate.
+            RunOptions::default(),
+            VerifyCommand::shell("exit 0"),
+        ),
+        RunMode::Real => {
+            let bin = resolve_real_claude(&app)?;
+            // §9.3: assert the subscription/OAuth route BEFORE spawning. The
+            // child is env_clear'd + allowlisted inside the runner; here we
+            // assert none of the API-key/Bedrock/Vertex vars survive into the
+            // scrubbed env (the allowlist is PATH/HOME/USER/TERM + locale, so
+            // they cannot — but we assert explicitly and refuse to launch on a
+            // mismatch rather than silently spending on a key route).
+            assert_subscription_env()?;
+            (
+                bin,
+                RunOptions {
+                    // SAFETY: no sandbox yet (Phase 6). Never auto-merge a real
+                    // agent's work into the user's `main` — leave it on a branch.
+                    keep_branch: true,
+                    extra_args: vec![
+                        "--permission-mode".to_string(),
+                        "acceptEdits".to_string(),
+                        "--model".to_string(),
+                        "sonnet".to_string(),
+                    ],
+                },
+                // No real verify command wired yet; a trivially-passing gate so
+                // the run reaches the keep-branch disposition.
+                VerifyCommand::shell("exit 0"),
+            )
+        }
+    };
 
-    // (1) Throwaway repo with an initial commit, so worktree ops have a base ref.
-    let repo = tempfile::tempdir()?;
-    init_git_repo(repo.path())?;
-
-    // (2) + (3): minimal spec + a shared GitGuard whose worktrees live under the
-    // temp repo's own .quiver dir (cleaned up with the tempdir).
+    let guard = GitGuard::new(project);
     let task = TaskSpec {
-        id: "demo".to_string(),
+        id: "task".to_string(),
         prompt,
     };
-    let guard = GitGuard::new(repo.path());
 
-    // (4) Trivially-passing gate — Phase 3 proves the seam, not a real build.
-    let verify = VerifyCommand::shell("exit 0");
+    let outcome: RunOutcome =
+        run_task_with_options(&guard, &task, &agent_bin, &verify, options).await?;
 
-    let outcome: RunOutcome = run_task(&guard, &task, &agent_bin, &verify).await?;
-
-    // (5) Stream each collected AgentEvent to the UI.
+    // Stream each collected AgentEvent to the UI.
     let mut last_cost: Option<f64> = None;
     for event in &outcome.events {
         if let quiver_core::event::AgentEventPayload::Result { cost_usd, .. } = &event.payload {
@@ -92,7 +197,12 @@ async fn run_demo_task_inner(app: AppHandle, prompt: String) -> anyhow::Result<(
         emit_agent_event(&app, event)?;
     }
 
-    // (6) Terminal lifecycle cap carrying the FinishStatus + summed cost.
+    // Terminal lifecycle cap. Surface the branch only when the work was left on
+    // one (real-mode, no merge).
+    let branch = match outcome.cleanup {
+        Cleanup::PreservedBranch => Some(outcome.branch.clone()),
+        _ => None,
+    };
     let finished = FinishedEvent {
         task_id: outcome.task_id,
         seq: outcome.events.len() as u64,
@@ -101,11 +211,11 @@ async fn run_demo_task_inner(app: AppHandle, prompt: String) -> anyhow::Result<(
         kind: "finished",
         status: finish_status_label(outcome.status).to_string(),
         cost_usd: last_cost,
+        branch,
     };
     app.emit(AGENT_EVENT_CHANNEL, &finished)
         .map_err(|e| anyhow::anyhow!("emit finished failed: {e}"))?;
 
-    // (7) `repo` drops here → temp dir removed.
     Ok(())
 }
 
@@ -124,18 +234,34 @@ fn finish_status_label(status: FinishStatus) -> &'static str {
     }
 }
 
-/// Resolve the agent binary to an ABSOLUTE path (DESIGN §12).
-///
-/// Probe order: (1) `QUIVER_AGENT_BIN` env override (the configurable hook that
-/// will later map to `app_config.claude_path_override`); (2) the built
-/// `fake-claude` sitting next to this app binary (the dev/CI default); (3) common
-/// `fake-claude` locations in the workspace `target/` dir.
-///
-/// TODO(phase-4): for a real run, switch the default to resolving the official
-/// `claude` binary per §12 (override → `~/.claude/local` → `/opt/homebrew/bin` →
-/// `/usr/local/bin`), assert the OAuth route (§9.3), and surface a clear
-/// "claude not found" error with a one-click override instead of a spawn failure.
-fn resolve_agent_bin(_app: &AppHandle) -> anyhow::Result<PathBuf> {
+/// §9.3 pre-spawn guard: assert NONE of the API-key/Bedrock/Vertex env vars are
+/// present, so a real-mode (subscription) run cannot silently take a non-OAuth
+/// route. The child is additionally env_clear'd + allowlisted inside the runner;
+/// asserting on the parent env here is a fail-closed belt-and-braces check.
+fn assert_subscription_env() -> anyhow::Result<()> {
+    assert_no_forbidden_env(|key| std::env::var_os(key).is_some())
+}
+
+/// Pure core of [`assert_subscription_env`]: error if `is_present` reports any of
+/// the [`FORBIDDEN_SUBSCRIPTION_ENV`] vars set. Parameterized over the lookup so
+/// it is testable without mutating the process's global environment (env var
+/// mutation races across parallel tests).
+fn assert_no_forbidden_env(is_present: impl Fn(&str) -> bool) -> anyhow::Result<()> {
+    for key in FORBIDDEN_SUBSCRIPTION_ENV {
+        if is_present(key) {
+            anyhow::bail!(
+                "refusing to launch real mode: {key} is set, which would route around \
+                 the subscription/OAuth path (§9.3). Unset it and retry."
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Resolve the free `fake-claude` test double to an ABSOLUTE path (DESIGN §12),
+/// for `simulate` mode. Probe order: `QUIVER_AGENT_BIN` override → next to this
+/// app binary → the workspace `target/<profile>/`.
+fn resolve_fake_claude(_app: &AppHandle) -> anyhow::Result<PathBuf> {
     if let Ok(override_path) = std::env::var("QUIVER_AGENT_BIN") {
         let p = PathBuf::from(override_path);
         if is_executable(&p) {
@@ -147,17 +273,14 @@ fn resolve_agent_bin(_app: &AppHandle) -> anyhow::Result<PathBuf> {
         );
     }
 
-    // The app binary's own directory — in `cargo tauri dev` and in a bundle this
-    // is the workspace `target/<profile>/`, where `cargo build` also drops
-    // `fake-claude`.
     let exe = std::env::current_exe()?;
     let exe_dir = exe
         .parent()
         .ok_or_else(|| anyhow::anyhow!("current_exe has no parent dir"))?;
     let candidates = [
-        exe_dir.join(fake_claude_name()),
-        exe_dir.join("debug").join(fake_claude_name()),
-        exe_dir.join("release").join(fake_claude_name()),
+        exe_dir.join("fake-claude"),
+        exe_dir.join("debug").join("fake-claude"),
+        exe_dir.join("release").join("fake-claude"),
     ];
     for candidate in candidates {
         if is_executable(&candidate) {
@@ -172,9 +295,61 @@ fn resolve_agent_bin(_app: &AppHandle) -> anyhow::Result<PathBuf> {
     )
 }
 
-fn fake_claude_name() -> &'static str {
-    // No `.exe` branch: Quiver is macOS-only (DESIGN §2.2).
-    "fake-claude"
+/// Resolve the official `claude` binary to an ABSOLUTE path (DESIGN §12), for
+/// `real` mode. Probe order: `QUIVER_CLAUDE_BIN` override → `PATH` lookup (PATH
+/// is repaired by `fix_path_env::fix()` in `main`) → `~/.local/bin/claude` →
+/// `~/.claude/local/claude` → `/opt/homebrew/bin/claude` → `/usr/local/bin/claude`.
+/// A clear "claude not found" error is returned if none resolve.
+fn resolve_real_claude(_app: &AppHandle) -> anyhow::Result<PathBuf> {
+    if let Ok(override_path) = std::env::var("QUIVER_CLAUDE_BIN") {
+        let p = PathBuf::from(override_path);
+        if is_executable(&p) {
+            return Ok(p);
+        }
+        anyhow::bail!(
+            "QUIVER_CLAUDE_BIN points at a non-executable path: {}",
+            p.display()
+        );
+    }
+
+    if let Some(p) = which_in_path("claude") {
+        return Ok(p);
+    }
+
+    if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+        let candidates = [
+            home.join(".local").join("bin").join("claude"),
+            home.join(".claude").join("local").join("claude"),
+        ];
+        for candidate in candidates {
+            if is_executable(&candidate) {
+                return Ok(candidate);
+            }
+        }
+    }
+    for fixed in ["/opt/homebrew/bin/claude", "/usr/local/bin/claude"] {
+        let p = PathBuf::from(fixed);
+        if is_executable(&p) {
+            return Ok(p);
+        }
+    }
+
+    anyhow::bail!(
+        "could not find the `claude` binary. Install it, or set QUIVER_CLAUDE_BIN \
+         to its absolute path."
+    )
+}
+
+/// First executable `name` found by scanning `PATH` (absolute path), or `None`.
+fn which_in_path(name: &str) -> Option<PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&path) {
+        let candidate = dir.join(name);
+        if is_executable(&candidate) {
+            return Some(candidate);
+        }
+    }
+    None
 }
 
 /// Is `path` a real, executable file?
@@ -183,32 +358,6 @@ fn is_executable(path: &Path) -> bool {
     std::fs::metadata(path)
         .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
         .unwrap_or(false)
-}
-
-/// Create a git repo with one initial commit at `dir` (a throwaway temp repo for
-/// the demo). Uses the `git` CLI to match `quiver-core`'s "no `git2` crate"
-/// constraint and isolates user/email config to this repo so it works on a box
-/// with no global git identity.
-fn init_git_repo(dir: &Path) -> anyhow::Result<()> {
-    git(dir, &["init", "-q", "-b", "main"])?;
-    git(dir, &["config", "user.email", "demo@quiver.local"])?;
-    git(dir, &["config", "user.name", "Quiver Demo"])?;
-    std::fs::write(dir.join("README.md"), "# quiver demo repo\n")?;
-    git(dir, &["add", "."])?;
-    git(dir, &["commit", "-q", "-m", "initial commit"])?;
-    Ok(())
-}
-
-fn git(dir: &Path, args: &[&str]) -> anyhow::Result<()> {
-    let out = Command::new("git").args(args).current_dir(dir).output()?;
-    if !out.status.success() {
-        anyhow::bail!(
-            "git {} failed: {}",
-            args.join(" "),
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-    }
-    Ok(())
 }
 
 fn now_ms() -> i64 {
@@ -223,13 +372,48 @@ fn now_ms() -> i64 {
 /// `fix_path_env::fix()` has repaired the process `PATH` (§12).
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .manage(AppState::default())
         .setup(|app| {
             // Eagerly grab the main window handle so a missing-window config
             // fails loudly here rather than silently at first emit.
             let _ = app.get_webview_window("main");
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![run_demo_task])
+        .invoke_handler(tauri::generate_handler![pick_project, run_task_cmd])
         .run(tauri::generate_context!())
         .expect("error while running Quiver");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn run_mode_deserializes_lowercase() {
+        let m: RunMode = serde_json::from_str("\"simulate\"").unwrap();
+        assert_eq!(m, RunMode::Simulate);
+        let m: RunMode = serde_json::from_str("\"real\"").unwrap();
+        assert_eq!(m, RunMode::Real);
+    }
+
+    #[test]
+    fn subscription_env_assertion_rejects_api_key() {
+        // No global env mutation: drive the pure core with a stub lookup that
+        // reports ANTHROPIC_API_KEY present.
+        let result = assert_no_forbidden_env(|key| key == "ANTHROPIC_API_KEY");
+        assert!(result.is_err(), "an API key present must refuse real mode");
+    }
+
+    #[test]
+    fn subscription_env_assertion_rejects_bedrock_and_vertex() {
+        assert!(assert_no_forbidden_env(|k| k == "CLAUDE_CODE_USE_BEDROCK").is_err());
+        assert!(assert_no_forbidden_env(|k| k == "CLAUDE_CODE_USE_VERTEX").is_err());
+        assert!(assert_no_forbidden_env(|k| k == "ANTHROPIC_AUTH_TOKEN").is_err());
+    }
+
+    #[test]
+    fn subscription_env_assertion_passes_when_clean() {
+        assert!(assert_no_forbidden_env(|_| false).is_ok());
+    }
 }
