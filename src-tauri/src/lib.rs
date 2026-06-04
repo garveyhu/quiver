@@ -22,7 +22,10 @@ use tauri_plugin_dialog::DialogExt;
 
 use quiver_core::event::{AgentEvent, AgentEventPayload};
 use quiver_core::git::GitGuard;
-use quiver_store::{InitialState, NewRun, Store};
+use quiver_store::{
+    InitialState, NewEvent, NewRun, NewTask, Settings, SettingsPatch, Store, StoredEvent,
+    TaskRecord,
+};
 use quiver_core::supervisor::{
     run_task_streaming, Cleanup, FinishStatus, RunOptions, RunOutcome, TaskSpec,
 };
@@ -136,6 +139,64 @@ fn get_initial_state(state: State<'_, AppState>) -> Result<InitialState, String>
     Ok(initial)
 }
 
+/// Read the typed app settings (DESIGN §11, v1.0 module 1). Always returns a
+/// complete [`Settings`] (defaults are seeded on first open). For Phase B's
+/// settings ledger UI.
+#[tauri::command]
+fn get_settings(state: State<'_, AppState>) -> Result<Settings, String> {
+    let store = state.store()?;
+    store.get_settings().map_err(|e| format!("{e:#}"))
+}
+
+/// Apply a partial settings update and return the resulting full [`Settings`]
+/// (immediate-apply). For Phase B.
+#[tauri::command]
+fn update_settings(
+    state: State<'_, AppState>,
+    patch: SettingsPatch,
+) -> Result<Settings, String> {
+    let store = state.store()?;
+    store.update_settings(&patch).map_err(|e| format!("{e:#}"))
+}
+
+/// All persisted tasks for the bulletin-board UI (DESIGN §11, v1.0 module 5),
+/// ordered by board position then time. Optional `project` / `status` filters.
+/// For Phase C.
+#[tauri::command]
+fn list_tasks(
+    state: State<'_, AppState>,
+    project: Option<String>,
+    status: Option<String>,
+) -> Result<Vec<TaskRecord>, String> {
+    let store = state.store()?;
+    store
+        .list_tasks(project.as_deref(), status.as_deref())
+        .map_err(|e| format!("{e:#}"))
+}
+
+/// Move a task to a new board `position` (drag-to-reorder). For Phase C.
+#[tauri::command]
+fn reorder_task(state: State<'_, AppState>, id: String, position: i64) -> Result<(), String> {
+    let store = state.store()?;
+    store
+        .reorder_task(&id, position, now_ms())
+        .map_err(|e| format!("{e:#}"))
+}
+
+/// The full ordered event log for one task — the §11 source of truth, for
+/// Phase D's Logbook replay. Returns the verbatim payload JSON the UI parses
+/// with its live `AgentEvent` contract.
+#[tauri::command]
+fn get_task_events(
+    state: State<'_, AppState>,
+    task_id: String,
+) -> Result<Vec<StoredEvent>, String> {
+    let store = state.store()?;
+    store
+        .events_for_task(&task_id)
+        .map_err(|e| format!("{e:#}"))
+}
+
 /// Validate `path` is a git repo, store it as the picked project (in memory +
 /// durable last_project), and touch its recent-projects entry. Shared by
 /// [`pick_project`] and [`select_recent_project`]. Returns the path string.
@@ -185,24 +246,63 @@ async fn run_task_cmd(
         return Err("请先选择一个项目——尚未选择 git 仓库。".to_string());
     };
 
-    let summary = run_task_inner(app, project.clone(), prompt.clone(), mode)
-        .await
-        .map_err(|e| {
-            // Sanitized surface (DESIGN §9): never leak a stack/SQL detail to the UI.
-            format!("{e:#}")
-        })?;
+    // A unique task id per invocation, generated up front so it is the SINGLE
+    // identity shared by: the queue row (`enqueue_task`), the streamed
+    // `AgentEvent.task_id` (the runner stamps `TaskSpec.id` on every event), and
+    // the appended event-log rows — so the task line and its full I/O line up
+    // for Phase C/D (board + Logbook replay).
+    let task_id = format!("task-{}", now_ms());
+    let project_str = project.display().to_string();
 
-    // Persist the finished run to history (DESIGN §11). A store error here is
-    // non-fatal — the run already streamed + finished; surface it but don't fail
-    // the command after the work is done.
+    // Enqueue the task in `running` state before the work starts (DESIGN §11,
+    // v1.0 module 5). A store error here is non-fatal to the run itself.
     if let Ok(store) = state.store() {
+        let _ = store.enqueue_task(&NewTask {
+            id: task_id.clone(),
+            project: project_str.clone(),
+            prompt: prompt.clone(),
+            mode: mode_label(mode).to_string(),
+            status: "running".to_string(),
+            created_at: now_ms(),
+        });
+    }
+
+    // Snapshot the store handle for the per-event append callback. The store is
+    // installed once at setup; if it is missing (impossible in practice), events
+    // simply aren't persisted and the live stream still works.
+    let summary = run_task_inner(
+        app,
+        state.store().ok(),
+        task_id.clone(),
+        project.clone(),
+        prompt.clone(),
+        mode,
+    )
+    .await
+    .map_err(|e| {
+        // Sanitized surface (DESIGN §9): never leak a stack/SQL detail to the UI.
+        format!("{e:#}")
+    })?;
+
+    // Persist the finished run: update the live task row's lifecycle + cost +
+    // branch (DESIGN §11 task), and ALSO append to the legacy `run_history`
+    // summary so existing readers keep working. Store errors are non-fatal — the
+    // run already streamed + finished.
+    if let Ok(store) = state.store() {
+        let _ = store.update_task_status(&task_id, &summary.status, now_ms());
+        let _ = store.set_task_cost_branch(
+            &task_id,
+            summary.cost_usd,
+            summary.branch.as_deref(),
+            now_ms(),
+        );
         let _ = store.record_run(&NewRun {
-            project: project.display().to_string(),
+            project: project_str,
             prompt,
             mode: mode_label(mode).to_string(),
-            status: summary.status,
+            status: summary.status.clone(),
             cost_usd: summary.cost_usd,
-            branch: summary.branch,
+            branch: summary.branch.clone(),
             created_at: now_ms(),
         });
     }
@@ -227,6 +327,8 @@ fn mode_label(mode: RunMode) -> &'static str {
 
 async fn run_task_inner(
     app: AppHandle,
+    store: Option<&Store>,
+    task_id: String,
     project: PathBuf,
     prompt: String,
     mode: RunMode,
@@ -271,17 +373,18 @@ async fn run_task_inner(
 
     let guard = GitGuard::new(project);
     let task = TaskSpec {
-        // A unique id per invocation so the per-attempt branch
-        // (`quiver/task-<id>/attempt-1`) never collides across runs on the same
-        // picked repo — a fixed id let the 2nd run fail at `git worktree add`
-        // because the branch ref left behind by an earlier run still existed.
-        id: format!("task-{}", now_ms()),
+        // The caller-generated unique id (shared with the queue row + event log).
+        // It is also what makes the per-attempt branch (`quiver/task-<id>/
+        // attempt-1`) unique across runs on the same picked repo.
+        id: task_id,
         prompt,
     };
 
     // TRUE live streaming (Problem 1): emit each AgentEvent to the UI the MOMENT
     // it is produced, via the streaming supervisor's per-event callback — not in a
     // post-run batch. `last_cost` is updated as the Result event flows through.
+    // EVERY event is ALSO appended to the §11 source-of-truth log so the full I/O
+    // is captured for Phase D replay (in addition to the live emit).
     let mut last_cost: Option<f64> = None;
     let outcome: RunOutcome = run_task_streaming(
         &guard,
@@ -292,6 +395,11 @@ async fn run_task_inner(
         |event: &AgentEvent| {
             if let AgentEventPayload::Result { cost_usd, .. } = &event.payload {
                 last_cost = *cost_usd;
+            }
+            // Persist the event (best-effort: a store write failure must not abort
+            // the run — the live stream still drives the office).
+            if let Some(store) = store {
+                persist_event(store, event);
             }
             // A failed emit (window gone) is not worth aborting the run over — the
             // event is still recorded in the outcome / history. Best-effort live UI.
@@ -307,16 +415,33 @@ async fn run_task_inner(
         _ => None,
     };
     let status_label = finish_status_label(outcome.status).to_string();
+    let finished_task_id = outcome.task_id.clone();
+    let finished_seq = outcome.events.len() as u64;
+    let finished_ts = now_ms();
     let finished = FinishedEvent {
         task_id: outcome.task_id,
-        seq: outcome.events.len() as u64,
-        ts_ms: now_ms(),
+        seq: finished_seq,
+        ts_ms: finished_ts,
         runner: "claude_cli",
         kind: "finished",
         status: status_label.clone(),
         cost_usd: last_cost,
         branch: branch.clone(),
     };
+    // Persist the synthesized terminal event too, so the appended log replays the
+    // FULL run (including the `finished` cap) exactly as the live stream showed it.
+    if let Some(store) = store {
+        if let Ok(payload) = serde_json::to_string(&finished) {
+            let _ = store.append_event(&NewEvent {
+                task_id: &finished_task_id,
+                seq: finished_seq,
+                ts_ms: finished_ts,
+                runner: "claude_cli",
+                kind: "finished",
+                payload_json: &payload,
+            });
+        }
+    }
     app.emit(AGENT_EVENT_CHANNEL, &finished)
         .map_err(|e| anyhow::anyhow!("emit finished failed: {e}"))?;
 
@@ -331,6 +456,32 @@ async fn run_task_inner(
 fn emit_agent_event(app: &AppHandle, event: &AgentEvent) -> anyhow::Result<()> {
     app.emit(AGENT_EVENT_CHANNEL, event)
         .map_err(|e| anyhow::anyhow!("emit agent-event failed: {e}"))
+}
+
+/// Append one live `AgentEvent` to the §11 source-of-truth log (best-effort).
+///
+/// The store is decoupled from the `quiver-core` event type, so this serializes
+/// the event to its flat camelCase wire JSON (the exact shape the UI replays)
+/// and pulls `kind` / `runner` out of it for the indexed columns. A serialization
+/// or write failure is swallowed: persistence must never break the live run.
+fn persist_event(store: &Store, event: &AgentEvent) {
+    let Ok(value) = serde_json::to_value(event) else {
+        return;
+    };
+    let payload_json = value.to_string();
+    let kind = value.get("kind").and_then(|v| v.as_str()).unwrap_or("unknown");
+    let runner = value
+        .get("runner")
+        .and_then(|v| v.as_str())
+        .unwrap_or("claude_cli");
+    let _ = store.append_event(&NewEvent {
+        task_id: &event.task_id,
+        seq: event.seq,
+        ts_ms: event.ts_ms,
+        runner,
+        kind,
+        payload_json: &payload_json,
+    });
 }
 
 fn finish_status_label(status: FinishStatus) -> &'static str {
@@ -506,7 +657,12 @@ pub fn run() {
             pick_project,
             select_recent_project,
             get_initial_state,
-            run_task_cmd
+            run_task_cmd,
+            get_settings,
+            update_settings,
+            list_tasks,
+            reorder_task,
+            get_task_events
         ])
         .run(tauri::generate_context!())
         .expect("error while running Quiver");
