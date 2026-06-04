@@ -21,7 +21,12 @@ const EVENT_CHANNEL_CAP: usize = 256;
 
 /// Env vars passed through to the child (DESIGN §9.3): a minimal allowlist on top
 /// of `env_clear()`. Locale (`LANG` / `LC_*`) is forwarded separately below.
-const ENV_ALLOWLIST: &[&str] = &["PATH", "HOME", "USER", "TERM"];
+///
+/// `QUIVER_FAKE_DELAY_MS` is forwarded so the `fake-claude` test double can pace
+/// its NDJSON output for a believable LIVE simulate run (it is inert for the real
+/// `claude` binary, which ignores unknown env). It carries no auth/route meaning,
+/// so forwarding it does not weaken the §9.3 subscription guard.
+const ENV_ALLOWLIST: &[&str] = &["PATH", "HOME", "USER", "TERM", "QUIVER_FAKE_DELAY_MS"];
 
 /// Spawns the official `claude` CLI and streams its `stream-json` stdout as
 /// normalized [`AgentEvent`]s (DESIGN §4.2 mode 1, §5.3). Subscription auth is

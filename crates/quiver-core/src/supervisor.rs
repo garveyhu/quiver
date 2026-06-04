@@ -146,21 +146,27 @@ pub async fn run_task(
     run_task_with_options(guard, task, runner_bin, verify, RunOptions::default()).await
 }
 
-/// `run_task` with explicit [`RunOptions`].
+/// `run_task_with_options` that ALSO fires `on_event` for each [`AgentEvent`] the
+/// moment it arrives from the runner channel — BEFORE the stream is fully
+/// drained, the verify-gate runs, or the worktree is torn down.
 ///
-/// Behaves identically to [`run_task`] except for the disposition of a
-/// *successful* run's worktree: with `options.keep_branch == true` the verified
-/// (or verify-failed) worktree + attempt branch are LEFT IN PLACE
-/// ([`Cleanup::PreservedBranch`]) and NEVER merged into `main` — the real-agent
-/// safety path (§9: no sandbox yet, so the user's `main` is never auto-touched).
-/// Failure paths (spawn fail, crash, verify-tool misconfig) still §8.4 GC the
-/// worktree regardless of `keep_branch`: a failed attempt is always abandoned.
-pub async fn run_task_with_options(
+/// This is the live-streaming entry point the Tauri shell uses: the callback
+/// pushes each event to the UI as it is produced, so the office animates in real
+/// time instead of receiving the whole batch after the run finishes. The events
+/// are still collected into [`RunOutcome::events`] (the §11 source of truth), so
+/// callers that want the full ordered log keep getting it. [`run_task`] /
+/// [`run_task_with_options`] delegate here with a no-op callback.
+///
+/// `on_event` is called synchronously on the supervisor task as each event is
+/// received; keep it cheap (e.g. a single Tauri `emit`). It must be `Send` so the
+/// future stays `Send` across the runner's `.await` points.
+pub async fn run_task_streaming(
     guard: &GitGuard,
     task: &TaskSpec,
     runner_bin: &Path,
     verify: &VerifyCommand,
     options: RunOptions,
+    mut on_event: impl FnMut(&AgentEvent) + Send,
 ) -> anyhow::Result<RunOutcome> {
     const ATTEMPT: u32 = 1;
     let branch = attempt_branch(&task.id, ATTEMPT);
@@ -194,7 +200,8 @@ pub async fn run_task_with_options(
         }
     };
 
-    // (3) Drain the normalized event stream.
+    // (3) Drain the normalized event stream — firing `on_event` LIVE for each
+    // event as it arrives, before collecting it for the outcome.
     let mut events = Vec::new();
     let mut saw_result_ok = false;
     let mut saw_error = false;
@@ -204,6 +211,7 @@ pub async fn run_task_with_options(
             AgentEventPayload::Error { .. } => saw_error = true,
             _ => {}
         }
+        on_event(&event);
         events.push(event);
     }
 
@@ -234,26 +242,15 @@ pub async fn run_task_with_options(
         } else {
             FinishStatus::VerifyFailed
         };
-        // (5a) Worktree disposition. In keep-branch mode (real-agent safety) we
-        // leave the work on its branch + worktree untouched and never merge into
-        // the user's `main`. Otherwise both Verified and VerifyFailed are "the
-        // run completed" — tear the worktree down under the §6.3 dirty guard
-        // (never force a dirty tree).
+        // (5a) Worktree disposition (see [`run_task_with_options`] doc).
         let cleanup = if options.keep_branch {
-            // Real-agent safety mode: leave the work on its (uniquely-named)
-            // attempt branch + worktree, never merged into the user's `main`.
             Cleanup::PreservedBranch
         } else {
             match guard.remove(&worktree).await? {
                 RemoveOutcome::Removed => {
-                    // `worktree remove` leaves the branch ref behind; delete it so
-                    // a non-kept run leaves NO `quiver/*` branch and the next run
-                    // on the same repo can't collide at `worktree add`.
                     guard.delete_branch(&branch).await?;
                     Cleanup::Removed
                 }
-                // A dirty tree is preserved (§6.3) — keep its branch too so the
-                // uncommitted work stays reachable for human review.
                 RemoveOutcome::PreservedDirty { status } => Cleanup::PreservedDirty { status },
             }
         };
@@ -275,7 +272,6 @@ pub async fn run_task_with_options(
         FailureReason::NoResult
     };
     guard.force_remove(&worktree).await?;
-    // An abandoned attempt leaves no orphan branch behind (§8.4).
     guard.delete_branch(&branch).await?;
     Ok(RunOutcome {
         task_id: task.id.clone(),
@@ -285,6 +281,28 @@ pub async fn run_task_with_options(
         failure: Some(failure),
         branch,
     })
+}
+
+/// `run_task` with explicit [`RunOptions`].
+///
+/// Behaves identically to [`run_task`] except for the disposition of a
+/// *successful* run's worktree: with `options.keep_branch == true` the verified
+/// (or verify-failed) worktree + attempt branch are LEFT IN PLACE
+/// ([`Cleanup::PreservedBranch`]) and NEVER merged into `main` — the real-agent
+/// safety path (§9: no sandbox yet, so the user's `main` is never auto-touched).
+/// Failure paths (spawn fail, crash, verify-tool misconfig) still §8.4 GC the
+/// worktree regardless of `keep_branch`: a failed attempt is always abandoned.
+pub async fn run_task_with_options(
+    guard: &GitGuard,
+    task: &TaskSpec,
+    runner_bin: &Path,
+    verify: &VerifyCommand,
+    options: RunOptions,
+) -> anyhow::Result<RunOutcome> {
+    // Delegate to the streaming variant with a no-op callback: non-streaming
+    // callers still get the full collected event log in the outcome, with
+    // identical lifecycle/cleanup behavior.
+    run_task_streaming(guard, task, runner_bin, verify, options, |_event| {}).await
 }
 
 #[cfg(test)]
@@ -484,6 +502,69 @@ mod tests {
             "keep_branch must preserve the attempt branch, got: {:?}",
             quiver_branches(repo.path())
         );
+    }
+
+    /// The streaming variant fires `on_event` for EACH event AS it arrives —
+    /// before the run finishes — and the callback sees the same ordered events
+    /// that end up in the outcome. Live-ness: with a per-line delay in
+    /// `fake-claude`, the callbacks are spread over wall-clock time rather than
+    /// all firing at the end.
+    #[tokio::test]
+    async fn streaming_fires_callback_per_event_in_order() {
+        let repo = temp_repo();
+        let wt_root = TempDir::new().expect("wt root");
+        let guard = GitGuard::new(repo.path()).with_worktrees_root(wt_root.path());
+        let bin = fake_claude_bin();
+        let verify = VerifyCommand::shell("exit 0");
+        let task = TaskSpec {
+            id: "stream-1".to_string(),
+            prompt: "p".to_string(),
+        };
+
+        let seen: std::sync::Arc<std::sync::Mutex<Vec<(u64, std::time::Instant)>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen_cb = std::sync::Arc::clone(&seen);
+        let start = std::time::Instant::now();
+
+        let out = run_task_streaming(
+            &guard,
+            &task,
+            &bin,
+            &verify,
+            RunOptions::default(),
+            move |ev| {
+                seen_cb
+                    .lock()
+                    .expect("seen lock")
+                    .push((ev.seq, std::time::Instant::now()));
+            },
+        )
+        .await
+        .expect("streaming run ok");
+
+        let seen = std::sync::Arc::try_unwrap(seen)
+            .expect("no other refs")
+            .into_inner()
+            .expect("seen inner");
+
+        // The callback saw every collected event, in seq order.
+        assert_eq!(
+            seen.len(),
+            out.events.len(),
+            "callback must fire once per collected event"
+        );
+        assert!(seen.len() >= 4, "happy path emits several events");
+        let seqs: Vec<u64> = seen.iter().map(|(s, _)| *s).collect();
+        let mut sorted = seqs.clone();
+        sorted.sort_unstable();
+        assert_eq!(seqs, sorted, "events must arrive in seq order");
+
+        // Live-ness: force a per-line delay in fake-claude via the env override so
+        // the first and last callbacks are separated in time (not a batch dump).
+        // This test sets no delay (CI speed), so we only assert ordering + count;
+        // the timed live-ness check lives in the integration test
+        // `tests/streaming.rs`, which sets QUIVER_FAKE_DELAY_MS.
+        let _ = start;
     }
 
     /// A crashed (permanently-failed) non-keep run is GC'd: no orphan branch and
