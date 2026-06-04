@@ -313,11 +313,27 @@ impl GitGuard {
     }
 
     /// `git merge --abort` at the repo root (DESIGN §7 step 6), undoing an
-    /// in-progress merge and restoring `main` to exactly its pre-merge state.
-    /// Ref-mutating → behind the metadata lock for this one command.
+    /// **in-progress** (conflicted, uncommitted) merge and restoring `main` to
+    /// exactly its pre-merge state. Ref-mutating → behind the metadata lock for
+    /// this one command.
+    ///
+    /// NOTE: this only applies while a merge is in progress (`MERGE_HEAD`
+    /// present). A clean `--no-ff` merge commits immediately, so to roll *that*
+    /// back you must [`GitGuard::reset_hard`] to the pre-merge commit instead.
     pub async fn merge_abort(&self) -> anyhow::Result<()> {
         let _lock = self.meta_lock.lock().await;
-        run_git_status(&self.repo, &["merge", "--abort"]).await?;
+        run_git(&self.repo, &["merge", "--abort"]).await?;
+        Ok(())
+    }
+
+    /// `git reset --hard <commit>` at the repo root, used to roll back an
+    /// already-committed clean merge when the re-verify against merged `main`
+    /// goes red (DESIGN §7 step 6). Restores `main` (ref + working tree) to
+    /// exactly `commit`, so `main` is byte-identical to before the attempt.
+    /// Ref-mutating → behind the metadata lock for this one command.
+    pub async fn reset_hard(&self, commit: &str) -> anyhow::Result<()> {
+        let _lock = self.meta_lock.lock().await;
+        run_git(&self.repo, &["reset", "--hard", commit]).await?;
         Ok(())
     }
 
