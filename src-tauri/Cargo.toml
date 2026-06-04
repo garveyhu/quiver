@@ -37,3 +37,8 @@ quiver-core = { path = "../crates/quiver-core" }
 # Durable SQLite persistence (picked project, recents, run history).
 quiver-store = { path = "../crates/quiver-store" }
 tauri-plugin-dialog = "2.7.1"
+# The async runtime the queue scheduler uses to run up to `maxWorkers` tasks
+# concurrently (one `tokio::spawn` per worker) with a `Semaphore` concurrency
+# cap. Tauri already pulls tokio in transitively; declared explicitly here so
+# the scheduler's use of `spawn` / `sync::Semaphore` is a first-class dep.
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "macros"] }

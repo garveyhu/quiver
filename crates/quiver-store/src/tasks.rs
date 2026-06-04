@@ -196,6 +196,101 @@ impl Store {
         )?;
         Ok(())
     }
+
+    /// Remove a task from the board (cancel an un-started commission). The
+    /// scheduler only ever cancels `queued` tasks via the command surface, but
+    /// the delete itself is unconditional on `id` — its caller enforces the
+    /// "queued-only" rule so a running task is never yanked out from under a
+    /// live worker.
+    pub fn delete_task(&self, id: &str) -> anyhow::Result<()> {
+        let conn = self.conn.lock().expect("store lock");
+        conn.execute("DELETE FROM task WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    /// Fetch a single task by id, or `None` if it is gone (e.g. cancelled). Used
+    /// by the scheduler to re-check a task's current status before claiming it.
+    pub fn get_task(&self, id: &str) -> anyhow::Result<Option<TaskRecord>> {
+        let conn = self.conn.lock().expect("store lock");
+        conn.query_row(
+            "SELECT id, project, prompt, mode, status, cost_usd, branch,
+                    position, created_at, updated_at
+             FROM task WHERE id = ?1",
+            params![id],
+            |row| {
+                Ok(TaskRecord {
+                    id: row.get(0)?,
+                    project: row.get(1)?,
+                    prompt: row.get(2)?,
+                    mode: row.get(3)?,
+                    status: row.get(4)?,
+                    cost_usd: row.get(5)?,
+                    branch: row.get(6)?,
+                    position: row.get(7)?,
+                    created_at: row.get(8)?,
+                    updated_at: row.get(9)?,
+                })
+            },
+        )
+        .optional()
+        .map_err(Into::into)
+    }
+
+    /// Atomically claim the next `queued` task (lowest `position`, then oldest)
+    /// for a project, flipping it to `running` in the same transaction so two
+    /// concurrent scheduler ticks can never claim the same row. Returns the
+    /// claimed [`TaskRecord`] (already `running`), or `None` if the queue is
+    /// empty.
+    ///
+    /// The claim-and-flip is done under the connection mutex via an immediate
+    /// transaction: SELECT the candidate, UPDATE it to `running`, commit. Because
+    /// the whole store is serialized behind one `Mutex<Connection>`, this is the
+    /// single point that hands a task to exactly one worker.
+    pub fn claim_next_queued(
+        &self,
+        project: &str,
+        updated_at: i64,
+    ) -> anyhow::Result<Option<TaskRecord>> {
+        let mut conn = self.conn.lock().expect("store lock");
+        let tx = conn.transaction()?;
+        let candidate: Option<TaskRecord> = tx
+            .query_row(
+                "SELECT id, project, prompt, mode, status, cost_usd, branch,
+                        position, created_at, updated_at
+                 FROM task
+                 WHERE project = ?1 AND status = 'queued'
+                 ORDER BY position ASC, created_at ASC
+                 LIMIT 1",
+                params![project],
+                |row| {
+                    Ok(TaskRecord {
+                        id: row.get(0)?,
+                        project: row.get(1)?,
+                        prompt: row.get(2)?,
+                        mode: row.get(3)?,
+                        status: row.get(4)?,
+                        cost_usd: row.get(5)?,
+                        branch: row.get(6)?,
+                        position: row.get(7)?,
+                        created_at: row.get(8)?,
+                        updated_at: row.get(9)?,
+                    })
+                },
+            )
+            .optional()?;
+        let Some(mut task) = candidate else {
+            tx.commit()?;
+            return Ok(None);
+        };
+        tx.execute(
+            "UPDATE task SET status = 'running', updated_at = ?2 WHERE id = ?1",
+            params![task.id, updated_at],
+        )?;
+        tx.commit()?;
+        task.status = "running".to_string();
+        task.updated_at = updated_at;
+        Ok(Some(task))
+    }
 }
 
 #[cfg(test)]
@@ -286,6 +381,53 @@ mod tests {
         assert_eq!(tasks.len(), 1, "same id must not duplicate");
         assert_eq!(tasks[0].prompt, "new");
         assert_eq!(tasks[0].status, "running");
+    }
+
+    #[test]
+    fn delete_removes_a_queued_task() {
+        let store = Store::open_in_memory().unwrap();
+        store.enqueue_task(&new_task("keep", "/r", "p", "queued", 1)).unwrap();
+        store.enqueue_task(&new_task("drop", "/r", "p", "queued", 2)).unwrap();
+        store.delete_task("drop").unwrap();
+        let ids: Vec<String> = store
+            .list_tasks(None, None)
+            .unwrap()
+            .into_iter()
+            .map(|t| t.id)
+            .collect();
+        assert_eq!(ids, vec!["keep"]);
+        assert!(store.get_task("drop").unwrap().is_none());
+        assert!(store.get_task("keep").unwrap().is_some());
+    }
+
+    #[test]
+    fn claim_next_queued_flips_to_running_in_board_order() {
+        let store = Store::open_in_memory().unwrap();
+        store.enqueue_task(&new_task("t1", "/r", "first", "queued", 1)).unwrap();
+        store.enqueue_task(&new_task("t2", "/r", "second", "queued", 2)).unwrap();
+
+        let claimed = store.claim_next_queued("/r", 50).unwrap().unwrap();
+        assert_eq!(claimed.id, "t1", "lowest position claimed first");
+        assert_eq!(claimed.status, "running", "claim flips to running");
+        // The stored row is now running too — a second claim picks t2, not t1.
+        assert_eq!(store.get_task("t1").unwrap().unwrap().status, "running");
+        let next = store.claim_next_queued("/r", 60).unwrap().unwrap();
+        assert_eq!(next.id, "t2");
+    }
+
+    #[test]
+    fn claim_next_queued_is_project_scoped_and_empties() {
+        let store = Store::open_in_memory().unwrap();
+        store.enqueue_task(&new_task("a", "/alpha", "p", "queued", 1)).unwrap();
+        store.enqueue_task(&new_task("b", "/beta", "p", "queued", 2)).unwrap();
+
+        // No queued task for an unrelated project.
+        assert!(store.claim_next_queued("/gamma", 10).unwrap().is_none());
+        // Claims only from the asked-for project.
+        assert_eq!(store.claim_next_queued("/alpha", 11).unwrap().unwrap().id, "a");
+        // /alpha now empty; /beta still has one.
+        assert!(store.claim_next_queued("/alpha", 12).unwrap().is_none());
+        assert_eq!(store.claim_next_queued("/beta", 13).unwrap().unwrap().id, "b");
     }
 
     #[test]
