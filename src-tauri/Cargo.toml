@@ -3,13 +3,20 @@ name = "quiver-app"
 version = "0.0.0"
 edition = "2021"
 description = "Quiver — gamified overnight supervisor for headless coding agents"
-default-run = "quiver-app"
+# Name the dev binary "Quiver" so `cargo tauri dev` shows "Quiver" in the macOS
+# Dock (the binary name is the Dock label in dev). The built .app uses
+# productName from tauri.conf.json.
+default-run = "Quiver"
 
 # The Tauri app's library + binary. `main.rs` is a thin shim that calls into the
 # lib so the same code is testable and reusable (Tauri 2 convention).
 [lib]
 name = "quiver_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "Quiver"
+path = "src/main.rs"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
