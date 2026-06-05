@@ -219,6 +219,98 @@ body {
   transform: translateY(-1px);
 }
 
+/* ============================================================
+   IME-safe text-input overlay (§0 option-b). A world scene asks for
+   keyboard input; this drops a real DOM field over the canvas anchor so
+   WKWebView's native CJK IME + 拼音候选条 work. Never type in canvas.
+   ============================================================ */
+.text-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+
+.text-overlay-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(28, 19, 12, 0.42);
+  backdrop-filter: blur(1px);
+}
+
+/* the field is absolutely positioned at the scene's anchor rect (px). */
+.text-overlay-field {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.text-overlay-input {
+  width: 100%;
+  flex: 1 1 auto;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  /* CJK-first font stack so Chinese renders crisply in the overlay field. */
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--parchment);
+  border: 2px solid var(--wood);
+  border-radius: var(--radius-ctrl);
+  box-shadow: var(--shadow-wood);
+  resize: none;
+  outline: none;
+}
+
+.text-overlay-input:focus {
+  border-color: var(--accent);
+}
+
+.text-overlay-input::placeholder {
+  color: var(--text-dim);
+}
+
+.text-overlay-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.text-overlay-cancel,
+.text-overlay-submit {
+  padding: 7px 16px;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  border-radius: var(--radius-ctrl);
+  cursor: pointer;
+  transition: filter var(--t-fast) ease, transform var(--t-fast) ease;
+}
+
+.text-overlay-cancel {
+  color: var(--parchment);
+  background: linear-gradient(180deg, var(--wood), var(--wood-dark));
+  border: 2px solid var(--wood-dark);
+}
+
+.text-overlay-submit {
+  color: var(--text-on-accent);
+  background: linear-gradient(180deg, var(--accent), var(--accent-hover));
+  border: 2px solid var(--accent-hover);
+}
+
+.text-overlay-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.text-overlay-cancel:hover,
+.text-overlay-submit:not(:disabled):hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
 /* a wooden game panel for the door/board overlay contents */
 .hotspot-card {
   position: relative;

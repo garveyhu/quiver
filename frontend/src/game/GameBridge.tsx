@@ -4,7 +4,15 @@ import { useSettings } from '@/hooks/useSettings';
 import { useTaskBoard } from '@/hooks/useTaskBoard';
 import { useArchive } from '@/hooks/useArchive';
 import { useReplay } from '@/hooks/useReplay';
-import { EventBus, BUS, type Hotspot, type TaskBoardSummary } from '@/game/EventBus';
+import {
+  EventBus,
+  BUS,
+  type Hotspot,
+  type TaskBoardSummary,
+  type BoardEnqueuePayload,
+  type BoardReorderPayload,
+  type BoardCancelPayload,
+} from '@/game/EventBus';
 import { GameStateContext, type GameState } from '@/game/useGameState';
 import type { RunMode } from '@/types/run.types';
 
@@ -72,6 +80,12 @@ export function GameBridge({ onOpenHotspot, children }: GameBridgeProps) {
       EventBus.emit(BUS.settings, settings.settings);
       EventBus.emit(BUS.project, { projectPath: supervisor.projectPath });
       EventBus.emit(BUS.replay, { active: replay.active });
+      // board snapshot, so the TaskBoardScene re-hydrates on (re)launch.
+      EventBus.emit(BUS.boardTasks, board.tasks);
+      EventBus.emit(BUS.boardMeta, {
+        projectPath: supervisor.projectPath,
+        error: board.error,
+      });
     };
     EventBus.on(BUS.sceneReady, flush);
     return () => {
@@ -108,7 +122,19 @@ export function GameBridge({ onOpenHotspot, children }: GameBridgeProps) {
     EventBus.emit(BUS.board, summary);
   }, [summary]);
 
-  // --- bus: world commands → App ----------------------------------------
+  // Full board snapshot + meta for the in-world TaskBoardScene (P2).
+  useEffect(() => {
+    EventBus.emit(BUS.boardTasks, board.tasks);
+  }, [board.tasks]);
+
+  useEffect(() => {
+    EventBus.emit(BUS.boardMeta, {
+      projectPath: supervisor.projectPath,
+      error: board.error,
+    });
+  }, [supervisor.projectPath, board.error]);
+
+  // --- bus: world commands → App / hooks --------------------------------
 
   useEffect(() => {
     const onOpen = (payload: { hotspot: Hotspot }) => onOpenHotspot(payload.hotspot);
@@ -117,6 +143,22 @@ export function GameBridge({ onOpenHotspot, children }: GameBridgeProps) {
       EventBus.off(BUS.openHotspot, onOpen);
     };
   }, [onOpenHotspot]);
+
+  // Board mutations from the TaskBoardScene → the existing useTaskBoard actions
+  // (the only IPC caller). The run mode is owned here, seeded from settings.
+  useEffect(() => {
+    const onEnqueue = (p: BoardEnqueuePayload) => void board.enqueue(p.prompt, mode);
+    const onReorder = (p: BoardReorderPayload) => void board.reorder(p.id, p.position);
+    const onCancel = (p: BoardCancelPayload) => void board.cancel(p.id);
+    EventBus.on(BUS.boardEnqueue, onEnqueue);
+    EventBus.on(BUS.boardReorder, onReorder);
+    EventBus.on(BUS.boardCancel, onCancel);
+    return () => {
+      EventBus.off(BUS.boardEnqueue, onEnqueue);
+      EventBus.off(BUS.boardReorder, onReorder);
+      EventBus.off(BUS.boardCancel, onCancel);
+    };
+  }, [board, mode]);
 
   const value: GameState = {
     supervisor,

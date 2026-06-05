@@ -173,8 +173,23 @@ export const STR = {
   hudIdle: '工坊静悄悄',
   hudToastDone: '完成 ✓',
 
-  // 临时覆盖层（点物件后打开的现有面板，P2-P4 会替换成世界内场景）
+  // 临时覆盖层（点物件后打开的现有面板，P3-P4 会替换成世界内场景）
   overlayClose: '× 回到工坊',
+
+  // --- 世界内公告板场景（里程碑 2 / P2）---
+  boardSceneTitle: '任务公告板',
+  boardSceneBack: '← 回到工坊',
+  boardScenePin: '＋ 钉新委托',
+  boardSceneEmpty: '公告板空着 — 钉一条委托上来吧',
+  boardSceneNoProject: '先在门口选一个工坊（git 仓库），才能钉委托',
+  boardCardCancel: '撤回',
+  boardCardCancelTip: '撤回这条尚未开工的委托',
+  boardCardDragTip: '拖动重新排序（仅待接委托）',
+
+  // 文本浮层（中文 IME 安全，§0 option-b，全场景复用）
+  textInputSubmit: '钉上去',
+  textInputCancel: '取消',
+  textInputNewCommission: '写一条委托',
 
   // 外观
   settingTheme: '主题',

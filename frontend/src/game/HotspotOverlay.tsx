@@ -4,7 +4,6 @@ import type { Hotspot } from '@/game/EventBus';
 import { STR } from '@/strings';
 import type { RunMode } from '@/types/run.types';
 import type { StoredEvent, TaskRecord } from '@/types/persistence.types';
-import { TaskBoard } from '@/components/board/TaskBoard';
 import { TaskInput } from '@/components/TaskInput';
 import { SettingsPanel } from '@/components/settings/SettingsPanel';
 import { ArchiveView } from '@/components/archive/ArchiveView';
@@ -21,22 +20,18 @@ interface HotspotOverlayProps {
 }
 
 /**
- * MILESTONE-1 TEMPORARY BRIDGE.
+ * TEMPORARY BRIDGE for the not-yet-diegetic surfaces.
  *
- * Clicking a world hotspot (board / settings / archive / door) opens the
- * matching *existing* React panel as a full-screen overlay over the canvas.
- * P2–P4 will replace each of these with an in-world Phaser scene; for now the
- * function is preserved verbatim — only the navigation changed from a tab bar
- * to touching an object in the room.
- *
- * The panels read all data + actions from the shared GameState (the hooks the
- * GameBridge owns), so no IPC contract is touched.
+ * The notice board is now an in-world Phaser scene (TaskBoardScene, P2), so it's
+ * gone from here. The remaining hotspots — settings (账本) / archive (书架) /
+ * project (门) — still open the matching *existing* React panel as a full-screen
+ * overlay over the canvas; P3–P4 replace each with an in-world scene. The panels
+ * read all data + actions from the shared GameState (the hooks the GameBridge
+ * owns), so no IPC contract is touched.
  */
 export function HotspotOverlay({ hotspot, onClose }: HotspotOverlayProps) {
   const { supervisor, settings, board, archive, replay, mode, setMode } = useGameState();
   const [openRecord, setOpenRecord] = useState<TaskRecord | null>(null);
-
-  const maxWorkers = settings.settings?.maxWorkers ?? 1;
 
   // "回放": start the re-enactment in the workshop, then close the overlay so
   // the archer is visible doing the run again.
@@ -93,25 +88,6 @@ export function HotspotOverlay({ hotspot, onClose }: HotspotOverlayProps) {
               </p>
             )}
           </section>
-        )}
-
-        {hotspot === 'board' && (
-          <>
-            <section className="hotspot-card">
-              <TaskInput
-                disabled={!supervisor.projectPath}
-                onSubmit={prompt => handleEnqueue(prompt, mode)}
-              />
-              <p className="app-hint">{STR.enqueueHint}</p>
-            </section>
-            <TaskBoard
-              tasks={board.tasks}
-              freshIds={board.freshIds}
-              maxWorkers={maxWorkers}
-              onReorder={board.reorder}
-              onCancel={board.cancel}
-            />
-          </>
         )}
 
         {hotspot === 'archive' && (

@@ -5,6 +5,7 @@ import { BootScene } from '@/game/scenes/BootScene';
 import { PreloaderScene } from '@/game/scenes/PreloaderScene';
 import { HallScene } from '@/game/scenes/HallScene';
 import { UIScene } from '@/game/scenes/UIScene';
+import { TaskBoardScene } from '@/game/scenes/TaskBoardScene';
 import { PALETTE } from '@/game/palette';
 
 export interface PhaserGameHandle {
@@ -43,7 +44,7 @@ export const PhaserGame = forwardRef<PhaserGameHandle>(function PhaserGame(_prop
       plugins: {
         scene: [{ key: 'rexUI', plugin: UIPlugin, mapping: 'rexUI' }],
       },
-      scene: [BootScene, PreloaderScene, HallScene, UIScene],
+      scene: [BootScene, PreloaderScene, HallScene, UIScene, TaskBoardScene],
     });
     gameRef.current = game;
 

@@ -30,6 +30,31 @@ export const PALETTE = {
 
   // hotspot affordance glint
   glint: 0xffd27a,
+
+  // --- 任务公告板 (TaskBoardScene) ---
+  boardScrim: 0x1c130c, // dim wash behind the focused board
+  boardWoodLight: 0x8a5a30, // top sheen of the timber frame
+  boardWood: 0x6b4424, // --wood, the plank face
+  boardWoodDark: 0x422914, // carved frame shadow / border
+  boardCork: 0x9c6b3f, // cork backing the pinned cards sit on
+  boardCorkEdge: 0x5e3a1e,
+  cardParchment: 0xfbf3df, // pinned parchment card face
+  cardParchmentEdge: 0xd9c39a,
+  cardInk: '#3a2e25', // --text on a card
+  cardInkDim: '#7a6651',
+  cardPin: 0xc0392b, // the red pin head
+  cardPinShine: 0xe8786a,
+  cancelBtn: 0xb44637, // cancel (撤回) affordance
+  cancelBtnInk: '#fbf3df',
+  pinBtn: 0x4f7a3a, // "钉新委托" call-to-action green
+  pinBtnInk: '#fbf3df',
+  // status badge fills (queued / running / verifying / done / failed)
+  badgeQueued: 0x8a7a5a,
+  badgeRunning: 0x2f6fb0,
+  badgeVerifying: 0xc98a2e,
+  badgeDone: 0x4f7a3a,
+  badgeFailed: 0xb44637,
+  badgeInk: '#fbf3df',
 } as const;
 
 // CJK-safe font stack reused across every canvas Text object.
@@ -41,4 +66,5 @@ export const SCENE = {
   preloader: 'PreloaderScene',
   hall: 'HallScene',
   ui: 'UIScene',
+  board: 'TaskBoardScene',
 } as const;

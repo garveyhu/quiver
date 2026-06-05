@@ -45,13 +45,15 @@ interface ArcherNode {
   dragged: boolean;
 }
 
-// A clickable world object that opens one of the (temporary) React overlays.
+// A clickable world object. The notice board now opens an in-world scene
+// (TaskBoardScene, P2); the rest still open the temporary React overlays via the
+// bus (settings / archive / project) — so each node carries its own click action.
 interface HotspotNode {
-  hotspot: Hotspot;
   zone: Phaser.GameObjects.Zone;
   label: Phaser.GameObjects.Container;
   glint: Phaser.GameObjects.Arc;
   anchor: (w: number, h: number) => { x: number; y: number };
+  onClick: () => void;
 }
 
 /**
@@ -288,34 +290,38 @@ export class HallScene extends Phaser.Scene {
   // --- diegetic navigation hotspots --------------------------------------
 
   private makeHotspots(): void {
+    // The temporary React overlays (settings / archive / project) emit a bus
+    // command the App routes; the notice board opens its in-world scene directly.
+    const overlay = (h: Hotspot) => () => EventBus.emit(BUS.openHotspot, { hotspot: h });
+
     const specs: Array<{
-      hotspot: Hotspot;
       label: string;
       anchor: (w: number, h: number) => { x: number; y: number };
+      onClick: () => void;
     }> = [
-      // 墙上公告板 (任务) — top-right wall
+      // 墙上公告板 (任务) — top-right wall → in-world TaskBoardScene
       {
-        hotspot: 'board',
         label: STR.hotspotBoard,
         anchor: (w, h) => ({ x: w * 0.84, y: h * 0.26 }),
+        onClick: () => this.openBoard(),
       },
       // 桌上账本 (设置) — right side, mid
       {
-        hotspot: 'settings',
         label: STR.hotspotSettings,
         anchor: (w, h) => ({ x: w * 0.9, y: h * 0.56 }),
+        onClick: overlay('settings'),
       },
       // 书架/档案柜 (档案) — right side, lower
       {
-        hotspot: 'archive',
         label: STR.hotspotArchive,
         anchor: (w, h) => ({ x: w * 0.9, y: h * 0.8 }),
+        onClick: overlay('archive'),
       },
       // 门 (选项目) — bottom-left
       {
-        hotspot: 'project',
         label: STR.hotspotProject,
         anchor: (w, h) => ({ x: w * 0.1, y: h * 0.86 }),
+        onClick: overlay('project'),
       },
     ];
 
@@ -334,14 +340,21 @@ export class HallScene extends Phaser.Scene {
       });
       const zone = this.add.zone(0, 0, 150, 64).setInteractive({ useHandCursor: true });
       zone.setDepth(8000);
-      zone.on('pointerup', () => EventBus.emit(BUS.openHotspot, { hotspot: spec.hotspot }));
+      zone.on('pointerup', spec.onClick);
       zone.on('pointerover', () => label.setScale(1.06));
       zone.on('pointerout', () => label.setScale(1));
 
-      const node: HotspotNode = { hotspot: spec.hotspot, zone, label, glint, anchor: spec.anchor };
+      const node: HotspotNode = { zone, label, glint, anchor: spec.anchor, onClick: spec.onClick };
       this.hotspots.push(node);
       this.placeHotspot(node);
     }
+  }
+
+  // Sleep the world (keep it warm, don't stop) and bring the notice board up.
+  private openBoard(): void {
+    play('open');
+    this.scene.sleep(SCENE.hall);
+    this.scene.launch(SCENE.board);
   }
 
   private makeHotspotLabel(text: string): Phaser.GameObjects.Container {

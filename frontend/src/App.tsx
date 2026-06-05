@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { PhaserGame } from '@/game/PhaserGame';
 import { GameBridge } from '@/game/GameBridge';
 import { HotspotOverlay } from '@/game/HotspotOverlay';
+import { TextInputOverlay } from '@/game/TextInputOverlay';
 import type { Hotspot } from '@/game/EventBus';
 
 /**
@@ -11,13 +12,11 @@ import type { Hotspot } from '@/game/EventBus';
  *
  *  - GameBridge (headless) owns the IPC hooks and shuttles their state onto the
  *    EventBus for the scenes; it also routes world hotspot clicks back to us;
- *  - HotspotOverlay is the milestone-1 temporary bridge: touching a world
- *    object opens the matching existing React panel as a full-screen overlay
- *    (P2–P4 replace these with in-world scenes).
- *
- * A text-input overlay layer will live here too once the board/settings scenes
- * need an on-canvas IME field (option-b); for now the overlays carry their own
- * inputs.
+ *  - HotspotOverlay is the temporary bridge for the still-React surfaces
+ *    (settings / archive / project); P3–P4 replace these with in-world scenes;
+ *  - TextInputOverlay is the IME-safe keyboard seam (§0 option-b): any world
+ *    scene that needs typed input summons a real DOM `<textarea>`/`<input>` over
+ *    the canvas through it. The TaskBoardScene's "钉新委托" is its first user.
  */
 export function App() {
   const [hotspot, setHotspot] = useState<Hotspot | null>(null);
@@ -30,6 +29,7 @@ export function App() {
       <PhaserGame />
       <GameBridge onOpenHotspot={openHotspot}>
         <HotspotOverlay hotspot={hotspot} onClose={closeHotspot} />
+        <TextInputOverlay />
       </GameBridge>
     </main>
   );
