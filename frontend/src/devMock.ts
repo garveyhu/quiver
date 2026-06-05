@@ -265,11 +265,33 @@ function handleCommand(cmd: string, args: Record<string, unknown>): unknown {
   }
 }
 
+/**
+ * `?mock&autostart` auto-pins a couple of live commissions right after install so
+ * the headless screenshot harness sees archers at work without a manual enqueue.
+ * Drives the same lifecycle path as a real pin (`enqueue_task_cmd` → pump → run),
+ * so the whole bus→HallScene chain is exercised end to end.
+ */
+function autostartDemoRun(): void {
+  const seed = [
+    '修复登录超时：刷新 token 续期逻辑',
+    '为公告板卡片加拖拽排序',
+    '把运行历史改成可搜索的档案库',
+  ];
+  seed.forEach((prompt, i) => {
+    setTimeout(() => {
+      handleCommand('enqueue_task_cmd', { prompt, mode: i === 0 ? 'real' : 'simulate' });
+    }, 400 + i * 500);
+  });
+}
+
 /** Install the official IPC mock with event support. */
 export function installDevMock(): void {
   mockIPC((cmd, args) => handleCommand(cmd, (args ?? {}) as Record<string, unknown>), {
     shouldMockEvents: true,
   });
+  if (location.search.includes('autostart')) {
+    autostartDemoRun();
+  }
   // eslint-disable-next-line no-console
   console.info('[quiver] dev Tauri mock installed (?mock) — concurrent queue simulated');
 }

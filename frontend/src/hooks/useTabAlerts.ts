@@ -2,8 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { TaskRecord } from '@/types/persistence.types';
-import type { Scene } from '@/components/SceneTabs';
 import { play } from '@/utils/sound';
+
+// The diegetic surfaces a finished-run flash can target. Was imported from the
+// (now removed) SceneTabs; inlined here so the hook is self-contained. The
+// game-first redesign relocates this journal-flash into the UIScene's hotspot
+// glint (DESIGN §4), but the IPC behaviour below is unchanged.
+export type Scene = 'workshop' | 'board' | 'archive';
 
 // IPC contract with src-tauri/src/lib.rs — keep names in sync.
 const TASK_UPDATED = 'task-updated';

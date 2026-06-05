@@ -158,6 +158,24 @@ export const STR = {
   logbookReplaying: '回放中…',
   replayStop: '停止回放',
 
+  // --- 游戏世界 / HUD（里程碑 1：game-first 翻转）---
+  // 世界内可点击物件的标签（公告板 / 账本 / 书架 / 门）
+  hotspotBoard: '公告板',
+  hotspotSettings: '账本',
+  hotspotArchive: '书架',
+  hotspotProject: '门 · 选项目',
+
+  // 顶部 HUD
+  hudBudgetPrefix: '余额',
+  hudBudgetUnset: '未设预算上限',
+  hudBusyPrefix: '工坊里有 ',
+  hudBusySuffix: ' 位弓匠在忙',
+  hudIdle: '工坊静悄悄',
+  hudToastDone: '完成 ✓',
+
+  // 临时覆盖层（点物件后打开的现有面板，P2-P4 会替换成世界内场景）
+  overlayClose: '× 回到工坊',
+
   // 外观
   settingTheme: '主题',
   settingThemeTip: '工坊配色。cozy 是温暖羊皮纸主题；midnight 是暖色夜间主题。立即生效。',
