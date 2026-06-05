@@ -287,10 +287,16 @@ fn finish_status_label(status: FinishStatus) -> &'static str {
 
 /// §9.3 pre-spawn guard: assert NONE of the API-key/Bedrock/Vertex env vars are
 /// present, so a real-mode (subscription) run cannot silently take a non-OAuth
-/// route.
-fn assert_subscription_env() -> anyhow::Result<()> {
+/// route. Exposed `pub(crate)` so the environment pre-flight check
+/// ([`crate::environment`]) reports the SAME guard the real launch path enforces.
+pub(crate) fn assert_subscription_env() -> anyhow::Result<()> {
     assert_no_forbidden_env(|key| std::env::var_os(key).is_some())
 }
+
+/// The API-key/Bedrock/Vertex env vars that would route a "real" run around the
+/// subscription/OAuth path (§9.3). Exposed so the pre-flight check can name the
+/// offending var without re-spelling the list.
+pub(crate) const SUBSCRIPTION_ENV_KEYS: &[&str] = FORBIDDEN_SUBSCRIPTION_ENV;
 
 /// Pure core of [`assert_subscription_env`]: error if `is_present` reports any of
 /// the [`FORBIDDEN_SUBSCRIPTION_ENV`] vars set.
@@ -366,7 +372,11 @@ fn resolve_fake_claude() -> anyhow::Result<PathBuf> {
 }
 
 /// Resolve the official `claude` binary to an ABSOLUTE path (DESIGN §12).
-fn resolve_real_claude() -> anyhow::Result<PathBuf> {
+/// Exposed `pub(crate)` so the environment pre-flight check
+/// ([`crate::environment`]) resolves the binary through the EXACT same path the
+/// real launch uses — guaranteeing "the check passed" implies "launch will find
+/// claude".
+pub(crate) fn resolve_real_claude() -> anyhow::Result<PathBuf> {
     if let Ok(override_path) = std::env::var("QUIVER_CLAUDE_BIN") {
         let p = PathBuf::from(override_path);
         if is_executable(&p) {
@@ -407,7 +417,8 @@ fn resolve_real_claude() -> anyhow::Result<PathBuf> {
 }
 
 /// First executable `name` found by scanning `PATH` (absolute path), or `None`.
-fn which_in_path(name: &str) -> Option<PathBuf> {
+/// Exposed `pub(crate)` for the environment pre-flight check (`git` probe).
+pub(crate) fn which_in_path(name: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
     for dir in std::env::split_paths(&path) {
         let candidate = dir.join(name);

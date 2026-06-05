@@ -16,6 +16,7 @@
 //! - `list_tasks` / `reorder_task` / `cancel_task_cmd` — board management.
 //! - `get_task_events` — the §11 ordered event log for Logbook replay (Phase D).
 
+mod environment;
 mod run;
 mod scheduler;
 
@@ -34,6 +35,7 @@ use quiver_store::{
     InitialState, NewTask, Settings, SettingsPatch, Store, StoredEvent, TaskRecord,
 };
 
+use crate::environment::check_environment;
 use crate::run::{run_one_task, RunMode};
 use crate::scheduler::{Scheduler, TASK_EVENT_CHANNEL};
 
@@ -344,6 +346,7 @@ pub fn run() {
         reorder_task,
         cancel_task_cmd,
         get_task_events,
+        check_environment,
         dev_bridge::__dev_bridge_result
     ]);
     #[cfg(not(debug_assertions))]
@@ -358,7 +361,8 @@ pub fn run() {
         list_tasks,
         reorder_task,
         cancel_task_cmd,
-        get_task_events
+        get_task_events,
+        check_environment
     ]);
 
     builder
