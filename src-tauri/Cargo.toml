@@ -13,6 +13,10 @@ default-run = "Quiver"
 [lib]
 name = "quiver_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+# The vendored dev-bridge (`dev_bridge.rs`) carries illustrative doc examples
+# that are not standalone-compilable; this app crate ships no public library
+# API meant to be doctested, so skip doctests instead of editing vendored code.
+doctest = false
 
 [[bin]]
 name = "Quiver"
@@ -42,3 +46,17 @@ tauri-plugin-dialog = "2.7.1"
 # cap. Tauri already pulls tokio in transitively; declared explicitly here so
 # the scheduler's use of `spawn` / `sync::Semaphore` is a first-class dep.
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "macros"] }
+
+# tauri-agent-tools dev bridge (debug-only; the `dev_bridge` module is gated
+# behind `#[cfg(debug_assertions)]` so the bridge — and its localhost HTTP
+# server — never ships in a release build). Lets external agent tooling eval JS,
+# read the DOM, and capture element screenshots against the live webview.
+tiny_http = "0.12"
+scopeguard = "1"
+rand = "0.8"
+uuid = { version = "1", features = ["v4"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["registry"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

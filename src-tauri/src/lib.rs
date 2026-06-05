@@ -19,6 +19,11 @@
 mod run;
 mod scheduler;
 
+// Dev-only inspection bridge for `tauri-agent-tools`. Compiled out of release
+// builds entirely so neither the module nor its localhost HTTP server ship.
+#[cfg(debug_assertions)]
+mod dev_bridge;
+
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -297,11 +302,18 @@ impl EmitTaskUpdate for AppHandle {
 /// Build and run the Tauri application. Called from `main.rs` AFTER
 /// `fix_path_env::fix()` has repaired the process `PATH` (§12).
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
         .setup(|app| {
             let _ = app.get_webview_window("main");
+
+            // Start the tauri-agent-tools dev bridge (debug builds only). A
+            // failure here must not block app startup, so we only warn.
+            #[cfg(debug_assertions)]
+            if let Err(e) = dev_bridge::start_bridge(app.handle()) {
+                eprintln!("Warning: failed to start dev bridge: {e}");
+            }
 
             let data_dir = app
                 .path()
@@ -314,20 +326,42 @@ pub fn run() {
             let state = app.state::<AppState>();
             let _ = state.store.set(Arc::new(store));
             Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![
-            pick_project,
-            select_recent_project,
-            get_initial_state,
-            run_task_cmd,
-            enqueue_task_cmd,
-            get_settings,
-            update_settings,
-            list_tasks,
-            reorder_task,
-            cancel_task_cmd,
-            get_task_events
-        ])
+        });
+
+    // Tauri supports only a single `invoke_handler`, and `generate_handler!`
+    // needs a literal command list — so the debug-only dev-bridge callback is
+    // wired via two cfg'd arms instead of being appended at runtime.
+    #[cfg(debug_assertions)]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        pick_project,
+        select_recent_project,
+        get_initial_state,
+        run_task_cmd,
+        enqueue_task_cmd,
+        get_settings,
+        update_settings,
+        list_tasks,
+        reorder_task,
+        cancel_task_cmd,
+        get_task_events,
+        dev_bridge::__dev_bridge_result
+    ]);
+    #[cfg(not(debug_assertions))]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        pick_project,
+        select_recent_project,
+        get_initial_state,
+        run_task_cmd,
+        enqueue_task_cmd,
+        get_settings,
+        update_settings,
+        list_tasks,
+        reorder_task,
+        cancel_task_cmd,
+        get_task_events
+    ]);
+
+    builder
         .run(tauri::generate_context!())
         .expect("error while running Quiver");
 }
