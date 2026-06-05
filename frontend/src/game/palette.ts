@@ -131,33 +131,8 @@ export const PALETTE = {
   archiveDialInk: '#f6ead0',
   archiveCountInk: '#e6d4ac',
 
-  // --- 委托卷轴 (LogbookScene, P4) — an unrolled parchment scroll ---
-  scrollScrim: 0x140d07, // deeper wash — the scroll is a focused reading mode
-  scrollRoller: 0x4a2d16, // the wooden roller bars top + bottom
-  scrollRollerCap: 0x6b4424, // the roller end caps
-  scrollParchment: 0xf3e6c8, // the unrolled parchment field
-  scrollParchmentEdge: 0xd8c39a,
-  scrollParchmentShade: 0xe6d4ac, // soft inner shadow at the rolled edges
-  scrollInk: '#3a2e25', // header ink on the parchment
-  scrollInkDim: '#7a6651',
-  // the transcript reading well (a clean inset surface; the two-layer rule —
-  // diegetic scroll frame, high-density monospace content inside).
-  transcriptWell: 0xfaf6ea,
-  transcriptWellEdge: 0xcdb88c,
-  transcriptInk: '#2c241d', // monospace body ink
-  transcriptInkDim: '#8a7a64', // timestamps / secondary
-  transcriptOutput: '#4a5a3a', // output_chunk verbatim text
-  transcriptError: '#b44637', // error lines
-  // per-kind row accent stripe down the transcript gutter.
-  kindWorker: 0x4f7a3a,
-  kindTool: 0x2f6fb0,
-  kindOutput: 0x8a7a5a,
-  kindResult: 0xc98a2e,
-  kindError: 0xb44637,
-  kindFinished: 0x6b4f9a,
-  // 回放 call-to-action.
-  replayBtn: 0x4f7a3a,
-  replayBtnInk: '#fbf3df',
+  // The 委托卷轴 / Logbook is now a React DOM overlay (LogbookOverlay) — its
+  // parchment-scroll skin + transcript colours live in styles.css, not here.
 } as const;
 
 // CJK-safe font stack reused across every canvas Text object.
@@ -193,5 +168,4 @@ export const SCENE = {
   board: 'TaskBoardScene',
   settings: 'SettingsScene',
   archive: 'ArchiveScene',
-  logbook: 'LogbookScene',
 } as const;

@@ -12,8 +12,10 @@ import {
   type BoardEnqueuePayload,
   type BoardReorderPayload,
   type BoardCancelPayload,
-  type LogbookRequest,
+  type LogbookOpen,
+  type LogbookState,
 } from '@/game/EventBus';
+import { logbookTotals } from '@/game/logbookState';
 import type { RunMode } from '@/types/run.types';
 import type { SettingsPatch, StoredEvent } from '@/types/persistence.types';
 
@@ -203,23 +205,60 @@ export function GameBridge(): null {
     };
   }, [settings]);
 
-  // LogbookScene event loads → useArchive.loadEvents (the only §11 IPC caller).
-  // The request carries a one-shot reply channel; resolve it exactly once with
-  // the loaded log, or null on failure — so a bad load never wedges the scroll.
+  // Open-Logbook requests (Hall archer / Archive book) → useArchive.loadEvents
+  // (the only §11 IPC caller). The bridge owns the data seam: it pushes a loading
+  // state immediately, loads + parses the run's events, computes the totals, and
+  // pushes the resolved state on BUS.logbookState for the React overlay to render.
+  // A stale load (the overlay re-opened on another run before the first resolved)
+  // is discarded by comparing against a monotonic token. The IPC stays in the hook.
+  const logbookToken = useRef(0);
   useEffect(() => {
-    const onLoad = (req: LogbookRequest) => {
+    const onOpen = (req: LogbookOpen) => {
+      const token = ++logbookToken.current;
+      const loading: LogbookState = {
+        meta: { ...req.meta, count: 0, cost: req.meta.costUsd ?? null, durationMs: 0, turns: null },
+        from: req.from,
+        raw: [],
+        loading: true,
+        error: false,
+      };
+      EventBus.emit(BUS.logbookState, loading);
       archive
-        .loadEvents(req.taskId)
-        .then(events => EventBus.emit(req.channel, events))
-        .catch(() => EventBus.emit(req.channel, null));
+        .loadEvents(req.meta.taskId)
+        .then(events => {
+          if (token !== logbookToken.current) return;
+          const totals = logbookTotals(events, req.meta.costUsd ?? null);
+          EventBus.emit(BUS.logbookState, {
+            meta: { ...req.meta, ...totals },
+            from: req.from,
+            raw: events,
+            loading: false,
+            error: false,
+          } satisfies LogbookState);
+        })
+        .catch(() => {
+          if (token !== logbookToken.current) return;
+          EventBus.emit(BUS.logbookState, {
+            ...loading,
+            loading: false,
+            error: true,
+          } satisfies LogbookState);
+        });
     };
-    EventBus.on(BUS.logbookLoad, onLoad);
+    const onClose = () => {
+      // bump the token so a still-in-flight load can't re-open the overlay.
+      logbookToken.current++;
+      EventBus.emit(BUS.logbookState, null);
+    };
+    EventBus.on(BUS.openLogbook, onOpen);
+    EventBus.on(BUS.closeLogbook, onClose);
     return () => {
-      EventBus.off(BUS.logbookLoad, onLoad);
+      EventBus.off(BUS.openLogbook, onOpen);
+      EventBus.off(BUS.closeLogbook, onClose);
     };
   }, [archive]);
 
-  // "回放" from the LogbookScene → useReplay.start (the workshop then re-enacts
+  // "回放" from the Logbook overlay → useReplay.start (the workshop then re-enacts
   // the run via the archer; replay.events already feed officeEvents above, so the
   // HallScene swaps to the replay stream with no extra wiring).
   useEffect(() => {

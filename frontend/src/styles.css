@@ -28,6 +28,38 @@
   /* UI scale factor, driven by the settings ledger (1 = 100%). */
   --ui-scale: 1;
 
+  /* 委托卷轴 / Logbook overlay — a cozy parchment-scroll skin (mirrors the warm
+     hexes that the Phaser world used in game/palette.ts, but as CSS tokens so the
+     DOM overlay is the source of truth here). */
+  --scroll-scrim: rgba(20, 13, 7, 0.62);
+  --scroll-parchment: #f3e6c8; /* the unrolled parchment field */
+  --scroll-parchment-edge: #d8c39a;
+  --scroll-parchment-shade: #e6d4ac; /* soft inner shadow at the rolled edges */
+  --scroll-roller: #4a2d16; /* wooden roller bars top + bottom */
+  --scroll-roller-cap: #6b4424; /* roller end caps / chrome */
+  --scroll-ink: #3a2e25; /* header ink on the parchment */
+  --scroll-ink-dim: #7a6651;
+  --transcript-well: #faf6ea; /* the inset reading surface */
+  --transcript-well-edge: #cdb88c;
+  --transcript-ink: #2c241d; /* monospace body ink */
+  --transcript-ink-dim: #8a7a64; /* timestamps / secondary */
+  --transcript-output: #4a5a3a; /* output_chunk verbatim text */
+  --transcript-error: #b44637; /* error lines */
+  /* per-kind row accent rail down the transcript gutter (mirrors PALETTE.kind*). */
+  --kind-worker: #4f7a3a;
+  --kind-tool: #2f6fb0;
+  --kind-output: #8a7a5a;
+  --kind-result: #c98a2e;
+  --kind-error: #b44637;
+  --kind-finished: #6b4f9a;
+  --replay-btn: #4f7a3a; /* 回放 call-to-action green */
+  --replay-btn-ink: #fbf3df;
+
+  /* CJK-safe monospace stack: a true mono for the latin runs, CJK fonts as a
+     wrap-safe fallback so Chinese in the transcript never breaks the layout. */
+  --mono-font: 'SFMono-Regular', 'Menlo', 'Consolas', 'Liberation Mono', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', monospace;
+
   font-family: 'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', -apple-system,
     BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   color-scheme: light;
@@ -47,6 +79,21 @@
   --text-dim: #b29c84;
   --text-on-accent: #2a2017;
   color-scheme: dark;
+
+  /* 夜幕: the scroll stays warm parchment but a touch deeper, the rollers darker,
+     so the cozy reading mode reads as candle-lit night rather than daylight. */
+  --scroll-scrim: rgba(10, 7, 4, 0.72);
+  --scroll-parchment: #e7d6b2;
+  --scroll-parchment-edge: #cab290;
+  --scroll-parchment-shade: #d8c39a;
+  --scroll-roller: #35200f;
+  --scroll-roller-cap: #5a3a1e;
+  --scroll-ink: #2c2118;
+  --scroll-ink-dim: #6f5c44;
+  --transcript-well: #f0e6cf;
+  --transcript-well-edge: #c2ad84;
+  --transcript-ink: #241d16;
+  --transcript-ink-dim: #7c6a52;
 }
 
 * {
@@ -182,6 +229,382 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .text-overlay-cancel,
   .text-overlay-submit {
+    transition: none;
+  }
+}
+
+/* ============================================================
+   委托卷轴 / Logbook overlay (replaces the Phaser LogbookScene).
+   A cozy parchment-SCROLL skin wrapping a native scrollable transcript:
+   the §6 two-layer rule — diegetic frame, clean scan-readable contents.
+   The native overflow:auto guarantees the dense text clips + scrolls
+   INSIDE the panel at any window size (the bug the canvas mask had).
+   ============================================================ */
+.logbook-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(16px, 4vh, 48px) clamp(16px, 4vw, 64px);
+}
+
+.logbook-scrim {
+  position: fixed;
+  inset: 0;
+  background: var(--scroll-scrim);
+  backdrop-filter: blur(2px);
+  animation: logbook-fade-in 0.22s ease both;
+}
+
+/* the unrolled scroll: a parchment column between two wooden rollers, lifted off
+   the dimmed world with a warm shadow. A column flex so the transcript takes the
+   remaining height and scrolls within it — the rollers + header + actions stay put. */
+.logbook-scroll {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(760px, 100%);
+  max-height: 100%;
+  background: var(--scroll-parchment);
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(20, 13, 7, 0.5), inset 0 0 0 1px var(--scroll-parchment-edge);
+  overflow: hidden;
+  animation: logbook-rise 0.22s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+/* the wooden roller bars top + bottom — a rounded timber bar with a soft inner
+   parchment-shade just below/above it (the rolled-edge shading). */
+.logbook-roller {
+  flex: 0 0 auto;
+  height: 22px;
+  background: linear-gradient(180deg, var(--scroll-roller-cap), var(--scroll-roller));
+  position: relative;
+}
+
+.logbook-roller-top {
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 6px 8px -6px rgba(20, 13, 7, 0.55);
+}
+
+.logbook-roller-bottom {
+  border-radius: 0 0 16px 16px;
+  box-shadow: 0 -6px 8px -6px rgba(20, 13, 7, 0.55);
+}
+
+/* roller end caps: a darker rounded knob poking out each side. */
+.logbook-roller::before,
+.logbook-roller::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 16px;
+  height: 28px;
+  background: var(--scroll-roller);
+  border-radius: 8px;
+  transform: translateY(-50%);
+}
+
+.logbook-roller::before {
+  left: -7px;
+}
+
+.logbook-roller::after {
+  right: -7px;
+}
+
+/* --- sticky commission head ------------------------------------------- */
+.logbook-header {
+  flex: 0 0 auto;
+  padding: 16px 26px 12px;
+  background: linear-gradient(180deg, var(--scroll-parchment-shade), var(--scroll-parchment));
+  border-bottom: 1px solid var(--scroll-parchment-edge);
+}
+
+.logbook-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 0 0 10px;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--scroll-ink);
+}
+
+.logbook-id {
+  flex: 0 0 auto;
+  font-family: var(--mono-font);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--scroll-ink-dim);
+}
+
+.logbook-prompt {
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* the meta strip — small label/value chips that wrap onto multiple rows. */
+.logbook-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin: 0;
+}
+
+.logbook-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  margin: 0;
+  padding: 3px 9px;
+  background: rgba(255, 253, 248, 0.55);
+  border: 1px solid var(--scroll-parchment-edge);
+  border-radius: 999px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.logbook-chip-label {
+  margin: 0;
+  color: var(--scroll-ink-dim);
+}
+
+.logbook-chip-value {
+  margin: 0;
+  font-weight: 600;
+  color: var(--scroll-ink);
+}
+
+/* --- the scrollable transcript (the whole point) ---------------------- */
+.logbook-transcript {
+  flex: 1 1 auto;
+  min-height: 120px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  margin: 12px 18px;
+  padding: 4px;
+  background: var(--transcript-well);
+  border: 1px solid var(--transcript-well-edge);
+  border-radius: 8px;
+  outline: none;
+}
+
+.logbook-transcript:focus-visible {
+  border-color: var(--accent);
+}
+
+/* a warm, slim custom scrollbar so the native scroll doesn't read as a foreign
+   chrome element on the parchment (WebKit; Firefox falls back to scrollbar-*). */
+.logbook-transcript {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-roller-cap) transparent;
+}
+
+.logbook-transcript::-webkit-scrollbar {
+  width: 9px;
+}
+
+.logbook-transcript::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.logbook-transcript::-webkit-scrollbar-thumb {
+  background: var(--scroll-roller-cap);
+  border: 2px solid var(--transcript-well);
+  border-radius: 999px;
+}
+
+.logbook-transcript::-webkit-scrollbar-thumb:hover {
+  background: var(--scroll-roller);
+}
+
+/* one transcript line: stamp | per-kind rail + body. */
+.logbook-row {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 0 12px;
+  padding: 7px 10px 8px;
+  border-left: 3px solid var(--transcript-well-edge);
+  border-bottom: 1px solid rgba(205, 184, 140, 0.4);
+}
+
+.logbook-row:last-child {
+  border-bottom: none;
+}
+
+/* per-kind accent rail (the left border colour). */
+.logbook-kind-worker_started {
+  border-left-color: var(--kind-worker);
+}
+.logbook-kind-tool_use {
+  border-left-color: var(--kind-tool);
+}
+.logbook-kind-output_chunk {
+  border-left-color: var(--kind-output);
+}
+.logbook-kind-result {
+  border-left-color: var(--kind-result);
+}
+.logbook-kind-error {
+  border-left-color: var(--kind-error);
+}
+.logbook-kind-finished {
+  border-left-color: var(--kind-finished);
+}
+
+.logbook-stamp {
+  font-family: var(--mono-font);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--transcript-ink-dim);
+  padding-top: 1px;
+}
+
+.logbook-body {
+  min-width: 0; /* lets the children's word-break actually constrain the column */
+}
+
+.logbook-head {
+  display: flex;
+  gap: 6px;
+  font-family: var(--mono-font);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--transcript-ink);
+}
+
+.logbook-glyph {
+  flex: 0 0 auto;
+}
+
+.logbook-head-text {
+  min-width: 0;
+  /* long heads (a tool summary) wrap inside the column instead of widening it. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* a verbatim output / error block — preformatted but soft-wrapping so a giant
+   single line never widens the panel or spills a horizontal scrollbar. */
+.logbook-block {
+  margin: 4px 0 0;
+  font-family: var(--mono-font);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--transcript-output);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.logbook-block-error {
+  color: var(--transcript-error);
+}
+
+/* loading / empty / error cozy states — centred soft ink on the well. */
+.logbook-status {
+  margin: 0;
+  padding: 36px 24px;
+  text-align: center;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  font-size: 14px;
+  color: var(--scroll-ink-dim);
+}
+
+.logbook-status-error {
+  color: var(--transcript-error);
+}
+
+/* --- footer actions --------------------------------------------------- */
+.logbook-actions {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 22px 14px;
+}
+
+.logbook-btn {
+  padding: 8px 18px;
+  font: inherit;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: var(--radius-ctrl);
+  cursor: pointer;
+  transition: filter var(--t-fast) ease, transform var(--t-fast) ease;
+}
+
+.logbook-btn-back {
+  color: var(--parchment);
+  background: linear-gradient(180deg, var(--scroll-roller-cap), var(--scroll-roller));
+  border: 2px solid var(--scroll-roller);
+}
+
+.logbook-btn-replay {
+  color: var(--replay-btn-ink);
+  background: linear-gradient(180deg, var(--replay-btn), #3f6630);
+  border: 2px solid #3f6630;
+}
+
+.logbook-btn-replay:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.logbook-btn-back:hover,
+.logbook-btn-replay:not(:disabled):hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+@keyframes logbook-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes logbook-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* a narrow window: drop the stamp into its own row so the body keeps full width. */
+@media (max-width: 480px) {
+  .logbook-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .logbook-stamp {
+    padding-top: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logbook-scrim,
+  .logbook-scroll {
+    animation: none;
+  }
+  .logbook-btn {
     transition: none;
   }
 }

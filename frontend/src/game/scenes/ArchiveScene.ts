@@ -67,7 +67,8 @@ function durationHint(record: TaskRecord): string {
  * A parchment search cell (summoning the IME-safe React overlay) and two filter
  * dials (status / project, cycled in-world) narrow the shelf client-side over the
  * records useArchive already loaded — the SAME search/filter contract the old
- * React ArchiveView had, just diegetic. Clicking a book opens the LogbookScene.
+ * React ArchiveView had, just diegetic. Clicking a book opens the Logbook overlay
+ * (a React DOM parchment scroll, emitted over BUS.openLogbook).
  *
  * All archive data flows over the EventBus — the scene never touches IPC. It
  * subscribes in `create()` and tears every listener down on `shutdown`.
@@ -191,20 +192,24 @@ export class ArchiveScene extends Phaser.Scene {
     );
   }
 
-  // Pull a run off the shelf → unroll its Logbook scroll. The archive sleeps (it
-  // stays warm) and the LogbookScene launches over it; closing the scroll wakes
-  // the archive back here (the WAKE handler fades it back in).
+  // Pull a run off the shelf → unroll its Logbook scroll (now a React DOM overlay
+  // that lays its parchment scrim over the still-visible shelf). The archive scene
+  // stays put underneath; the bridge loads the run's events and renders the
+  // overlay. No scene sleep / launch — and no hand-painted scroll to overflow.
   private openBook(record: TaskRecord): void {
     play('open');
-    fadeOutThen(
-      this,
-      () => {
-        this.scene.sleep(SCENE.archive);
-        this.cameras.main.resetFX();
-        this.scene.launch(SCENE.logbook, { record });
+    EventBus.emit(BUS.openLogbook, {
+      meta: {
+        taskId: record.id,
+        prompt: record.prompt,
+        project: record.project,
+        mode: record.mode,
+        status: record.status,
+        branch: record.branch,
+        costUsd: record.costUsd,
       },
-      PALETTE.archiveScrim,
-    );
+      from: 'archive',
+    });
   }
 
   // --- bus handlers -------------------------------------------------------

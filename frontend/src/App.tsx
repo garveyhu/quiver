@@ -1,6 +1,7 @@
 import { PhaserGame } from '@/game/PhaserGame';
 import { GameBridge } from '@/game/GameBridge';
 import { TextInputOverlay } from '@/game/TextInputOverlay';
+import { LogbookOverlay } from '@/game/LogbookOverlay';
 
 /**
  * The app shell, after the game-first flip is complete. There is no tab bar, no
@@ -13,7 +14,11 @@ import { TextInputOverlay } from '@/game/TextInputOverlay';
  *    settings / archive / logbook actions) back to the hooks. Renders nothing;
  *  - TextInputOverlay: the IME-safe keyboard seam (§0 option-b) — any world scene
  *    that needs typed input summons a real DOM `<textarea>`/`<input>` over the
- *    canvas through it (the board's "钉新委托", the ledger's cells, archive search).
+ *    canvas through it (the board's "钉新委托", the ledger's cells, archive search);
+ *  - LogbookOverlay: the 委托卷轴 — a cozy parchment-scroll skin (CSS) wrapping a
+ *    native scrollable transcript, opened over the world when a Hall archer or an
+ *    Archive book is clicked (the §6 two-layer rule, replacing the old Phaser scene
+ *    whose hand-painted masked text overflowed on large windows).
  */
 export function App() {
   return (
@@ -21,6 +26,7 @@ export function App() {
       <PhaserGame />
       <GameBridge />
       <TextInputOverlay />
+      <LogbookOverlay />
     </main>
   );
 }

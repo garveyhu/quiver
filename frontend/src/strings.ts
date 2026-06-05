@@ -241,10 +241,7 @@ export const STR = {
   logbookSceneLoading: '正在展开卷轴…',
   logbookSceneError: '卷轴读取失败，请稍后重试',
   logbookSceneEmpty: '这卷委托没有留下任何事件记录。',
-  logbookSceneTotalEvents: '事件 ',
-  logbookSceneTotalCost: '花费 ',
-  logbookSceneTotalDuration: '历时 ',
-  logbookSceneTurnsPrefix: '轮次 ',
+  logbookSceneTurnsPrefix: '轮次',
 
   // --- 世界内设置账本场景（里程碑 3 / P3）---
   settingsSceneBack: '← 合上账本',

@@ -55,11 +55,19 @@ export const BUS = {
   // unchanged useSupervisor.pickProject IPC). No payload — the LAST temporary React
   // overlay is gone (P5): the door drives the hook directly, no DOM panel.
   pickProject: 'cmd:pick-project',
-  // the LogbookScene asks the bridge to load ONE run's full §11 event log; the
-  // bridge calls useArchive.loadEvents and replies once on `req.channel`.
-  // payload: LogbookRequest (see below).
-  logbookLoad: 'cmd:logbook-load',
-  // the LogbookScene asks the bridge to start a "回放" re-enactment in the Hall.
+  // a world scene (Hall archer / Archive book) asks to unroll ONE run's Logbook —
+  // now a real React DOM overlay (the 卷轴皮 wraps a native scrollable transcript so
+  // dense text never overflows a hand-painted mask). Payload: LogbookOpen (below).
+  // The GameBridge satisfies it via the unchanged useArchive.loadEvents (the only
+  // §11 IPC caller) and pushes the loaded state on `BUS.logbookState`.
+  openLogbook: 'cmd:logbook-open',
+  // the overlay asks to roll the scroll back up (its 卷起 button / scrim click).
+  closeLogbook: 'cmd:logbook-close',
+  // the loaded Logbook state the React overlay renders (meta + transcript +
+  // loading / error). Pushed by the GameBridge after it loads the run's events.
+  // payload: LogbookState | null (null = overlay closed).
+  logbookState: 'logbook:state',
+  // the Logbook overlay asks the bridge to start a "回放" re-enactment in the Hall.
   // payload: StoredEvent[] — the run's raw stored log; the bridge calls
   // useReplay.start with it (the workshop then re-enacts via the archer).
   replayStart: 'cmd:replay-start',
@@ -143,14 +151,54 @@ export interface ArchiveMeta {
 }
 
 /**
- * The LogbookScene's request for ONE run's full §11 event log (scene →
- * GameBridge → useArchive.loadEvents). Like {@link TextInputRequest} it carries a
- * one-shot reply `channel`: the bridge resolves it exactly once with the loaded
- * `StoredEvent[]` (or `null` on failure), so concurrent opens never cross wires.
+ * The §1 commission head a Logbook shows above its transcript. Assembled at the
+ * open site (Hall archer / Archive book) from whatever record it has; the totals
+ * (event count / cost / duration / turns) are filled in by the GameBridge once it
+ * has loaded + parsed the run's events. A Hall archer click may only know the
+ * `taskId`, so every field but `taskId` is optional.
  */
-export interface LogbookRequest {
-  channel: string;
+export interface LogbookMeta {
   taskId: string;
+  prompt?: string;
+  project?: string;
+  /** Raw run mode ('real' | 'simulate') — labelled to 真实 / 模拟 in the overlay. */
+  mode?: string;
+  /** Raw task status — labelled via TASK_STATUS_LABEL in the overlay. */
+  status?: string;
+  branch?: string | null;
+  /** Fallback cost from the record, used only if the events carry none. */
+  costUsd?: number | null;
+}
+
+/**
+ * A world scene's request to open the Logbook overlay for one run (scene →
+ * GameBridge). The bridge loads the events (useArchive.loadEvents) and pushes a
+ * {@link LogbookState} on `BUS.logbookState`. `from` records where it was opened
+ * so a "回放" can fully clean up an archive scene if needed (parity with the old
+ * scene's bookkeeping).
+ */
+export interface LogbookOpen {
+  meta: LogbookMeta;
+  from: 'archive' | 'hall';
+}
+
+/**
+ * The fully-resolved Logbook state the React overlay renders. `raw` is the run's
+ * verbatim stored log (handed to useReplay.start on 回放); `meta` carries the head
+ * plus the totals the bridge computed from the parsed events. `loading` is true
+ * until the load settles; `error` is set if the §11 load failed.
+ */
+export interface LogbookState {
+  meta: LogbookMeta & {
+    count: number;
+    cost: number | null;
+    durationMs: number;
+    turns: number | null;
+  };
+  from: 'archive' | 'hall';
+  raw: StoredEvent[];
+  loading: boolean;
+  error: boolean;
 }
 
 /**

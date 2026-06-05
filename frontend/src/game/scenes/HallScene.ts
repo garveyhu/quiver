@@ -812,10 +812,13 @@ export class HallScene extends Phaser.Scene {
     this.openScene(SCENE.archive);
   }
 
-  // Mockup C: click a station archer → unroll THAT run's Logbook scroll. Works for
-  // live + finished archers; closing the scroll wakes the hall back.
+  // Mockup C: click a station archer → unroll THAT run's Logbook scroll (now a
+  // React DOM overlay; the world stays put under its scrim). Works for live +
+  // finished archers. The Hall only knows the taskId; the bridge loads the run's
+  // events and fills in the head. No scene launch — no Phaser scroll to overflow.
   private openArcherLogbook(taskId: string): void {
-    this.openScene(SCENE.logbook, { taskId, from: 'hall' });
+    play('open');
+    EventBus.emit(BUS.openLogbook, { meta: { taskId }, from: 'hall' });
   }
 
   // A diegetic-nav pill: an emoji icon + Chinese label on a wooden plaque. The
