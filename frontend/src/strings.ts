@@ -164,6 +164,8 @@ export const STR = {
   hotspotSettings: '账本',
   hotspotArchive: '书架',
   hotspotProject: '门 · 选项目',
+  // empty-state (no project) door hint — the one glowing call-to-action
+  firstRunWake: '点亮工坊 · 选择项目',
 
   // 顶部 HUD
   hudBudgetPrefix: '余额',

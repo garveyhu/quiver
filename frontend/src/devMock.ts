@@ -301,7 +301,9 @@ export function installDevMock(): void {
   mockIPC((cmd, args) => handleCommand(cmd, (args ?? {}) as Record<string, unknown>), {
     shouldMockEvents: true,
   });
-  if (location.search.includes('autostart')) {
+  // `&noproject` exercises the cozy empty workshop, so it must NOT auto-pin any
+  // commissions (there's no project to run them in) — only autostart with a project.
+  if (location.search.includes('autostart') && !NO_PROJECT) {
     autostartDemoRun();
   }
   // eslint-disable-next-line no-console

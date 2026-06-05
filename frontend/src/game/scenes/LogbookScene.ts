@@ -1,10 +1,8 @@
 import Phaser from 'phaser';
-import type ScrollablePanel from 'phaser4-rex-plugins/templates/ui/scrollablepanel/ScrollablePanel';
-import type Sizer from 'phaser4-rex-plugins/templates/ui/sizer/Sizer';
-import type RexUIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin';
 import { EventBus, BUS, type TaskRecord, type StoredEvent } from '@/game/EventBus';
 import { requestLogbook } from '@/game/requestLogbook';
 import { PALETTE, CJK_FONT, SCENE } from '@/game/palette';
+import { fadeIn, fadeOutThen } from '@/game/transition';
 import { STR, TASK_STATUS_LABEL } from '@/strings';
 import { play } from '@/utils/sound';
 import type { AgentEvent } from '@/types/agentEvent.types';
@@ -86,19 +84,29 @@ function kindAccent(kind: AgentEvent['kind']): number {
  * is removed on `shutdown`.
  */
 export class LogbookScene extends Phaser.Scene {
-  declare rexUI: RexUIPlugin;
-
   private scrim?: Phaser.GameObjects.Rectangle;
   private backstop?: Phaser.GameObjects.Rectangle;
   private frame?: Phaser.GameObjects.Container;
   private header?: Phaser.GameObjects.Container;
-  private panel?: ScrollablePanel;
-  private listSizer?: Sizer;
   private statusText?: Phaser.GameObjects.Text;
   private backBtn?: Phaser.GameObjects.Container;
   private replayBtn?: Phaser.GameObjects.Container;
-  private lineMaskShape?: Phaser.GameObjects.Graphics;
-  private lineMask?: Phaser.Display.Masks.GeometryMask;
+
+  // The transcript is rendered as a single tall content container, clipped to the
+  // reading-well viewport by a geometry mask, and scrolled by nudging the
+  // container's Y. This replaces the rexUI ScrollablePanel (which laid rows at the
+  // scene root and left a stray un-masked panel rectangle on screen) with a
+  // self-contained, precisely-clipped scroll — the §6 two-layer rule stays intact.
+  private content?: Phaser.GameObjects.Container;
+  private well?: Phaser.GameObjects.Graphics;
+  private viewMaskShape?: Phaser.GameObjects.Graphics;
+  private viewMask?: Phaser.Display.Masks.GeometryMask;
+  private scrollbar?: Phaser.GameObjects.Rectangle;
+  private scrollTrack?: Phaser.GameObjects.Rectangle;
+  // viewport geometry (scene space), recomputed on (re)layout.
+  private viewport = { x: 0, y: 0, w: 0, h: 0 };
+  private contentH = 0;
+  private scrollY = 0; // current scroll offset (0 = top), 0..maxScroll
 
   private record?: TaskRecord;
   private taskId = '';
@@ -129,6 +137,10 @@ export class LogbookScene extends Phaser.Scene {
 
     this.layout();
     this.scale.on('resize', this.layout, this);
+    this.input.on('wheel', this.onWheel, this);
+
+    // The scroll unrolls in with a camera fade over the slept hall/archive.
+    fadeIn(this, PALETTE.scrollScrim);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.teardown, this);
 
@@ -152,13 +164,17 @@ export class LogbookScene extends Phaser.Scene {
     this.backstop = undefined;
     this.frame = undefined;
     this.header = undefined;
-    this.panel = undefined;
-    this.listSizer = undefined;
     this.statusText = undefined;
     this.backBtn = undefined;
     this.replayBtn = undefined;
-    this.lineMaskShape = undefined;
-    this.lineMask = undefined;
+    this.content = undefined;
+    this.well = undefined;
+    this.viewMaskShape = undefined;
+    this.viewMask = undefined;
+    this.scrollbar = undefined;
+    this.scrollTrack = undefined;
+    this.contentH = 0;
+    this.scrollY = 0;
     this.raw = null;
     this.parsed = [];
     this.loadError = false;
@@ -166,14 +182,22 @@ export class LogbookScene extends Phaser.Scene {
 
   private teardown(): void {
     this.scale.off('resize', this.layout, this);
+    this.input.off('wheel', this.onWheel, this);
   }
 
   // Roll the scroll up. If we came from a book, wake the archive shelf; if from an
-  // archer, wake the hall (both were slept, not stopped, so they stay warm).
+  // archer, wake the hall (both were slept, not stopped, so they stay warm). Fade
+  // out first; the woken scene fades itself back in (reduced-motion = instant cut).
   private close(): void {
     play('close');
-    this.scene.stop(SCENE.logbook);
-    this.scene.wake(this.from === 'archive' ? SCENE.archive : SCENE.hall);
+    fadeOutThen(
+      this,
+      () => {
+        this.scene.stop(SCENE.logbook);
+        this.scene.wake(this.from === 'archive' ? SCENE.archive : SCENE.hall);
+      },
+      PALETTE.scrollScrim,
+    );
   }
 
   // --- data load (over the bus; no IPC here) ------------------------------
@@ -228,7 +252,7 @@ export class LogbookScene extends Phaser.Scene {
     this.buildBackstop(cx, cy, frameW, frameH);
     this.buildScroll(cx, cy, frameW, frameH);
     this.buildChrome(cx, cy, frameW, frameH);
-    this.buildPanel(cx, cy, frameW, frameH);
+    this.buildViewport(cx, cy, frameW, frameH);
     this.renderHeader();
     this.renderTranscript();
     this.refreshReplayButton();
@@ -304,46 +328,57 @@ export class LogbookScene extends Phaser.Scene {
     this.replayBtn = replay;
   }
 
-  private buildPanel(cx: number, cy: number, w: number, h: number): void {
-    this.panel?.destroy();
-    const sizer = this.rexUI.add.sizer({ orientation: 'y', space: { item: 0 } });
-    this.listSizer = sizer;
-
+  // The transcript reading well + its self-clipping scroll content. A single
+  // content container holds every line, stacked top-down; a geometry mask clips it
+  // to the well; mouse-wheel + drag nudge its Y. No rexUI panel → no stray
+  // un-masked rectangle, and rows are clipped exactly to the parchment.
+  private buildViewport(cx: number, cy: number, w: number, h: number): void {
     const rollerH = 26;
     const headerH = 96; // the commission header band at the top of the parchment
     const viewportW = w - 56;
     const viewportH = h - rollerH * 2 - headerH - 28;
     const viewportY = cy - h / 2 + rollerH + headerH + viewportH / 2 + 8;
+    const viewX = cx - viewportW / 2;
+    const viewTop = viewportY - viewportH / 2;
+    this.viewport = { x: viewX, y: viewTop, w: viewportW, h: viewportH };
 
     // the transcript reading well: a clean inset surface inside the parchment.
+    // Drawn in SCENE space at the scene root (NOT inside the frame container — that
+    // would double-offset it to the bottom-right, the old stray-rectangle bug).
+    this.well?.destroy();
     const well = this.add.graphics().setDepth(14);
     well.fillStyle(PALETTE.transcriptWell, 1);
-    well.fillRoundedRect(cx - viewportW / 2 - 6, viewportY - viewportH / 2 - 6, viewportW + 12, viewportH + 12, 6);
+    well.fillRoundedRect(viewX - 6, viewTop - 6, viewportW + 12, viewportH + 12, 6);
     well.lineStyle(1.5, PALETTE.transcriptWellEdge, 1);
-    well.strokeRoundedRect(cx - viewportW / 2 - 6, viewportY - viewportH / 2 - 6, viewportW + 12, viewportH + 12, 6);
-    // park the well graphic on the frame so it's destroyed with the next layout.
-    this.frame?.add(well);
+    well.strokeRoundedRect(viewX - 6, viewTop - 6, viewportW + 12, viewportH + 12, 6);
+    this.well = well;
 
-    this.lineMaskShape?.destroy();
+    // a thin scroll track + thumb down the well's right gutter (shown only when
+    // the transcript overflows). Drawn under the mask so it's never clipped.
+    this.scrollTrack?.destroy();
+    this.scrollTrack = this.add
+      .rectangle(viewX + viewportW + 1, viewportY, 4, viewportH, PALETTE.transcriptWellEdge, 0.5)
+      .setOrigin(0.5, 0.5)
+      .setDepth(24)
+      .setVisible(false);
+    this.scrollbar?.destroy();
+    this.scrollbar = this.add
+      .rectangle(viewX + viewportW + 1, viewTop, 4, 40, PALETTE.scrollRollerCap, 0.9)
+      .setOrigin(0.5, 0)
+      .setDepth(25)
+      .setVisible(false);
+
+    // the scrolling content container, masked to the well.
+    this.content?.destroy();
+    this.content = this.add.container(viewX, viewTop).setDepth(22);
+    this.viewMaskShape?.destroy();
     const maskShape = this.add.graphics().setVisible(false);
     maskShape.fillStyle(0xffffff, 1);
-    maskShape.fillRect(cx - viewportW / 2, viewportY - viewportH / 2, viewportW, viewportH);
-    this.lineMaskShape = maskShape;
-    this.lineMask = maskShape.createGeometryMask();
-
-    this.panel = this.rexUI.add
-      .scrollablePanel({
-        x: cx,
-        y: viewportY,
-        width: viewportW,
-        height: viewportH,
-        scrollMode: 'y',
-        panel: { child: sizer, mask: { padding: 2 } },
-        space: { panel: 2 },
-        mouseWheelScroller: { focus: false, speed: 0.5 },
-      })
-      .setDepth(20)
-      .layout() as unknown as ScrollablePanel;
+    maskShape.fillRect(viewX, viewTop, viewportW, viewportH);
+    this.viewMaskShape = maskShape;
+    this.viewMask = maskShape.createGeometryMask();
+    this.content.setMask(this.viewMask);
+    this.scrollY = 0;
 
     this.statusText = this.add
       .text(cx, viewportY, '', {
@@ -355,6 +390,43 @@ export class LogbookScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 0.5)
       .setDepth(25);
+  }
+
+  // --- scroll handling ----------------------------------------------------
+
+  private maxScroll(): number {
+    return Math.max(0, this.contentH - this.viewport.h);
+  }
+
+  private applyScroll(): void {
+    if (!this.content) return;
+    const max = this.maxScroll();
+    this.scrollY = Phaser.Math.Clamp(this.scrollY, 0, max);
+    this.content.y = this.viewport.y - this.scrollY;
+    // sync the thumb.
+    if (this.scrollbar && this.scrollTrack) {
+      const overflow = max > 0.5;
+      this.scrollbar.setVisible(overflow);
+      this.scrollTrack.setVisible(overflow);
+      if (overflow) {
+        const ratio = this.viewport.h / this.contentH;
+        const thumbH = Math.max(28, this.viewport.h * ratio);
+        const travel = this.viewport.h - thumbH;
+        this.scrollbar.height = thumbH;
+        this.scrollbar.y = this.viewport.y + travel * (this.scrollY / max);
+      }
+    }
+  }
+
+  private onWheel(
+    _pointer: Phaser.Input.Pointer,
+    _over: unknown,
+    _dx: number,
+    dy: number,
+  ): void {
+    if (this.maxScroll() <= 0) return;
+    this.scrollY += dy * 0.5;
+    this.applyScroll();
   }
 
   // --- commission header (prompt + totals) --------------------------------
@@ -440,42 +512,50 @@ export class LogbookScene extends Phaser.Scene {
   // --- transcript (monospace, high-density) -------------------------------
 
   private renderTranscript(): void {
-    if (!this.listSizer || !this.panel || !this.statusText) return;
+    if (!this.content || !this.statusText) return;
 
-    this.listSizer.clear(true);
+    this.content.removeAll(true);
+    this.contentH = 0;
 
     if (this.loadError) {
       this.statusText.setText(STR.logbookSceneError).setVisible(true);
-      this.panel.layout();
+      this.applyScroll();
       return;
     }
     if (this.raw === null) {
       this.statusText.setText(STR.logbookSceneLoading).setVisible(true);
-      this.panel.layout();
+      this.applyScroll();
       return;
     }
     if (this.parsed.length === 0) {
       this.statusText.setText(STR.logbookSceneEmpty).setVisible(true);
-      this.panel.layout();
+      this.applyScroll();
       return;
     }
     this.statusText.setVisible(false);
 
-    const rowW = this.frameRect.w - 56;
+    // Stack each line top-down inside the (masked) content container. Width is the
+    // exact viewport width so a row never spills past the parchment's right edge.
+    const rowW = this.viewport.w;
+    let y = 4;
     for (const p of this.parsed) {
       const row = this.buildLine(p, rowW);
-      this.listSizer.add(row, { expand: false, align: 'left', padding: { left: 0, right: 0 } });
+      row.setY(y);
+      this.content.add(row);
+      y += (row.getData('rowH') as number) + 2;
     }
-    this.panel.layout();
+    this.contentH = y + 4;
+    this.scrollY = 0;
+    this.applyScroll();
   }
 
   // One transcript line: a clock stamp + per-kind accent stripe + monospace head,
-  // and (for output / error) a verbatim block in a distinct ink below.
+  // and (for output / error) a verbatim block in a distinct ink below. The line is
+  // a container in CONTENT space (the container is masked, not each line), so rows
+  // clip cleanly to the well and stay equidistant.
   private buildLine(p: ParsedEvent, width: number): Phaser.GameObjects.Container {
     const line = transcriptLine(p.event);
     const c = this.add.container(0, 0);
-    c.setDepth(22);
-    if (this.lineMask) c.setMask(this.lineMask);
 
     const padX = 10;
     const padY = 6;
@@ -533,6 +613,7 @@ export class LogbookScene extends Phaser.Scene {
     c.add(rule);
 
     c.setSize(width, rowH);
+    c.setData('rowH', rowH);
     return c;
   }
 
@@ -548,15 +629,21 @@ export class LogbookScene extends Phaser.Scene {
     play('open');
     // hand the stored log to useReplay (via the bridge); the workshop re-enacts it.
     EventBus.emit(BUS.replayStart, this.raw);
-    // a replay is always shown in the hall, regardless of where we opened from. If
-    // we came via the archive, fully stop it (don't leave it orphaned sleeping
-    // behind the hall) so the scene graph stays clean.
-    if (this.from === 'archive' && this.scene.isSleeping(SCENE.archive)) {
-      this.scene.stop(SCENE.archive);
-    }
-    // roll the scroll up and return to the workshop so the archer is visible.
-    this.scene.stop(SCENE.logbook);
-    this.scene.wake(SCENE.hall);
+    fadeOutThen(
+      this,
+      () => {
+        // a replay is always shown in the hall, regardless of where we opened from.
+        // If we came via the archive, fully stop it (don't leave it orphaned
+        // sleeping behind the hall) so the scene graph stays clean.
+        if (this.from === 'archive' && this.scene.isSleeping(SCENE.archive)) {
+          this.scene.stop(SCENE.archive);
+        }
+        // roll the scroll up and return to the workshop so the archer is visible.
+        this.scene.stop(SCENE.logbook);
+        this.scene.wake(SCENE.hall);
+      },
+      PALETTE.scrollScrim,
+    );
   }
 
   private makeButton(

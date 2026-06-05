@@ -22,5 +22,19 @@ export default defineConfig({
   build: {
     target: 'es2022',
     outDir: 'dist',
+    rollupOptions: {
+      output: {
+        // Split the heavy engine deps into their own chunks so app code, Phaser,
+        // and the rexUI plugin parse + cache independently. The app ships inside a
+        // Tauri WebView (no network fetch cost), so this is about clean splitting,
+        // not download size. Matched by module path (rexUI is only imported via
+        // deep subpaths, so it has no resolvable package-name entry).
+        manualChunks(id) {
+          if (id.includes('node_modules/phaser4-rex-plugins')) return 'rexui';
+          if (id.includes('node_modules/phaser')) return 'phaser';
+          return undefined;
+        },
+      },
+    },
   },
 });

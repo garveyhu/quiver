@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSupervisor } from '@/hooks/useSupervisor';
 import { useSettings } from '@/hooks/useSettings';
 import { useTaskBoard } from '@/hooks/useTaskBoard';
@@ -7,40 +7,32 @@ import { useReplay } from '@/hooks/useReplay';
 import {
   EventBus,
   BUS,
-  type Hotspot,
   type TaskBoardSummary,
   type BoardEnqueuePayload,
   type BoardReorderPayload,
   type BoardCancelPayload,
   type LogbookRequest,
 } from '@/game/EventBus';
-import { GameStateContext, type GameState } from '@/game/useGameState';
 import type { RunMode } from '@/types/run.types';
 import type { SettingsPatch, StoredEvent } from '@/types/persistence.types';
 
-interface GameBridgeProps {
-  /** A hotspot was clicked in the world — App opens the matching React overlay. */
-  onOpenHotspot: (hotspot: Hotspot) => void;
-  /** The temporary React overlays, which read the shared GameState via context. */
-  children: ReactNode;
-}
-
 /**
  * The headless React↔Phaser bridge. It owns the data layer (every IPC hook is
- * instantiated here, exactly once) and does three things:
+ * instantiated here, exactly once) and does two things:
  *
  *  1. re-emits the hooks' current state onto the EventBus so the Phaser scenes
  *     can render it (the live AgentEvent stream / a replay, settings, board
  *     summary, project, replay flag);
- *  2. turns world *commands* coming back off the bus (a hotspot click) into the
- *     App-level overlay action — never an IPC call directly;
- *  3. exposes the hooks to the temporary overlays via Context.
+ *  2. turns world *commands* coming back off the bus (pick-project, board
+ *     mutations, settings patches, logbook loads, replay) into the existing
+ *     hooks' action functions — never an IPC call directly.
  *
- * Hard rule: the EventBus never reaches Rust. All IPC stays inside the hooks;
- * the bridge only shuttles their already-fetched data onto the bus and routes
- * bus commands to the hooks' existing action functions.
+ * It renders nothing: the whole UI is the Phaser canvas plus the IME text
+ * overlay. Hard rule: the EventBus never reaches Rust. All IPC stays inside the
+ * hooks; the bridge only shuttles their already-fetched data onto the bus and
+ * routes bus commands to the hooks' existing action functions.
  */
-export function GameBridge({ onOpenHotspot, children }: GameBridgeProps) {
+export function GameBridge(): null {
   const supervisor = useSupervisor();
   const settings = useSettings();
   const board = useTaskBoard(supervisor.projectPath);
@@ -154,15 +146,18 @@ export function GameBridge({ onOpenHotspot, children }: GameBridgeProps) {
     EventBus.emit(BUS.archiveMeta, { error: archive.error });
   }, [archive.error]);
 
-  // --- bus: world commands → App / hooks --------------------------------
+  // --- bus: world commands → hooks --------------------------------------
 
+  // The door/sign hotspot → useSupervisor.pickProject (the native folder dialog
+  // over the unchanged pick_project IPC). No React overlay; the door drives the
+  // hook directly.
   useEffect(() => {
-    const onOpen = (payload: { hotspot: Hotspot }) => onOpenHotspot(payload.hotspot);
-    EventBus.on(BUS.openHotspot, onOpen);
+    const onPick = () => void supervisor.pickProject();
+    EventBus.on(BUS.pickProject, onPick);
     return () => {
-      EventBus.off(BUS.openHotspot, onOpen);
+      EventBus.off(BUS.pickProject, onPick);
     };
-  }, [onOpenHotspot]);
+  }, [supervisor]);
 
   // Board mutations from the TaskBoardScene → the existing useTaskBoard actions
   // (the only IPC caller). The run mode is owned here, seeded from settings.
@@ -218,15 +213,5 @@ export function GameBridge({ onOpenHotspot, children }: GameBridgeProps) {
     };
   }, [replay]);
 
-  const value: GameState = {
-    supervisor,
-    settings,
-    board,
-    archive,
-    replay,
-    mode,
-    setMode,
-  };
-
-  return <GameStateContext.Provider value={value}>{children}</GameStateContext.Provider>;
+  return null;
 }

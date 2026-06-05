@@ -47,8 +47,10 @@ export const BUS = {
   archiveMeta: 'archive:meta',
 
   // Commands Phaser → React (GameBridge subscribes and calls the hooks).
-  // payload: { hotspot: 'project' } — board / settings / archive are in-world.
-  openHotspot: 'cmd:open-hotspot',
+  // the door/sign hotspot asks to pick a project (the native folder dialog via the
+  // unchanged useSupervisor.pickProject IPC). No payload — the LAST temporary React
+  // overlay is gone (P5): the door drives the hook directly, no DOM panel.
+  pickProject: 'cmd:pick-project',
   // the LogbookScene asks the bridge to load ONE run's full §11 event log; the
   // bridge calls useArchive.loadEvents and replies once on `req.channel`.
   // payload: LogbookRequest (see below).
@@ -78,13 +80,6 @@ export interface TaskBoardSummary {
   queued: number;
   maxWorkers: number;
 }
-
-// The diegetic world objects a hotspot click can open via the temporary React
-// overlay bridge. The notice board (TaskBoardScene, P2), the ledger/settings
-// (SettingsScene, P3) and the bookshelf/archive (ArchiveScene, P4) are now
-// in-world scenes launched directly, so only the door/project picker still rides
-// the temporary overlay (P5 absorbs it into the door/sign).
-export type Hotspot = 'project';
 
 // Anchor rect (canvas/page pixels) the React overlay positions its field over.
 export interface TextInputAnchor {

@@ -5,6 +5,7 @@ import type RexUIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin';
 import { EventBus, BUS, type TaskRecord, type BoardMeta } from '@/game/EventBus';
 import { requestTextInput } from '@/game/requestTextInput';
 import { PALETTE, CJK_FONT, SCENE } from '@/game/palette';
+import { fadeIn, fadeOutThen } from '@/game/transition';
 import { STR, TASK_STATUS_LABEL } from '@/strings';
 import { play } from '@/utils/sound';
 
@@ -75,6 +76,11 @@ export class TaskBoardScene extends Phaser.Scene {
   declare rexUI: RexUIPlugin;
 
   private scrim?: Phaser.GameObjects.Rectangle;
+  // An invisible interactive backstop over the board + pin button. It swallows
+  // pointer events so a click on the timber frame / cork (or a stray pointerup
+  // left behind when the IME overlay for "钉新委托" closes) never falls through to
+  // the scrim's close handler — the same M3/M4 fix the ledger & archive use.
+  private backstop?: Phaser.GameObjects.Rectangle;
   private frame?: Phaser.GameObjects.Container;
   private panel?: ScrollablePanel;
   private listSizer?: Sizer;
@@ -111,6 +117,9 @@ export class TaskBoardScene extends Phaser.Scene {
     // Ask the bridge to flush the current board snapshot now that we're up.
     EventBus.emit(BUS.sceneReady);
 
+    // Fade the board in over the slept world (camera dolly-in, honours motion).
+    fadeIn(this, PALETTE.boardScrim);
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.teardown, this);
 
     if (import.meta.env.DEV) {
@@ -120,6 +129,7 @@ export class TaskBoardScene extends Phaser.Scene {
 
   private resetState(): void {
     this.scrim = undefined;
+    this.backstop = undefined;
     this.frame = undefined;
     this.panel = undefined;
     this.listSizer = undefined;
@@ -140,9 +150,16 @@ export class TaskBoardScene extends Phaser.Scene {
 
   private close(): void {
     play('close');
-    this.scene.stop(SCENE.board);
-    // Wake the world back up (it was slept, not stopped, so it stays warm).
-    this.scene.wake(SCENE.hall);
+    // Fade out, then stop this scene and wake the (slept, still-warm) world. The
+    // hall fades itself back in on WAKE. Reduced-motion collapses to an instant cut.
+    fadeOutThen(
+      this,
+      () => {
+        this.scene.stop(SCENE.board);
+        this.scene.wake(SCENE.hall);
+      },
+      PALETTE.boardScrim,
+    );
   }
 
   // --- bus handlers -------------------------------------------------------
@@ -180,9 +197,25 @@ export class TaskBoardScene extends Phaser.Scene {
     const cx = width / 2;
     const cy = height / 2 + 10;
 
+    this.buildBackstop(cx, cy, boardW, boardH);
     this.buildFrame(cx, cy, boardW, boardH);
     this.buildButtons(cx, cy, boardW, boardH);
     this.buildPanel(cx, cy, boardW, boardH);
+  }
+
+  // The interactive backstop: an invisible rect over the board, sitting above the
+  // scrim (depth 0) but below the frame art (depth 10) and every card/button, so
+  // non-control clicks on the timber/cork are swallowed here instead of falling
+  // through to the scrim → close() (the §6 input-overlay footgun).
+  private buildBackstop(cx: number, cy: number, w: number, h: number): void {
+    const bw = w + 36;
+    const bh = h + 36;
+    if (!this.backstop) {
+      this.backstop = this.add.rectangle(cx, cy, bw, bh, 0x000000, 0).setDepth(5).setInteractive();
+      this.backstop.on('pointerup', (p: Phaser.Input.Pointer) => p.event.stopPropagation());
+    } else {
+      this.backstop.setSize(bw, bh).setPosition(cx, cy);
+    }
   }
 
   private buildFrame(cx: number, cy: number, w: number, h: number): void {

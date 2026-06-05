@@ -39,6 +39,11 @@ export class UIScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Phaser reuses the scene instance across stop→start, so clear every stale
+    // GameObject handle before re-layout — otherwise `this.panel.setSize()` hits a
+    // destroyed object (the §6 scene-recreate footgun the sub-scenes already guard).
+    this.resetState();
+
     this.layout();
     this.scale.on('resize', this.layout, this);
 
@@ -51,6 +56,15 @@ export class UIScene extends Phaser.Scene {
     this.tickClock();
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.teardown, this);
+  }
+
+  private resetState(): void {
+    this.barBg = undefined;
+    this.barFill = undefined;
+    this.budgetText = undefined;
+    this.clockText = undefined;
+    this.busyText = undefined;
+    this.panel = undefined;
   }
 
   private teardown(): void {

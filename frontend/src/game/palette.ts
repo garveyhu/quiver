@@ -9,6 +9,7 @@ export const PALETTE = {
   // room / canvas
   canvasBg: '#fbf6ec', // --bg (cream parchment)
   canvasBgNight: '#251d18',
+  canvasBgInt: 0x1c130c, // numeric wash for camera fades (matches scrim ink)
 
   // archer bubble + juice (mirrored from OfficeScene's former local COLOR)
   bubbleFill: 0xfffdf8,
@@ -30,6 +31,11 @@ export const PALETTE = {
 
   // hotspot affordance glint
   glint: 0xffd27a,
+
+  // empty-state (no project) cold wash + the lit "wake the workshop" hint chip
+  coldWash: 0x101826, // a chilly blue-grey over the sleeping workshop
+  hudAccentInt: 0xe0992e, // numeric --accent for the door hint chip
+  nightWash: 0x1a2440, // 夜幕 theme — a soft cool wash over the whole world
 
   // --- 任务公告板 (TaskBoardScene) ---
   boardScrim: 0x1c130c, // dim wash behind the focused board
@@ -151,6 +157,27 @@ export const PALETTE = {
 
 // CJK-safe font stack reused across every canvas Text object.
 export const CJK_FONT = 'PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif';
+
+/**
+ * Whether the user asked the OS to reduce motion. The whole world honours this
+ * (P5 hard constraint): particles / camera fades / glint breathing degrade to an
+ * instant cut or are skipped so the app never spins or flashes for someone who
+ * opted out. Read live (not cached) so a settings change mid-session is respected.
+ */
+export function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
+/** Scene-transition fade duration (ms), collapsed to an instant cut when the user
+ * opted out of motion. One knob so every open/close fades in lockstep. */
+export const FADE_MS = 220;
+export function fadeMs(): number {
+  return prefersReducedMotion() ? 0 : FADE_MS;
+}
 
 // Scene keys — one registry so launch/start calls never drift on a typo.
 export const SCENE = {

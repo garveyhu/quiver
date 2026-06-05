@@ -3,8 +3,9 @@ import { type Pose, type WorkerView } from '@/office/types';
 import { createWorker, reduceWorker } from '@/office/poseMachine';
 import type { AgentEvent } from '@/types/agentEvent.types';
 import { play } from '@/utils/sound';
-import { EventBus, BUS, type Hotspot } from '@/game/EventBus';
-import { PALETTE, CJK_FONT, SCENE } from '@/game/palette';
+import { EventBus, BUS } from '@/game/EventBus';
+import { PALETTE, CJK_FONT, SCENE, prefersReducedMotion } from '@/game/palette';
+import { fadeIn, fadeOutThen } from '@/game/transition';
 import { STR } from '@/strings';
 
 const COLOR = {
@@ -13,6 +14,7 @@ const COLOR = {
   bubbleText: PALETTE.bubbleText,
   sparkle: PALETTE.sparkle,
   glow: PALETTE.glow,
+  ember: PALETTE.emberLow,
   popup: PALETTE.popup,
   popupStroke: PALETTE.popupStroke,
 } as const;
@@ -53,6 +55,7 @@ interface HotspotNode {
   zone: Phaser.GameObjects.Zone;
   label: Phaser.GameObjects.Container;
   glint: Phaser.GameObjects.Arc;
+  halo: Phaser.GameObjects.Arc;
   anchor: (w: number, h: number) => { x: number; y: number };
   onClick: () => void;
 }
@@ -87,6 +90,16 @@ export class HallScene extends Phaser.Scene {
   // budget 0..1 (hearth fire height / colour). null = unknown → neutral.
   private budgetRatio: number | null = null;
 
+  // Whether a project (workshop) is selected. Until one is, the workshop sleeps:
+  // a cold dim wash, banked embers, a dozing archer, and the door glint pulsing
+  // "点亮工坊 · 选择项目" (the §6 no-tutorial empty-state cue, P3 #14).
+  private hasProject = true;
+  private dimWash?: Phaser.GameObjects.Rectangle;
+  private sleeper?: Phaser.GameObjects.Container;
+  private wakeHint?: Phaser.GameObjects.Container;
+  // 夜幕 theme cool wash over the whole world (P4 #16).
+  private nightWash?: Phaser.GameObjects.Rectangle;
+
   constructor() {
     super(SCENE.hall);
   }
@@ -97,9 +110,16 @@ export class HallScene extends Phaser.Scene {
     this.makeHotspots();
     this.scale.on('resize', this.layoutRoom, this);
 
+    // Fade the workshop in on first entry and every time a sub-scene closes back
+    // to it (the world was slept, not stopped, so create() doesn't re-run — the
+    // WAKE event is the seam). Honours reduced-motion via fadeIn().
+    fadeIn(this, PALETTE.canvasBgInt);
+    this.events.on(Phaser.Scenes.Events.WAKE, this.onWake, this);
+
     // Subscribe to the bus; the bridge flushes the current snapshot on ready.
     EventBus.on(BUS.officeEvents, this.onEvents, this);
     EventBus.on(BUS.settings, this.onSettings, this);
+    EventBus.on(BUS.project, this.onProject, this);
     EventBus.emit(BUS.sceneReady);
 
     // Tear down every subscription + resize handler when the scene shuts down,
@@ -140,7 +160,15 @@ export class HallScene extends Phaser.Scene {
   private teardown(): void {
     EventBus.off(BUS.officeEvents, this.onEvents, this);
     EventBus.off(BUS.settings, this.onSettings, this);
+    EventBus.off(BUS.project, this.onProject, this);
     this.scale.off('resize', this.layoutRoom, this);
+    this.events.off(Phaser.Scenes.Events.WAKE, this.onWake, this);
+  }
+
+  // The workshop woke back up (a sub-scene closed). Fade it in from the wash so the
+  // return reads as a soft dolly-back rather than a hard cut.
+  private onWake(): void {
+    fadeIn(this, PALETTE.canvasBgInt);
   }
 
   // --- bus handlers -------------------------------------------------------
@@ -166,9 +194,23 @@ export class HallScene extends Phaser.Scene {
     this.cursor = events.length;
   }
 
-  // Budget → hearth: nightly budget is the primary cap, monthly is the fallback.
-  // Without a cap or a spend figure we can't compute a ratio → neutral fire.
-  private onSettings(settings: { nightlyBudgetUsd: number | null; monthlyCreditCapUsd: number | null } | null): void {
+  // Project gate: an unselected workshop sleeps cold + dim until the door is used.
+  private onProject(payload: { projectPath: string | null }): void {
+    const has = payload.projectPath != null;
+    if (has === this.hasProject && (this.dimWash || has)) return;
+    this.hasProject = has;
+    this.applyWorkshopState();
+  }
+
+  // Budget → hearth + theme → world tint. Nightly budget is the primary cap,
+  // monthly the fallback. Without a cap or spend figure we can't compute a ratio →
+  // neutral fire. The appearance theme (暖阳 / 夜幕) tints the whole world, not just
+  // the DOM overlay (P4 #16): 夜幕 lays a soft cool wash over the workshop.
+  private onSettings(
+    settings:
+      | { nightlyBudgetUsd: number | null; monthlyCreditCapUsd: number | null; theme?: string }
+      | null,
+  ): void {
     if (!settings) {
       this.budgetRatio = null;
     } else {
@@ -178,6 +220,25 @@ export class HallScene extends Phaser.Scene {
       this.budgetRatio = cap != null && cap > 0 ? 1 : null;
     }
     this.applyHearth();
+    this.applyTheme(settings?.theme === 'midnight');
+  }
+
+  // A soft cool wash over the world for the 夜幕 theme (kept under the dim/empty
+  // wash + HUD, above the room art). 暖阳 removes it entirely.
+  private applyTheme(night: boolean): void {
+    const { width, height } = this.scale;
+    if (night) {
+      if (!this.nightWash) {
+        this.nightWash = this.add
+          .rectangle(0, 0, width, height, PALETTE.nightWash, 0.22)
+          .setOrigin(0, 0)
+          .setDepth(40);
+      } else {
+        this.nightWash.setSize(width, height).setVisible(true);
+      }
+    } else {
+      this.nightWash?.setVisible(false);
+    }
   }
 
   private makeAnims(): void {
@@ -244,6 +305,20 @@ export class HallScene extends Phaser.Scene {
     if (!this.fire) {
       this.fire = this.add.sprite(fx, fy, 'fire').setDepth(-55).setOrigin(0.5, 0.62);
       this.fire.play('fire');
+      // a subtle alpha flicker on the flame so the hearth feels alive (ambient,
+      // §8). On its own property so it never fights the glow's breathing tween.
+      // Skipped under reduced-motion (the flame holds steady).
+      if (!prefersReducedMotion()) {
+        this.tweens.add({
+          targets: this.fire,
+          alpha: { from: 1, to: 0.86 },
+          duration: 140,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+          delay: 300,
+        });
+      }
     } else {
       this.fire.setPosition(fx, fy);
     }
@@ -272,17 +347,142 @@ export class HallScene extends Phaser.Scene {
 
     for (const node of this.nodes.values()) this.placeNode(node);
     for (const h of this.hotspots) this.placeHotspot(h);
+
+    // re-place / re-size the empty-state small-play (dim wash, sleeper, door hint).
+    this.applyWorkshopState();
+    // keep the night wash full-bleed on resize.
+    if (this.nightWash?.visible) this.nightWash.setSize(width, height);
   }
 
   // The hearth's height + glow tint = the budget gauge (full=tall warm fire,
-  // depleted=banked low embers). Neutral when no budget data is available.
+  // depleted=banked low embers). Neutral when no budget data is available. When
+  // banked (ratio ≤ 0.15, e.g. budget paused) the flame shrinks to embers, the
+  // glow cools, and the lanterns dim — the §1 "限额暂停 → 火 banked、灯暗" state.
   private applyHearth(): void {
     if (!this.fire) return;
     const { height } = this.scale;
     const ratio = this.budgetRatio ?? 0.7; // neutral, warm middle
     const base = height * 0.16;
     this.fire.setScale((base * (0.55 + 0.45 * ratio)) / 100);
-    if (this.fireGlow) this.fireGlow.setFillStyle(COLOR.glow, 0.16 + 0.18 * ratio);
+    const banked = ratio <= 0.15;
+    if (this.fireGlow) {
+      this.fireGlow.setFillStyle(banked ? COLOR.ember : COLOR.glow, 0.12 + 0.2 * ratio);
+    }
+    // dim the lanterns when banked so the workshop reads as "powered down".
+    const lanternAlpha = banked ? 0.06 : 0.16;
+    for (const g of this.lanternGlows) g.setFillStyle(COLOR.glow, lanternAlpha);
+  }
+
+  // The §1 empty-state small-play (P3 #14): no project → a cold, dim, sleeping
+  // workshop with the door glint shouting "点亮工坊 · 选择项目"; a project → the
+  // workshop lights back up. Idempotent; safe to call on (re)layout + on change.
+  private applyWorkshopState(): void {
+    const { width, height } = this.scale;
+    if (!this.hasProject) {
+      // a cold blue wash chills the whole room (deep enough to read as "asleep",
+      // but the hearth + candle + door hint still glow warmly through it).
+      if (!this.dimWash) {
+        this.dimWash = this.add
+          .rectangle(0, 0, width, height, PALETTE.coldWash, 0.62)
+          .setOrigin(0, 0)
+          .setDepth(50);
+      } else {
+        this.dimWash.setSize(width, height).setVisible(true);
+      }
+      // bank the hearth to embers + dim the lanterns.
+      this.budgetRatio = 0.1;
+      this.applyHearth();
+      this.showSleeper();
+      this.emphasizeDoorGlint(true);
+    } else {
+      this.dimWash?.setVisible(false);
+      this.sleeper?.setVisible(false);
+      this.wakeHint?.setVisible(false);
+      this.emphasizeDoorGlint(false);
+      // restore the hearth to its budget-driven level (neutral if unknown).
+      if (this.budgetRatio === 0.1) this.budgetRatio = null;
+      this.applyHearth();
+    }
+  }
+
+  // A single dozing archer slumped at the centre station — the workshop isn't
+  // empty, it's asleep, waiting to be lit.
+  private showSleeper(): void {
+    const { width, height } = this.scale;
+    const x = width * 0.46;
+    const y = height - 128;
+    if (!this.sleeper) {
+      const c = this.add.container(x, y).setDepth(60);
+      const station = this.add.image(6, 60, 'station').setOrigin(0.5, 1);
+      const stationH = ARCHER_H * 1.35;
+      station.setDisplaySize(stationH * (station.width / station.height), stationH);
+      const sprite = this.add.sprite(-18, 58, 'c0-sick').setOrigin(0.5, 1);
+      sprite.setScale(ARCHER_H / CHAR_CELL.h);
+      const zzz = this.add
+        .text(20, -ARCHER_H - 4, '💤', { fontFamily: CJK_FONT, fontSize: '22px' })
+        .setOrigin(0.5, 0.5);
+      c.add([station, sprite, zzz]);
+      // a slow dozing breath, unless motion is reduced.
+      if (!prefersReducedMotion()) {
+        this.tweens.add({
+          targets: zzz,
+          y: zzz.y - 6,
+          alpha: 0.4,
+          duration: 1600,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+      }
+      this.sleeper = c;
+    } else {
+      this.sleeper.setPosition(x, y).setVisible(true);
+    }
+  }
+
+  // Pulse the door glint hard + show "点亮工坊 · 选择项目" so an empty workshop
+  // points unambiguously at the one action that matters.
+  private emphasizeDoorGlint(on: boolean): void {
+    const door = this.hotspots[this.hotspots.length - 1]; // door is the last spec
+    if (!door) return;
+    if (on) {
+      door.glint.setRadius(11).setFillStyle(PALETTE.glint, 1).setDepth(70);
+      door.label.setDepth(70);
+      const { x, y } = door.anchor(this.scale.width, this.scale.height);
+      if (!this.wakeHint) {
+        const hint = this.add.container(x, y - 44).setDepth(70);
+        const text = this.add
+          .text(0, 0, STR.firstRunWake, {
+            fontFamily: CJK_FONT,
+            fontSize: '15px',
+            color: PALETTE.hudInk,
+            fontStyle: 'bold',
+            align: 'center',
+          })
+          .setOrigin(0.5, 0.5);
+        const pad = 12;
+        const bg = this.add.graphics();
+        bg.fillStyle(PALETTE.hudAccentInt, 0.96);
+        bg.fillRoundedRect(-text.width / 2 - pad, -text.height / 2 - 7, text.width + pad * 2, text.height + 14, 9);
+        hint.add([bg, text]);
+        this.wakeHint = hint;
+        if (!prefersReducedMotion()) {
+          this.tweens.add({
+            targets: hint,
+            y: hint.y - 6,
+            duration: 900,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+          });
+        }
+      } else {
+        this.wakeHint.setPosition(x, y - 44).setVisible(true);
+      }
+    } else {
+      door.glint.setRadius(7);
+      this.wakeHint?.setVisible(false);
+    }
   }
 
   private slotPosition(slot: number, total: number): { x: number; y: number } {
@@ -311,10 +511,6 @@ export class HallScene extends Phaser.Scene {
   // --- diegetic navigation hotspots --------------------------------------
 
   private makeHotspots(): void {
-    // The remaining temporary React overlay (project/door) emits a bus command the
-    // App routes; the board / ledger / bookshelf open their in-world scenes directly.
-    const overlay = (h: Hotspot) => () => EventBus.emit(BUS.openHotspot, { hotspot: h });
-
     const specs: Array<{
       label: string;
       anchor: (w: number, h: number) => { x: number; y: number };
@@ -338,67 +534,95 @@ export class HallScene extends Phaser.Scene {
         anchor: (w, h) => ({ x: w * 0.9, y: h * 0.8 }),
         onClick: () => this.openArchive(),
       },
-      // 门 (选项目) — bottom-left
+      // 门 (选项目) — bottom-left. Drives useSupervisor.pickProject directly over
+      // the bus (the native folder dialog); no React overlay anymore (P5).
       {
         label: STR.hotspotProject,
         anchor: (w, h) => ({ x: w * 0.1, y: h * 0.86 }),
-        onClick: overlay('project'),
+        onClick: () => {
+          play('open');
+          EventBus.emit(BUS.pickProject);
+        },
       },
     ];
 
+    const reduce = prefersReducedMotion();
     for (const spec of specs) {
       const label = this.makeHotspotLabel(spec.label);
+      // a soft affordance halo behind the label, plus a small breathing glint dot
+      // hugging its corner — the §6 "no-tutorial diegetic nav" cue that an object
+      // is touchable. The breathing is skipped under reduced-motion.
+      const halo = this.add.circle(0, 0, 30, PALETTE.glint, 0.0).setDepth(7999);
       const glint = this.add.circle(0, 0, 7, PALETTE.glint, 0.9);
       glint.setDepth(8001);
-      this.tweens.add({
-        targets: glint,
-        alpha: 0.25,
-        scale: 1.5,
-        duration: 1100,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
+      if (!reduce) {
+        this.tweens.add({
+          targets: glint,
+          alpha: 0.25,
+          scale: 1.5,
+          duration: 1100,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+      }
       const zone = this.add.zone(0, 0, 150, 64).setInteractive({ useHandCursor: true });
       zone.setDepth(8000);
       zone.on('pointerup', spec.onClick);
-      zone.on('pointerover', () => label.setScale(1.06));
-      zone.on('pointerout', () => label.setScale(1));
+      // hover: lift + brighten the label and bloom the halo so the target is
+      // unmistakable on approach (affordance glint on hover, §6).
+      zone.on('pointerover', () => {
+        label.setScale(1.08);
+        glint.setScale(1.4).setAlpha(1);
+        this.tweens.add({ targets: halo, fillAlpha: 0.22, duration: reduce ? 0 : 160 });
+      });
+      zone.on('pointerout', () => {
+        label.setScale(1);
+        glint.setScale(1).setAlpha(0.9);
+        this.tweens.add({ targets: halo, fillAlpha: 0, duration: reduce ? 0 : 160 });
+      });
 
-      const node: HotspotNode = { zone, label, glint, anchor: spec.anchor, onClick: spec.onClick };
+      const node: HotspotNode = { zone, label, glint, halo, anchor: spec.anchor, onClick: spec.onClick };
       this.hotspots.push(node);
       this.placeHotspot(node);
     }
   }
 
-  // Sleep the world (keep it warm, don't stop) and bring the notice board up.
+  // Sleep the world (keep it warm, don't stop) and bring a sub-scene up — fading
+  // the camera out first so the hop reads as a dolly to the object, not a cut. The
+  // sub-scene fades itself in on create; the world fades back in on WAKE. When the
+  // user opts out of motion the fade collapses to an instant launch.
+  private openScene(key: string, data?: object): void {
+    play('open');
+    fadeOutThen(
+      this,
+      () => {
+        this.scene.sleep(SCENE.hall);
+        // reset the (now-slept) camera so its next WAKE fade-in starts cleanly.
+        this.cameras.main.resetFX();
+        if (data) this.scene.launch(key, data);
+        else this.scene.launch(key);
+      },
+      PALETTE.canvasBgInt,
+    );
+  }
+
   private openBoard(): void {
-    play('open');
-    this.scene.sleep(SCENE.hall);
-    this.scene.launch(SCENE.board);
+    this.openScene(SCENE.board);
   }
 
-  // Sleep the world and flip the ledger (settings) open in front of it.
   private openSettings(): void {
-    play('open');
-    this.scene.sleep(SCENE.hall);
-    this.scene.launch(SCENE.settings);
+    this.openScene(SCENE.settings);
   }
 
-  // Sleep the world and dolly to the bookshelf (run archive) in front of it.
   private openArchive(): void {
-    play('open');
-    this.scene.sleep(SCENE.hall);
-    this.scene.launch(SCENE.archive);
+    this.openScene(SCENE.archive);
   }
 
-  // Mockup C: click a station archer → unroll THAT run's Logbook scroll. The
-  // world sleeps (stays warm) and the LogbookScene opens for the archer's taskId;
-  // closing the scroll wakes the hall back. Works for live + finished archers.
+  // Mockup C: click a station archer → unroll THAT run's Logbook scroll. Works for
+  // live + finished archers; closing the scroll wakes the hall back.
   private openArcherLogbook(taskId: string): void {
-    play('open');
-    this.scene.sleep(SCENE.hall);
-    this.scene.launch(SCENE.logbook, { taskId, from: 'hall' });
+    this.openScene(SCENE.logbook, { taskId, from: 'hall' });
   }
 
   private makeHotspotLabel(text: string): Phaser.GameObjects.Container {
@@ -428,6 +652,7 @@ export class HallScene extends Phaser.Scene {
     const { x, y } = node.anchor(width, height);
     node.label.setPosition(x, y);
     node.zone.setPosition(x, y);
+    node.halo.setPosition(x, y);
     // the breathing glint hugs the label's top-right corner as an affordance cue.
     node.glint.setPosition(x + node.label.width * 0.42 + 14, y - 16);
   }
@@ -675,8 +900,11 @@ export class HallScene extends Phaser.Scene {
     play('complete');
     const x = node.container.x;
     const y = node.container.y;
+    const reduce = prefersReducedMotion();
 
-    for (let i = 0; i < 10; i++) {
+    // confetti storm — skipped under reduced-motion (the +XP/−$cost float still
+    // shows, just without the particle burst).
+    for (let i = 0; i < (reduce ? 0 : 10); i++) {
       const star = this.add.star(
         x + Phaser.Math.Between(-55, 55),
         y - ARCHER_H * 0.7 + Phaser.Math.Between(-30, 20),
@@ -699,9 +927,10 @@ export class HallScene extends Phaser.Scene {
       });
     }
 
-    const costStr = view.costUsd === null ? '—' : `$${view.costUsd.toFixed(2)}`;
+    // the spend reads as a cost (−$x.xx), the XP as a gain (+N), per Mockup C.
+    const costStr = view.costUsd === null ? '—' : `−$${view.costUsd.toFixed(2)}`;
     const xp = 10 + Math.floor((view.log.length || 0) / 2) * 5;
-    const popup = this.add.text(x, y - ARCHER_H * 1.35, `+${xp} XP · 花费 ${costStr}`, {
+    const popup = this.add.text(x, y - ARCHER_H * 1.35, `+${xp} XP · ${costStr}`, {
       fontFamily: CJK_FONT,
       fontSize: '15px',
       color: COLOR.popup,

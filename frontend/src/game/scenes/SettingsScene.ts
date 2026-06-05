@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { EventBus, BUS, type SettingsPatch } from '@/game/EventBus';
 import { requestTextInput } from '@/game/requestTextInput';
 import { PALETTE, CJK_FONT, SCENE } from '@/game/palette';
+import { fadeIn, fadeOutThen } from '@/game/transition';
 import { STR } from '@/strings';
 import { play } from '@/utils/sound';
 import type { Settings } from '@/types/persistence.types';
@@ -91,6 +92,9 @@ export class SettingsScene extends Phaser.Scene {
     // Ask the bridge to flush the current settings snapshot now that we're up.
     EventBus.emit(BUS.sceneReady);
 
+    // Flip the ledger in with a camera fade over the slept world (honours motion).
+    fadeIn(this, PALETTE.ledgerScrim);
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.teardown, this);
 
     if (import.meta.env.DEV) {
@@ -117,11 +121,18 @@ export class SettingsScene extends Phaser.Scene {
     this.scale.off('resize', this.layout, this);
   }
 
-  // Close the book: stop this scene and wake the world (it was slept, not stopped).
+  // Close the book: fade out, then stop this scene and wake the (slept, still-warm)
+  // world. The hall fades itself back in on WAKE. Reduced-motion = instant cut.
   private close(): void {
     play('close');
-    this.scene.stop(SCENE.settings);
-    this.scene.wake(SCENE.hall);
+    fadeOutThen(
+      this,
+      () => {
+        this.scene.stop(SCENE.settings);
+        this.scene.wake(SCENE.hall);
+      },
+      PALETTE.ledgerScrim,
+    );
   }
 
   // --- bus handlers -------------------------------------------------------

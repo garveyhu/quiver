@@ -5,6 +5,7 @@ import type RexUIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin';
 import { EventBus, BUS, type TaskRecord, type ArchiveMeta } from '@/game/EventBus';
 import { requestTextInput } from '@/game/requestTextInput';
 import { PALETTE, CJK_FONT, SCENE } from '@/game/palette';
+import { fadeIn, fadeOutThen } from '@/game/transition';
 import { STR, TASK_STATUS_LABEL } from '@/strings';
 import { play } from '@/utils/sound';
 
@@ -116,6 +117,11 @@ export class ArchiveScene extends Phaser.Scene {
     // Ask the bridge to flush the current archive snapshot now that we're up.
     EventBus.emit(BUS.sceneReady);
 
+    // Dolly to the shelf with a camera fade; fade back in when a Logbook scroll
+    // (opened from a book) closes and wakes us (the WAKE seam, like the hall).
+    fadeIn(this, PALETTE.archiveScrim);
+    this.events.on(Phaser.Scenes.Events.WAKE, this.onWake, this);
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.teardown, this);
 
     if (import.meta.env.DEV) {
@@ -162,22 +168,40 @@ export class ArchiveScene extends Phaser.Scene {
     EventBus.off(BUS.archiveRecords, this.onRecords, this);
     EventBus.off(BUS.archiveMeta, this.onMeta, this);
     this.scale.off('resize', this.layoutChrome, this);
+    this.events.off(Phaser.Scenes.Events.WAKE, this.onWake, this);
+  }
+
+  private onWake(): void {
+    fadeIn(this, PALETTE.archiveScrim);
   }
 
   private close(): void {
     play('close');
-    this.scene.stop(SCENE.archive);
-    // Wake the world back up (it was slept, not stopped, so it stays warm).
-    this.scene.wake(SCENE.hall);
+    fadeOutThen(
+      this,
+      () => {
+        this.scene.stop(SCENE.archive);
+        // Wake the world back up (it was slept, not stopped, so it stays warm).
+        this.scene.wake(SCENE.hall);
+      },
+      PALETTE.archiveScrim,
+    );
   }
 
   // Pull a run off the shelf → unroll its Logbook scroll. The archive sleeps (it
   // stays warm) and the LogbookScene launches over it; closing the scroll wakes
-  // the archive back here.
+  // the archive back here (the WAKE handler fades it back in).
   private openBook(record: TaskRecord): void {
     play('open');
-    this.scene.sleep(SCENE.archive);
-    this.scene.launch(SCENE.logbook, { record });
+    fadeOutThen(
+      this,
+      () => {
+        this.scene.sleep(SCENE.archive);
+        this.cameras.main.resetFX();
+        this.scene.launch(SCENE.logbook, { record });
+      },
+      PALETTE.archiveScrim,
+    );
   }
 
   // --- bus handlers -------------------------------------------------------
