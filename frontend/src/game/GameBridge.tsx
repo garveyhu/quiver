@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useSupervisor } from '@/hooks/useSupervisor';
 import { useSettings } from '@/hooks/useSettings';
 import { useTaskBoard } from '@/hooks/useTaskBoard';
@@ -43,18 +43,12 @@ export function GameBridge(): null {
   const replay = useReplay();
   const health = useEnvironmentCheck();
 
-  const [mode, setMode] = useState<RunMode>('simulate');
-
-  // Pre-select the run mode from the saved default — once, before the user
-  // touches the toggle (preserves App.tsx's old seeding behaviour).
-  const seededMode = useRef(false);
-  useEffect(() => {
-    if (!seededMode.current && settings.settings) {
-      seededMode.current = true;
-      const def = settings.settings.defaultMode;
-      if (def === 'real' || def === 'simulate') setMode(def);
-    }
-  }, [settings.settings]);
+  // New commissions always run in the saved default mode. The in-canvas mode
+  // toggle was removed in the game-first redesign, so the settings ledger is the
+  // single source of truth — read it live, because a one-time seed would ignore
+  // the user later switching the default to 真实/real.
+  const modeRef = useRef<RunMode>('simulate');
+  modeRef.current = settings.settings?.defaultMode === 'real' ? 'real' : 'simulate';
 
   // Apply appearance settings to the document (uiScale + theme), as App used to.
   useEffect(() => {
@@ -179,9 +173,9 @@ export function GameBridge(): null {
   }, [supervisor]);
 
   // Board mutations from the TaskBoardScene → the existing useTaskBoard actions
-  // (the only IPC caller). The run mode is owned here, seeded from settings.
+  // (the only IPC caller). New commissions read the live default mode.
   useEffect(() => {
-    const onEnqueue = (p: BoardEnqueuePayload) => void board.enqueue(p.prompt, mode);
+    const onEnqueue = (p: BoardEnqueuePayload) => void board.enqueue(p.prompt, modeRef.current);
     const onReorder = (p: BoardReorderPayload) => void board.reorder(p.id, p.position);
     const onCancel = (p: BoardCancelPayload) => void board.cancel(p.id);
     EventBus.on(BUS.boardEnqueue, onEnqueue);
@@ -192,7 +186,7 @@ export function GameBridge(): null {
       EventBus.off(BUS.boardReorder, onReorder);
       EventBus.off(BUS.boardCancel, onCancel);
     };
-  }, [board, mode]);
+  }, [board]);
 
   // Settings edits from the SettingsScene ledger → the unchanged useSettings.patch
   // (debounced persistence, the only settings IPC seam). The bus carries a patch;
