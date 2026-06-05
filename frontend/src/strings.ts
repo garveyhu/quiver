@@ -90,6 +90,18 @@ export const STR = {
   settingAgentBinTip: 'claude 可执行文件的绝对路径。留空则自动解析（PATH 与常见安装位置）。填错会在运行时报错。',
   settingAgentBinPlaceholder: '留空 = 自动解析',
 
+  // --- 工坊体检（DESIGN §9 health check / M4-UI）---
+  settingsSectionHealth: '体检',
+  settingsSectionHealthHint: '开工前先给工坊做个体检',
+  healthChecking: '正在体检工坊…',
+  healthError: '体检失败，请稍后重试',
+  healthEmpty: '还没有体检结果，点「重新检查」开始。',
+  healthRecheck: '重新检查',
+  healthAllReady: '工坊准备就绪 ✓',
+  healthHasWarn: '有几项需要留意',
+  healthHasFail: '有项目未通过，真实模式可能无法开工',
+  healthFixTitle: '修复建议',
+
   // --- 任务公告板（Phase C）---
   boardTitle: '任务公告板',
   boardSubtitle: '把委托钉上板子，弓箭手们会并行接单开工',
@@ -166,6 +178,12 @@ export const STR = {
   hotspotProject: '门 · 选项目',
   // empty-state (no project) door hint — the one glowing call-to-action
   firstRunWake: '点亮工坊 · 选择项目',
+  // empty-state breathing arrow under the sleeper, pointing at the door (⑤-B)
+  wakeArrow: '↓ 点亮工坊',
+  // 首次引导（⑤-B）— 右栈三入口逐个浮气泡介绍，5s 内播完
+  onboardBoard: '把委托钉这儿，弓箭手接单开工',
+  onboardSettings: '这儿改设置和预算',
+  onboardArchive: '翻历史委托和卷轴',
 
   // 顶部 HUD
   hudBudgetPrefix: '余额',
@@ -174,6 +192,7 @@ export const STR = {
   hudBusySuffix: ' 位弓匠在忙',
   hudIdle: '工坊静悄悄',
   hudToastDone: '完成 ✓',
+  hudHintOpenLogbook: '点弓箭手看完整卷轴',
 
   // 临时覆盖层（点物件后打开的现有面板，P3-P4 会替换成世界内场景）
   overlayClose: '× 回到工坊',

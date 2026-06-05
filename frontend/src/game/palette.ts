@@ -101,6 +101,11 @@ export const PALETTE = {
   ledgerSaveSaved: 0x4f7a3a,
   ledgerSaveError: 0xb44637,
   ledgerSaveInk: '#fbf3df',
+  // 工坊体检 (health page, M4-UI) — per-status glyph ink (on parchment).
+  healthOk: '#4f7a3a', // ✓ green
+  healthWarn: '#c98a2e', // ⚠ amber
+  healthFail: '#b44637', // ✗ red
+  healthRemediation: '#7a6651', // muted fix-step ink
 
   // --- 委托档案库 (ArchiveScene, P4) — a wall of bookshelves ---
   archiveScrim: 0x1c130c, // dim wash over the slept world behind the shelf

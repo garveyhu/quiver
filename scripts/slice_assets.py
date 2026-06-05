@@ -202,11 +202,21 @@ def slice_characters() -> None:
             min(fh, bbox[3] + pad),
         ]
         crop_box = tuple(bbox)
+        # Top safety band: idle/celebrate frames place the hat pixels flush against
+        # the shared bbox top (source content touches row 0), so source padding
+        # clamps at 0 and the crown gets shaved by origin-bottom scaling. Reserve a
+        # transparent band ABOVE the content on the output cell itself — guaranteed
+        # regardless of where the source content sits. (≥12px scaled = TOP_BAND.)
+        TOP_BAND = 12
         cw = int((crop_box[2] - crop_box[0]) * CHAR_SCALE)
-        ch = int((crop_box[3] - crop_box[1]) * CHAR_SCALE)
+        ch = int((crop_box[3] - crop_box[1]) * CHAR_SCALE) + TOP_BAND
 
         def cell(idx: int) -> Image.Image:
-            return scaled(crops[idx].crop(crop_box), CHAR_SCALE)
+            scaled_crop = scaled(crops[idx].crop(crop_box), CHAR_SCALE)
+            canvas = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
+            # bottom-align the content; the TOP_BAND transparent strip sits on top.
+            canvas.paste(scaled_crop, (0, ch - scaled_crop.height), scaled_crop)
+            return canvas
 
         # animation strips
         for name, idxs in (("walk", WALK_FRAMES), ("bow", BOW_FRAMES)):

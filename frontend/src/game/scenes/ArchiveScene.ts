@@ -99,6 +99,9 @@ export class ArchiveScene extends Phaser.Scene {
 
   // book layout geometry, recomputed on (re)layout so books place correctly.
   private frameRect = { x: 0, y: 0, w: 0, h: 0 };
+  // effective book spine width — narrows to fit the (clamped) viewport so spines
+  // never overrun the shelf mask on a narrow window.
+  private bookWidth: number = BOOK.width;
 
   constructor() {
     super(SCENE.archive);
@@ -311,9 +314,15 @@ export class ArchiveScene extends Phaser.Scene {
     const sizer = this.rexUI.add.sizer({ orientation: 'y', space: { item: BOOK.gap } });
     this.listSizer = sizer;
 
-    const viewportW = w - 60;
-    const viewportH = h - 196;
+    // chrome band (title + search/filter controls) scales with the frame height
+    // rather than a fixed 196px, so a short frame still leaves a usable shelf.
+    const chromeBand = Math.max(150, Math.round(h * 0.3));
+    const viewportW = Math.max(BOOK.width * 0.5 + 40, w - 60);
+    const viewportH = Math.max(180, h - chromeBand);
     const viewportY = cy + 48;
+
+    // spines narrow to fit inside the (clamped) viewport on a narrow window.
+    this.bookWidth = Math.min(BOOK.width, viewportW - 40);
 
     // clip the (root-level) books to the recessed shelf interior.
     this.cardMaskShape?.destroy();
@@ -577,7 +586,7 @@ export class ArchiveScene extends Phaser.Scene {
       this.listSizer.add(book, {
         expand: false,
         align: 'center',
-        minWidth: BOOK.width,
+        minWidth: this.bookWidth,
         minHeight: BOOK.height,
       });
     }
@@ -607,18 +616,19 @@ export class ArchiveScene extends Phaser.Scene {
   // a status cloth band, the prompt as the title, and cost/project/time/duration
   // as the foot — kept clearly scannable (clarity > theme for dense data).
   private buildBook(record: TaskRecord): Phaser.GameObjects.Container {
+    const bookW = this.bookWidth;
     const c = this.add.container(0, 0);
-    c.setSize(BOOK.width, BOOK.height);
+    c.setSize(bookW, BOOK.height);
     c.setDepth(22);
     if (this.cardMask) c.setMask(this.cardMask);
 
-    const half = { w: BOOK.width / 2, h: BOOK.height / 2 };
+    const half = { w: bookW / 2, h: BOOK.height / 2 };
 
     const bg = this.add.graphics();
     bg.fillStyle(PALETTE.bookBody, 1);
-    bg.fillRoundedRect(-half.w, -half.h, BOOK.width, BOOK.height, BOOK.radius);
+    bg.fillRoundedRect(-half.w, -half.h, bookW, BOOK.height, BOOK.radius);
     bg.lineStyle(2, PALETTE.bookBodyEdge, 1);
-    bg.strokeRoundedRect(-half.w, -half.h, BOOK.width, BOOK.height, BOOK.radius);
+    bg.strokeRoundedRect(-half.w, -half.h, bookW, BOOK.height, BOOK.radius);
     // page block peeking out the right edge of the spine.
     bg.fillStyle(PALETTE.bookPaper, 1);
     bg.fillRoundedRect(half.w - 14, -half.h + 8, 8, BOOK.height - 16, 2);
@@ -634,7 +644,7 @@ export class ArchiveScene extends Phaser.Scene {
 
     const left = -half.w + BOOK.bandW + BOOK.padX;
     const top = -half.h + BOOK.padY;
-    const innerW = BOOK.width - BOOK.bandW - BOOK.padX * 2 - 14;
+    const innerW = bookW - BOOK.bandW - BOOK.padX * 2 - 14;
 
     // status label + mode chip head.
     const statusLabel = TASK_STATUS_LABEL[record.status] ?? record.status;
@@ -680,7 +690,7 @@ export class ArchiveScene extends Phaser.Scene {
       .setOrigin(0, 1);
     c.add(footText);
 
-    const hit = new Phaser.Geom.Rectangle(-half.w, -half.h, BOOK.width, BOOK.height);
+    const hit = new Phaser.Geom.Rectangle(-half.w, -half.h, bookW, BOOK.height);
     c.setInteractive({ hitArea: hit, hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true });
     c.on('pointerup', () => this.openBook(record));
     c.on('pointerover', () => c.setScale(1.01));

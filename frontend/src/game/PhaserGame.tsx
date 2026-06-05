@@ -61,7 +61,10 @@ export const PhaserGame = forwardRef<PhaserGameHandle>(function PhaserGame(_prop
     gameRef.current = game;
 
     if (import.meta.env.DEV) {
-      (window as unknown as { __game?: Phaser.Game }).__game = game;
+      const w = window as unknown as { __game?: Phaser.Game; __quiver?: { game: Phaser.Game } };
+      w.__game = game;
+      // dev-only handle for real-window verification (read scene geometry via eval).
+      w.__quiver = { game };
     }
 
     return () => {

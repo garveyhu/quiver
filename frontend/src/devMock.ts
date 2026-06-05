@@ -232,6 +232,60 @@ function handleCommand(cmd: string, args: Record<string, unknown>): unknown {
       const id = String(args.taskId ?? '');
       return [...(eventLog[id] ?? [])].sort((a, b) => a.seq - b.seq);
     }
+    case 'check_environment':
+      // A believable mixed verdict so the 工坊体检 page shows ✓/⚠/✗ at once.
+      return [
+        {
+          id: 'claude_found',
+          label: 'Claude 命令',
+          status: 'ok',
+          message: '已找到 claude：/opt/homebrew/bin/claude',
+          detail: '/opt/homebrew/bin/claude',
+        },
+        {
+          id: 'claude_version',
+          label: 'Claude 版本',
+          status: 'ok',
+          message: 'claude 版本：1.0.0 (Claude Code)',
+          detail: '1.0.0 (Claude Code)',
+        },
+        {
+          id: 'claude_auth',
+          label: 'Claude 登录态',
+          status: 'warn',
+          message: '未检测到 Claude 登录凭证——真实模式可能因未登录而失败。',
+          remediation: '请在终端运行 `claude` 并完成登录（订阅 / OAuth），登录后重新检查。',
+        },
+        {
+          id: 'subscription_env',
+          label: '订阅路由',
+          status: 'ok',
+          message: '未检测到会绕过订阅的环境变量。',
+        },
+        {
+          id: 'git_found',
+          label: 'Git 命令',
+          status: 'ok',
+          message: '已找到 git：/usr/bin/git',
+          detail: '/usr/bin/git',
+        },
+        {
+          id: 'path_fixed',
+          label: 'PATH 修复',
+          status: 'ok',
+          message: 'PATH 看起来已修复（包含常见的命令目录）。',
+        },
+        {
+          id: 'worktree_temp',
+          label: '工作树暂存',
+          status: NO_PROJECT ? 'warn' : 'ok',
+          message: NO_PROJECT
+            ? '尚未选择项目——无法检测工作树暂存目录。'
+            : '工作树暂存目录可写。',
+          remediation: NO_PROJECT ? '请先在门口选择一个 git 项目，然后重新检查。' : undefined,
+          detail: NO_PROJECT ? undefined : '/Users/demo/repos/quiver/.quiver/worktrees',
+        },
+      ];
     case 'enqueue_task_cmd': {
       const id = `task-${now()}-${tasks.length}`;
       const task: MockTask = {

@@ -335,9 +335,18 @@ export class LogbookScene extends Phaser.Scene {
   private buildViewport(cx: number, cy: number, w: number, h: number): void {
     const rollerH = 26;
     const headerH = 96; // the commission header band at the top of the parchment
-    const viewportW = w - 56;
-    const viewportH = h - rollerH * 2 - headerH - 28;
-    const viewportY = cy - h / 2 + rollerH + headerH + viewportH / 2 + 8;
+    const viewportW = Math.max(120, w - 56);
+    const viewportH = Math.max(160, h - rollerH * 2 - headerH - 28);
+    // parchment field spans [cy - h/2 + rollerH, cy + h/2 - rollerH]; keep the
+    // whole well (top..bottom) inside that band so it never spills over a roller.
+    const wellTopBound = cy - h / 2 + rollerH + headerH;
+    const wellBotBound = cy + h / 2 - rollerH;
+    const rawViewportY = cy - h / 2 + rollerH + headerH + viewportH / 2 + 8;
+    const viewportY = Phaser.Math.Clamp(
+      rawViewportY,
+      wellTopBound + viewportH / 2,
+      wellBotBound - viewportH / 2,
+    );
     const viewX = cx - viewportW / 2;
     const viewTop = viewportY - viewportH / 2;
     this.viewport = { x: viewX, y: viewTop, w: viewportW, h: viewportH };

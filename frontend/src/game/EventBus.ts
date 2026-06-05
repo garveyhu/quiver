@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { TaskRecord, SettingsPatch, StoredEvent } from '@/types/persistence.types';
+import type { EnvironmentCheck } from '@/types/environment.types';
 
 /**
  * The single React ↔ Phaser event seam (lifted from phaserjs/template-react-ts).
@@ -45,6 +46,9 @@ export const BUS = {
   archiveRecords: 'archive:records',
   // `{ error: string | null }` — archive-scene error surface.
   archiveMeta: 'archive:meta',
+  // `HealthSnapshot` — the workshop pre-flight self-diagnosis result (DESIGN §9),
+  // pushed from useEnvironmentCheck for the ledger's 工坊体检 page (M4-UI).
+  health: 'health:changed',
 
   // Commands Phaser → React (GameBridge subscribes and calls the hooks).
   // the door/sign hotspot asks to pick a project (the native folder dialog via the
@@ -72,6 +76,10 @@ export const BUS = {
   settingsPatch: 'cmd:settings-patch',
   // `SaveStatus` — the ledger's "记录中… / 已记录" chip, pushed from useSettings.
   settingsSave: 'settings:save-status',
+  // the ledger's 工坊体检 page asks the bridge to (re)run the pre-flight checks.
+  // No payload; GameBridge routes it to useEnvironmentCheck.refresh (the only
+  // check_environment IPC caller), which re-pushes the result on `BUS.health`.
+  healthRefresh: 'cmd:health-refresh',
 } as const;
 
 // Snapshot of the board's live concurrency, surfaced on the HUD.
@@ -145,6 +153,19 @@ export interface LogbookRequest {
   taskId: string;
 }
 
+/**
+ * The workshop pre-flight self-diagnosis snapshot pushed on `BUS.health`
+ * (useEnvironmentCheck → SettingsScene's 工坊体检 page). `loading` is true while a
+ * check is in flight; `error` carries a command-level failure (vs per-check
+ * warn/fail rows, which live inside `checks`).
+ */
+export interface HealthSnapshot {
+  checks: EnvironmentCheck[];
+  loading: boolean;
+  error: string | null;
+}
+
 // Re-export so scenes import the board/archive row + settings-patch + stored
-// event shapes from one place.
+// event + health-check shapes from one place.
 export type { TaskRecord, SettingsPatch, StoredEvent };
+export type { EnvironmentCheck };

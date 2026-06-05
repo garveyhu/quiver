@@ -4,6 +4,7 @@ import { useSettings } from '@/hooks/useSettings';
 import { useTaskBoard } from '@/hooks/useTaskBoard';
 import { useArchive } from '@/hooks/useArchive';
 import { useReplay } from '@/hooks/useReplay';
+import { useEnvironmentCheck } from '@/hooks/useEnvironmentCheck';
 import {
   EventBus,
   BUS,
@@ -38,6 +39,7 @@ export function GameBridge(): null {
   const board = useTaskBoard(supervisor.projectPath);
   const archive = useArchive();
   const replay = useReplay();
+  const health = useEnvironmentCheck();
 
   const [mode, setMode] = useState<RunMode>('simulate');
 
@@ -85,6 +87,12 @@ export function GameBridge(): null {
       // archive snapshot, so the ArchiveScene bookshelf re-hydrates on (re)launch.
       EventBus.emit(BUS.archiveRecords, archive.records);
       EventBus.emit(BUS.archiveMeta, { error: archive.error });
+      // health snapshot, so the ledger's 工坊体检 page re-hydrates on (re)launch.
+      EventBus.emit(BUS.health, {
+        checks: health.checks,
+        loading: health.loading,
+        error: health.error,
+      });
     };
     EventBus.on(BUS.sceneReady, flush);
     return () => {
@@ -145,6 +153,15 @@ export function GameBridge(): null {
   useEffect(() => {
     EventBus.emit(BUS.archiveMeta, { error: archive.error });
   }, [archive.error]);
+
+  // Workshop pre-flight self-diagnosis for the ledger's 工坊体检 page (M4-UI).
+  useEffect(() => {
+    EventBus.emit(BUS.health, {
+      checks: health.checks,
+      loading: health.loading,
+      error: health.error,
+    });
+  }, [health.checks, health.loading, health.error]);
 
   // --- bus: world commands → hooks --------------------------------------
 
@@ -212,6 +229,16 @@ export function GameBridge(): null {
       EventBus.off(BUS.replayStart, onReplay);
     };
   }, [replay]);
+
+  // 工坊体检 page's 重新检查 button → useEnvironmentCheck.refresh (the only
+  // check_environment IPC caller; the result re-pushes on BUS.health above).
+  useEffect(() => {
+    const onRefresh = () => void health.refresh();
+    EventBus.on(BUS.healthRefresh, onRefresh);
+    return () => {
+      EventBus.off(BUS.healthRefresh, onRefresh);
+    };
+  }, [health]);
 
   return null;
 }

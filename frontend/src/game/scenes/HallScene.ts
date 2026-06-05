@@ -22,7 +22,7 @@ const COLOR = {
 const CHAR_COUNT = 4;
 
 // Native cell size of a sliced character frame (scripts/slice_assets.py).
-const CHAR_CELL = { w: 234, h: 256 };
+const CHAR_CELL = { w: 234, h: 268 };
 const WALK_FRAMES = 6;
 const BOW_FRAMES = 6;
 const FIRE_FRAMES = 3;
@@ -51,11 +51,16 @@ interface ArcherNode {
 // (SettingsScene, P3) and the bookshelf (ArchiveScene, P4) now open in-world
 // scenes; only the door/project picker still opens a temporary React overlay via
 // the bus — so each node carries its own click action.
+// A hotspot's visual weight. The notice board is the primary call-to-action
+// (bigger label + halo); the rest are secondary. (⑤-C visual hierarchy.)
+type HotspotPriority = 'primary' | 'secondary';
+
 interface HotspotNode {
   zone: Phaser.GameObjects.Zone;
   label: Phaser.GameObjects.Container;
   glint: Phaser.GameObjects.Arc;
   halo: Phaser.GameObjects.Arc;
+  haloRadius: number;
   anchor: (w: number, h: number) => { x: number; y: number };
   onClick: () => void;
 }
@@ -99,6 +104,14 @@ export class HallScene extends Phaser.Scene {
   private wakeHint?: Phaser.GameObjects.Container;
   // 夜幕 theme cool wash over the whole world (P4 #16).
   private nightWash?: Phaser.GameObjects.Rectangle;
+
+  // First-run onboarding (⑤-B): a one-time tour of the right-stack hotspots,
+  // gated by localStorage so it plays at most once per machine. Guarded so a
+  // resize/relayout mid-tour can't re-trigger it.
+  private onboardingShown = false;
+  private onboardingBubbles: Phaser.GameObjects.Container[] = [];
+  // Empty-state breathing arrow under the sleeper, pointing at the door (⑤-B).
+  private wakeArrow?: Phaser.GameObjects.Text;
 
   constructor() {
     super(SCENE.hall);
@@ -197,6 +210,8 @@ export class HallScene extends Phaser.Scene {
   // Project gate: an unselected workshop sleeps cold + dim until the door is used.
   private onProject(payload: { projectPath: string | null }): void {
     const has = payload.projectPath != null;
+    // a lit workshop with a project is the seam for the first-run tour (⑤-B).
+    if (has) this.maybeStartOnboarding();
     if (has === this.hasProject && (this.dimWash || has)) return;
     this.hasProject = has;
     this.applyWorkshopState();
@@ -398,6 +413,7 @@ export class HallScene extends Phaser.Scene {
       this.dimWash?.setVisible(false);
       this.sleeper?.setVisible(false);
       this.wakeHint?.setVisible(false);
+      this.wakeArrow?.setVisible(false);
       this.emphasizeDoorGlint(false);
       // restore the hearth to its budget-driven level (neutral if unknown).
       if (this.budgetRatio === 0.1) this.budgetRatio = null;
@@ -438,6 +454,36 @@ export class HallScene extends Phaser.Scene {
     } else {
       this.sleeper.setPosition(x, y).setVisible(true);
     }
+
+    // a breathing "↓ 点亮工坊" arrow just under the sleeper, nudging the eye toward
+    // the (glowing) door — the empty-state's second, gentler cue (⑤-B).
+    const arrowX = width * 0.4;
+    const arrowY = height - 56;
+    if (!this.wakeArrow) {
+      this.wakeArrow = this.add
+        .text(arrowX, arrowY, STR.wakeArrow, {
+          fontFamily: CJK_FONT,
+          fontSize: '16px',
+          color: PALETTE.hudInk,
+          fontStyle: 'bold',
+          align: 'center',
+        })
+        .setOrigin(0.5, 0.5)
+        .setDepth(61);
+      if (!prefersReducedMotion()) {
+        this.tweens.add({
+          targets: this.wakeArrow,
+          y: arrowY + 8,
+          alpha: { from: 1, to: 0.5 },
+          duration: 1000,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+      }
+    } else {
+      this.wakeArrow.setPosition(arrowX, arrowY).setVisible(true);
+    }
   }
 
   // Pulse the door glint hard + show "点亮工坊 · 选择项目" so an empty workshop
@@ -446,7 +492,7 @@ export class HallScene extends Phaser.Scene {
     const door = this.hotspots[this.hotspots.length - 1]; // door is the last spec
     if (!door) return;
     if (on) {
-      door.glint.setRadius(11).setFillStyle(PALETTE.glint, 1).setDepth(70);
+      door.glint.setRadius(16).setFillStyle(PALETTE.glint, 1).setDepth(70);
       door.label.setDepth(70);
       const { x, y } = door.anchor(this.scale.width, this.scale.height);
       if (!this.wakeHint) {
@@ -480,9 +526,106 @@ export class HallScene extends Phaser.Scene {
         this.wakeHint.setPosition(x, y - 44).setVisible(true);
       }
     } else {
-      door.glint.setRadius(7);
+      door.glint.setRadius(10);
       this.wakeHint?.setVisible(false);
     }
+  }
+
+  // --- first-run onboarding (⑤-B) -----------------------------------------
+
+  // Run the one-time right-stack tour at most once per machine, and only with a
+  // project (a lit workshop). Gated by localStorage + an in-session guard so a
+  // relayout/reflush can't replay it. Skipped under reduced-motion.
+  private maybeStartOnboarding(): void {
+    if (this.onboardingShown) return;
+    this.onboardingShown = true; // claim the slot before any early-out below
+    if (prefersReducedMotion()) return;
+    let seen = false;
+    try {
+      seen = localStorage.getItem('quiver-seen-onboarding') === '1';
+    } catch {
+      seen = false; // private mode / blocked storage → just skip, don't crash
+    }
+    if (seen) return;
+    try {
+      localStorage.setItem('quiver-seen-onboarding', '1');
+    } catch {
+      /* best-effort; the in-session guard still prevents a replay this run */
+    }
+    this.showOnboardingSequence();
+  }
+
+  // Introduce the three right-stack entries in turn: each flashes its halo a few
+  // times and floats a one-line intro bubble that fades after a beat. Staggered so
+  // the whole tour reads as a guided sweep and finishes inside ~5s.
+  private showOnboardingSequence(): void {
+    const intros = [STR.onboardBoard, STR.onboardSettings, STR.onboardArchive];
+    // the right stack is the first three hotspots (board / settings / archive).
+    intros.forEach((text, i) => {
+      const node = this.hotspots[i];
+      if (!node) return;
+      const startAt = i * 1200;
+      this.time.delayedCall(startAt, () => this.introHotspot(node, text));
+    });
+  }
+
+  // Flash one hotspot's halo + float its intro bubble above its plaque.
+  private introHotspot(node: HotspotNode, text: string): void {
+    // a 6-blink halo pulse on top of its resting glow.
+    this.tweens.add({
+      targets: node.halo,
+      fillAlpha: 0.3,
+      duration: 240,
+      yoyo: true,
+      repeat: 5,
+      ease: 'Sine.easeInOut',
+      onComplete: () => node.halo.setFillStyle(PALETTE.glint, 0.08),
+    });
+
+    const { x, y } = node.label;
+    const bubble = this.add.container(x, y - 36).setDepth(8050);
+    const t = this.add
+      .text(0, 0, text, {
+        fontFamily: CJK_FONT,
+        fontSize: '13px',
+        color: PALETTE.bubbleText,
+        align: 'center',
+        wordWrap: { width: 200 },
+      })
+      .setOrigin(0.5, 0.5);
+    const padX = 12;
+    const padY = 8;
+    const bw = t.width + padX * 2;
+    const bh = t.height + padY * 2;
+    const bg = this.add.graphics();
+    bg.fillStyle(PALETTE.bubbleFill, 0.98);
+    bg.lineStyle(2, PALETTE.bubbleStroke, 1);
+    bg.fillRoundedRect(-bw / 2, -bh / 2, bw, bh, 8);
+    bg.strokeRoundedRect(-bw / 2, -bh / 2, bw, bh, 8);
+    bg.fillTriangle(-6, bh / 2 - 1, 6, bh / 2 - 1, 0, bh / 2 + 8);
+    bubble.add([bg, t]);
+    bubble.setAlpha(0);
+    this.onboardingBubbles.push(bubble);
+
+    // float in, hold, then fade out — ~1.7s on screen so all three clear by ~5s.
+    this.tweens.add({
+      targets: bubble,
+      alpha: 1,
+      y: bubble.y - 8,
+      duration: 220,
+      ease: 'Back.easeOut',
+    });
+    this.tweens.add({
+      targets: bubble,
+      alpha: 0,
+      delay: 1450,
+      duration: 260,
+      ease: 'Sine.easeIn',
+      onComplete: () => {
+        this.onboardingBubbles = this.onboardingBubbles.filter(b => b !== bubble);
+        bubble.destroy();
+      },
+    });
   }
 
   private slotPosition(slot: number, total: number): { x: number; y: number } {
@@ -495,7 +638,9 @@ export class HallScene extends Phaser.Scene {
     const span = right - left;
     const x = total === 1 ? width * 0.46 : left + (span * (col + 0.5)) / cols;
     const floorY = height - 70;
-    const y = floorY - 58 - row * height * 0.14;
+    // clamp the (origin-bottom) archer feet between its drawn half-height and a
+    // floor margin so a tall stack never floats above the room or off the bottom.
+    const y = Phaser.Math.Clamp(floorY - 58 - row * height * 0.14, ARCHER_H * 0.5, height - 90);
     return { x, y };
   }
 
@@ -513,31 +658,44 @@ export class HallScene extends Phaser.Scene {
   private makeHotspots(): void {
     const specs: Array<{
       label: string;
+      icon: string;
+      priority: HotspotPriority;
       anchor: (w: number, h: number) => { x: number; y: number };
       onClick: () => void;
     }> = [
-      // 墙上公告板 (任务) — top-right wall → in-world TaskBoardScene
+      // Right-side vertical stack (⑤-C): three entries aligned on x≈0.82 at evenly
+      // spaced y (0.28 / 0.50 / 0.72) so they read as one column in dialogue with
+      // the centre stations — replacing the old four-corner scatter.
+      // 公告板 (任务) → in-world TaskBoardScene. Primary call-to-action.
       {
         label: STR.hotspotBoard,
-        anchor: (w, h) => ({ x: w * 0.84, y: h * 0.26 }),
+        icon: '📌',
+        priority: 'primary',
+        anchor: (w, h) => ({ x: w * 0.82, y: h * 0.28 }),
         onClick: () => this.openBoard(),
       },
-      // 桌上账本 (设置) — right side, mid → in-world SettingsScene
+      // 账本 (设置) → in-world SettingsScene.
       {
         label: STR.hotspotSettings,
-        anchor: (w, h) => ({ x: w * 0.9, y: h * 0.56 }),
+        icon: '📖',
+        priority: 'secondary',
+        anchor: (w, h) => ({ x: w * 0.82, y: h * 0.5 }),
         onClick: () => this.openSettings(),
       },
-      // 书架/档案柜 (档案) — right side, lower → in-world ArchiveScene
+      // 书架/档案柜 (档案) → in-world ArchiveScene.
       {
         label: STR.hotspotArchive,
-        anchor: (w, h) => ({ x: w * 0.9, y: h * 0.8 }),
+        icon: '📚',
+        priority: 'secondary',
+        anchor: (w, h) => ({ x: w * 0.82, y: h * 0.72 }),
         onClick: () => this.openArchive(),
       },
-      // 门 (选项目) — bottom-left. Drives useSupervisor.pickProject directly over
-      // the bus (the native folder dialog); no React overlay anymore (P5).
+      // 门 (选项目) — bottom-left, deliberately offset from the right stack so the
+      // "enter the workshop" decision sits on its own. Drives pickProject directly.
       {
         label: STR.hotspotProject,
+        icon: '🚪',
+        priority: 'secondary',
         anchor: (w, h) => ({ x: w * 0.1, y: h * 0.86 }),
         onClick: () => {
           play('open');
@@ -547,45 +705,80 @@ export class HallScene extends Phaser.Scene {
     ];
 
     const reduce = prefersReducedMotion();
-    for (const spec of specs) {
-      const label = this.makeHotspotLabel(spec.label);
-      // a soft affordance halo behind the label, plus a small breathing glint dot
-      // hugging its corner — the §6 "no-tutorial diegetic nav" cue that an object
-      // is touchable. The breathing is skipped under reduced-motion.
-      const halo = this.add.circle(0, 0, 30, PALETTE.glint, 0.0).setDepth(7999);
-      const glint = this.add.circle(0, 0, 7, PALETTE.glint, 0.9);
+    specs.forEach((spec, i) => {
+      const primary = spec.priority === 'primary';
+      const label = this.makeHotspotLabel(spec.label, spec.icon, primary);
+      // a soft affordance halo behind the label (always faintly lit at 0.08 so the
+      // touchable object never goes fully dark), plus a breathing glint dot hugging
+      // its corner — the §6 "no-tutorial diegetic nav" cue. Breathing skipped under
+      // reduced-motion. The primary (board) gets a larger halo + glint.
+      const haloRadius = primary ? 56 : 48;
+      const halo = this.add.circle(0, 0, haloRadius, PALETTE.glint, 0.08).setDepth(7999);
+      const glintR = primary ? 11 : 10;
+      const glint = this.add.circle(0, 0, glintR, PALETTE.glint, 1);
       glint.setDepth(8001);
       if (!reduce) {
+        // a brighter, faster, larger breathing pulse than M5's old 7px/1100ms — and
+        // each hotspot's tween is staggered by i*200ms so the column breathes in a
+        // rolling rhythm instead of pulsing in unison (⑤-D).
         this.tweens.add({
           targets: glint,
-          alpha: 0.25,
-          scale: 1.5,
-          duration: 1100,
+          alpha: { from: 1, to: 0.35 },
+          scale: { from: 1, to: 1.8 },
+          duration: 800,
+          delay: i * 200,
           yoyo: true,
           repeat: -1,
           ease: 'Sine.easeInOut',
         });
       }
-      const zone = this.add.zone(0, 0, 150, 64).setInteractive({ useHandCursor: true });
+      const zone = this.add.zone(0, 0, 160, 70).setInteractive({ useHandCursor: true });
       zone.setDepth(8000);
       zone.on('pointerup', spec.onClick);
-      // hover: lift + brighten the label and bloom the halo so the target is
-      // unmistakable on approach (affordance glint on hover, §6).
+      // hover: lift + grow the label, accelerate + brighten the glint, and bloom the
+      // halo so the target is unmistakable on approach (affordance on hover, §6 / ⑤-D).
       zone.on('pointerover', () => {
-        label.setScale(1.08);
-        glint.setScale(1.4).setAlpha(1);
-        this.tweens.add({ targets: halo, fillAlpha: 0.22, duration: reduce ? 0 : 160 });
+        this.tweens.add({
+          targets: label,
+          scale: 1.15,
+          y: label.y - 6,
+          duration: reduce ? 0 : 140,
+          ease: 'Back.easeOut',
+        });
+        glint.setScale(1.6).setAlpha(1);
+        this.tweens.add({ targets: halo, fillAlpha: 0.24, duration: reduce ? 0 : 160 });
       });
       zone.on('pointerout', () => {
-        label.setScale(1);
-        glint.setScale(1).setAlpha(0.9);
-        this.tweens.add({ targets: halo, fillAlpha: 0, duration: reduce ? 0 : 160 });
+        this.tweens.add({
+          targets: label,
+          scale: 1,
+          y: this.hotspotLabelY(zone),
+          duration: reduce ? 0 : 140,
+          ease: 'Sine.easeOut',
+        });
+        glint.setScale(1).setAlpha(1);
+        this.tweens.add({ targets: halo, fillAlpha: 0.08, duration: reduce ? 0 : 160 });
       });
 
-      const node: HotspotNode = { zone, label, glint, halo, anchor: spec.anchor, onClick: spec.onClick };
+      const node: HotspotNode = {
+        zone,
+        label,
+        glint,
+        halo,
+        haloRadius,
+        anchor: spec.anchor,
+        onClick: spec.onClick,
+      };
       this.hotspots.push(node);
       this.placeHotspot(node);
-    }
+    });
+  }
+
+  // The label's resting y for a hotspot (so pointerout returns the lifted label to
+  // its anchored row, not a stale captured value).
+  private hotspotLabelY(zone: Phaser.GameObjects.Zone): number {
+    const node = this.hotspots.find(h => h.zone === zone);
+    return node ? node.anchor(this.scale.width, this.scale.height).y : zone.y;
   }
 
   // Sleep the world (keep it warm, don't stop) and bring a sub-scene up — fading
@@ -625,31 +818,55 @@ export class HallScene extends Phaser.Scene {
     this.openScene(SCENE.logbook, { taskId, from: 'hall' });
   }
 
-  private makeHotspotLabel(text: string): Phaser.GameObjects.Container {
+  // A diegetic-nav pill: an emoji icon + Chinese label on a wooden plaque. The
+  // primary (board) plaque is drawn a touch larger so it reads as the headline
+  // action. A soft drop-shadow lifts the pill off the busy room art (⑤-A).
+  private makeHotspotLabel(
+    text: string,
+    icon: string,
+    primary: boolean,
+  ): Phaser.GameObjects.Container {
     const c = this.add.container(0, 0).setDepth(8002);
-    const label = this.add.text(0, 0, text, {
+    const fontSize = primary ? 18 : 17;
+    const label = this.add.text(0, 0, `${icon} ${text}`, {
       fontFamily: CJK_FONT,
-      fontSize: '15px',
+      fontSize: `${fontSize}px`,
       color: PALETTE.hudInk,
       fontStyle: 'bold',
       align: 'center',
     });
     label.setOrigin(0.5, 0.5);
-    const pad = 12;
+    const padX = 16;
+    const padY = 12;
+    const w = label.width + padX * 2;
+    const h = label.height + padY;
+    const radius = 12;
+
+    // drop-shadow: a faint dark rounded rect offset down-right, behind the plaque.
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.25);
+    shadow.fillRoundedRect(-w / 2 + 3, -h / 2 + 4, w, h, radius);
+
     const bg = this.add.graphics();
-    bg.fillStyle(PALETTE.hudPanel, 0.92);
+    bg.fillStyle(PALETTE.hudPanel, 0.94);
     bg.lineStyle(2, PALETTE.hudPanelEdge, 1);
-    const w = label.width + pad * 2;
-    const h = label.height + pad;
-    bg.fillRoundedRect(-w / 2, -h / 2, w, h, 9);
-    bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 9);
-    c.add([bg, label]);
+    bg.fillRoundedRect(-w / 2, -h / 2, w, h, radius);
+    bg.strokeRoundedRect(-w / 2, -h / 2, w, h, radius);
+    c.add([shadow, bg, label]);
+    // give the container a real size so placeHotspot's x-clamp + glint offset have
+    // a true pill width to work from (a bare container reports width 0).
+    c.setSize(w, h);
     return c;
   }
 
   private placeHotspot(node: HotspotNode): void {
     const { width, height } = this.scale;
-    const { x, y } = node.anchor(width, height);
+    const anchored = node.anchor(width, height);
+    // keep the whole label pill on-screen on a narrow window — clamp the centre x
+    // by the label's half-width (+8 breathing) so it never overruns either edge.
+    const halfW = node.label.width / 2 + 8;
+    const x = Phaser.Math.Clamp(anchored.x, halfW, width - halfW);
+    const y = anchored.y;
     node.label.setPosition(x, y);
     node.zone.setPosition(x, y);
     node.halo.setPosition(x, y);

@@ -7,10 +7,13 @@ import { STR } from '@/strings';
 import { play } from '@/utils/sound';
 import type { Settings } from '@/types/persistence.types';
 import type { SaveStatus } from '@/hooks/useSettings';
+import type { EnvironmentCheck, CheckStatus } from '@/types/environment.types';
+import type { HealthSnapshot } from '@/game/EventBus';
 
-// The four settings groups become the ledger's page tabs. The order + labels are
-// lifted verbatim from the old React SettingsPanel sections.
-type GroupKey = 'run' | 'budget' | 'agent' | 'appearance';
+// The settings groups become the ledger's page tabs. The first four are lifted
+// verbatim from the old React SettingsPanel sections; the fifth (工坊体检) hosts
+// the pre-flight self-diagnosis panel (M4-UI / DESIGN §9).
+type GroupKey = 'run' | 'budget' | 'agent' | 'appearance' | 'health';
 
 interface GroupSpec {
   key: GroupKey;
@@ -22,7 +25,11 @@ const GROUPS: GroupSpec[] = [
   { key: 'budget', label: STR.settingsSectionBudget },
   { key: 'agent', label: STR.settingsSectionAgent },
   { key: 'appearance', label: STR.settingsSectionAppearance },
+  { key: 'health', label: STR.settingsSectionHealth },
 ];
+
+// Status glyph + colour for one health row.
+const HEALTH_GLYPH: Record<CheckStatus, string> = { ok: '✓', warn: '⚠', fail: '✗' };
 
 const MODEL_OPTIONS = ['sonnet', 'opus', 'haiku'] as const;
 
@@ -72,6 +79,10 @@ export class SettingsScene extends Phaser.Scene {
   private saveStatus: SaveStatus = 'idle';
   private activeGroup: GroupKey = 'run';
 
+  // Workshop pre-flight self-diagnosis (DESIGN §9), pushed from useEnvironmentCheck
+  // over BUS.health. Only the 工坊体检 page reads it; null until the first push.
+  private health: HealthSnapshot | null = null;
+
   // True while the text overlay is open, so a second cell click can't double-open.
   private cellEditing = false;
 
@@ -89,6 +100,7 @@ export class SettingsScene extends Phaser.Scene {
 
     EventBus.on(BUS.settings, this.onSettings, this);
     EventBus.on(BUS.settingsSave, this.onSaveStatus, this);
+    EventBus.on(BUS.health, this.onHealth, this);
     // Ask the bridge to flush the current settings snapshot now that we're up.
     EventBus.emit(BUS.sceneReady);
 
@@ -118,6 +130,7 @@ export class SettingsScene extends Phaser.Scene {
   private teardown(): void {
     EventBus.off(BUS.settings, this.onSettings, this);
     EventBus.off(BUS.settingsSave, this.onSaveStatus, this);
+    EventBus.off(BUS.health, this.onHealth, this);
     this.scale.off('resize', this.layout, this);
   }
 
@@ -145,6 +158,12 @@ export class SettingsScene extends Phaser.Scene {
   private onSaveStatus(status: SaveStatus): void {
     this.saveStatus = status;
     this.renderSaveChip();
+  }
+
+  private onHealth(snapshot: HealthSnapshot): void {
+    this.health = snapshot;
+    // Only the 工坊体检 page renders health; avoid churning other pages.
+    if (this.activeGroup === 'health') this.renderPage();
   }
 
   // The single mutation seam: every control hands a partial patch here, which the
@@ -276,7 +295,10 @@ export class SettingsScene extends Phaser.Scene {
     const gap = 8;
     const totalH = GROUPS.length * tabH + (GROUPS.length - 1) * gap;
     const startY = cy - totalH / 2 + tabH / 2;
-    const x = cx + w / 2 + tabW / 2 - 10;
+    // Ride the book's right edge, but clamp so the tabs never spill past the
+    // window's right side on narrow widths (640px), where the book + tab gutter
+    // would otherwise overflow.
+    const x = Math.min(cx + w / 2 + tabW / 2 - 10, this.scale.width - tabW / 2 - 4);
 
     GROUPS.forEach((group, i) => {
       const y = startY + i * (tabH + gap);
@@ -377,6 +399,14 @@ export class SettingsScene extends Phaser.Scene {
   private renderPage(): void {
     if (!this.pageLayer) return;
     this.pageLayer.removeAll(true);
+
+    // The 工坊体检 page is a bespoke status panel, not a field-rows form — it reads
+    // the health snapshot (not Settings), so it renders ahead of the settings gate.
+    if (this.activeGroup === 'health') {
+      this.renderHealthPage();
+      return;
+    }
+
     if (!this.settings) {
       const loading = this.add
         .text(0, 0, STR.settingsSaving, {
@@ -410,8 +440,192 @@ export class SettingsScene extends Phaser.Scene {
     });
   }
 
-  // Each group's fields, mapped 1:1 from the old SettingsPanel sections.
-  private rowsForGroup(group: GroupKey, s: Settings): FieldRow[] {
+  // --- 工坊体检 page (M4-UI / DESIGN §9) -----------------------------------
+
+  // The pre-flight self-diagnosis panel: a one-line overall verdict across the top
+  // band, then one ✓/⚠/✗ row per probe flowing left page → right page, and a
+  // 重新检查 button anchored to the right page's foot. Reads BUS.health (not
+  // Settings), so it owns its own loading / error / empty states.
+  private renderHealthPage(): void {
+    if (!this.pageLayer) return;
+    const { w, h } = this.bookRect;
+    const pad = 22;
+    const pageW = (w - pad * 2 - 12) / 2;
+    const pageTop = -h / 2 + pad + 24;
+    const leftColX = -w / 2 + pad + 16;
+    const rightColX = 6 + 16;
+
+    const snap = this.health;
+
+    // command-level failure or in-flight / empty states.
+    if (!snap || (snap.loading && snap.checks.length === 0)) {
+      this.addHealthCentreNote(snap?.loading ? STR.healthChecking : STR.healthEmpty);
+      this.buildRecheckButton();
+      return;
+    }
+    if (snap.error) {
+      this.addHealthCentreNote(STR.healthError, PALETTE.healthFail);
+      this.buildRecheckButton();
+      return;
+    }
+    if (snap.checks.length === 0) {
+      this.addHealthCentreNote(STR.healthEmpty);
+      this.buildRecheckButton();
+      return;
+    }
+
+    // overall verdict banner (full width across both pages, above the rows).
+    const verdict = this.healthVerdict(snap.checks);
+    const banner = this.add
+      .text(0, pageTop - 6, verdict.text, {
+        fontFamily: CJK_FONT,
+        fontSize: '15px',
+        color: verdict.color,
+        fontStyle: 'bold',
+        align: 'center',
+      })
+      .setOrigin(0.5, 0);
+    this.pageLayer.add(banner);
+
+    // Flow one row per probe down the left page, spilling to the right page when
+    // the column fills. Rows are variable-height (warn/fail rows expand their
+    // remediation), so we pack by each row's measured height instead of a grid —
+    // this keeps a wrapped 2-line remediation from overlapping the next row.
+    const rowsTop = pageTop + 30;
+    const colBottom = h / 2 - pad - 70; // leave room for the 重新检查 button foot
+    const rowGap = 12;
+    let cursorY = rowsTop;
+    let colX = leftColX;
+    let onRight = false;
+
+    for (const check of snap.checks) {
+      const { node, height } = this.buildHealthRow(check, colX, cursorY, pageW - 28);
+      // if this row would overrun the current column, jump to the right page once.
+      if (cursorY + height > colBottom && !onRight) {
+        onRight = true;
+        colX = rightColX;
+        cursorY = rowsTop;
+        node.setPosition(colX, cursorY);
+      }
+      this.pageLayer!.add(node);
+      cursorY += height + rowGap;
+    }
+
+    this.buildRecheckButton();
+  }
+
+  private healthVerdict(checks: EnvironmentCheck[]): { text: string; color: string } {
+    if (checks.some(c => c.status === 'fail')) {
+      return { text: STR.healthHasFail, color: PALETTE.healthFail };
+    }
+    if (checks.some(c => c.status === 'warn')) {
+      return { text: STR.healthHasWarn, color: PALETTE.healthWarn };
+    }
+    return { text: STR.healthAllReady, color: PALETTE.healthOk };
+  }
+
+  private addHealthCentreNote(text: string, color: string = PALETTE.ledgerInkDim): void {
+    const note = this.add
+      .text(0, -10, text, {
+        fontFamily: CJK_FONT,
+        fontSize: '15px',
+        color,
+        align: 'center',
+        wordWrap: { width: this.bookRect.w - 120 },
+      })
+      .setOrigin(0.5, 0.5);
+    this.pageLayer!.add(note);
+  }
+
+  // A single health row: a status glyph + label on the first line, the message on
+  // the second, and (for warn/fail) the remediation indented below in muted ink.
+  // Returns the container + its measured height so the caller can pack rows by
+  // their real (variable) extent rather than a fixed grid.
+  private buildHealthRow(
+    check: EnvironmentCheck,
+    x: number,
+    y: number,
+    width: number,
+  ): { node: Phaser.GameObjects.Container; height: number } {
+    const c = this.add.container(x, y);
+    const glyphColor =
+      check.status === 'ok'
+        ? PALETTE.healthOk
+        : check.status === 'warn'
+          ? PALETTE.healthWarn
+          : PALETTE.healthFail;
+
+    const glyph = this.add
+      .text(0, 0, HEALTH_GLYPH[check.status], {
+        fontFamily: CJK_FONT,
+        fontSize: '16px',
+        color: glyphColor,
+        fontStyle: 'bold',
+      })
+      .setOrigin(0, 0);
+    c.add(glyph);
+
+    const label = this.add
+      .text(24, 0, check.label, {
+        fontFamily: CJK_FONT,
+        fontSize: '14px',
+        color: PALETTE.ledgerInk,
+        fontStyle: 'bold',
+      })
+      .setOrigin(0, 0);
+    c.add(label);
+
+    const message = this.add
+      .text(24, 18, check.message, {
+        fontFamily: CJK_FONT,
+        fontSize: '11px',
+        color: PALETTE.ledgerInkDim,
+        wordWrap: { width: width - 24 },
+        lineSpacing: 2,
+      })
+      .setOrigin(0, 0);
+    c.add(message);
+
+    // the row's vertical extent: label/glyph line + the wrapped message, plus the
+    // remediation block for warn/fail rows.
+    let height = 18 + message.height + 4;
+
+    // warn/fail rows expand their remediation (the §9 "what to do about it").
+    if (check.remediation) {
+      const fixY = height;
+      const fix = this.add
+        .text(24, fixY, `${STR.healthFixTitle}：${check.remediation}`, {
+          fontFamily: CJK_FONT,
+          fontSize: '11px',
+          color: PALETTE.healthRemediation,
+          fontStyle: 'italic',
+          wordWrap: { width: width - 24 },
+          lineSpacing: 2,
+        })
+        .setOrigin(0, 0);
+      c.add(fix);
+      height = fixY + fix.height + 2;
+    }
+
+    return { node: c, height };
+  }
+
+  // The 重新检查 button on the right page's foot. Emits BUS.healthRefresh so the
+  // bridge re-runs check_environment (the scene never touches IPC).
+  private buildRecheckButton(): void {
+    const { w, h } = this.bookRect;
+    const x = 6 + (w / 2 - 22) / 2;
+    const y = h / 2 - 56;
+    const btn = this.makeButton(x, y, STR.healthRecheck, () => {
+      play('open');
+      EventBus.emit(BUS.healthRefresh);
+    });
+    this.pageLayer!.add(btn);
+  }
+
+  // Each group's fields, mapped 1:1 from the old SettingsPanel sections. The
+  // 工坊体检 page is bespoke (renderHealthPage), so it's excluded from this switch.
+  private rowsForGroup(group: Exclude<GroupKey, 'health'>, s: Settings): FieldRow[] {
     switch (group) {
       case 'run':
         return [

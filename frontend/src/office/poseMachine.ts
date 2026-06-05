@@ -64,7 +64,7 @@ export function reduceWorker(prev: WorkerView, event: AgentEvent): WorkerView {
       return {
         ...prev,
         pose: 'working',
-        bubble: '思考 / 输出中…',
+        bubble: text,
         detail: text,
         log: pushLog(prev, event, text),
       };

@@ -3,7 +3,7 @@ import { SCENE } from '@/game/palette';
 
 // Native cell size of a sliced character frame (scripts/slice_assets.py).
 // Kept in lockstep with HallScene's CHAR_CELL.
-const CHAR_CELL = { w: 234, h: 256 };
+const CHAR_CELL = { w: 234, h: 268 };
 const CHAR_COUNT = 4;
 
 /**

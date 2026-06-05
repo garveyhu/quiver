@@ -29,6 +29,7 @@ export class UIScene extends Phaser.Scene {
   private budgetText?: Phaser.GameObjects.Text;
   private clockText?: Phaser.GameObjects.Text;
   private busyText?: Phaser.GameObjects.Text;
+  private hintText?: Phaser.GameObjects.Text;
   private panel?: Phaser.GameObjects.Rectangle;
 
   private budgetCap: number | null = null;
@@ -64,6 +65,7 @@ export class UIScene extends Phaser.Scene {
     this.budgetText = undefined;
     this.clockText = undefined;
     this.busyText = undefined;
+    this.hintText = undefined;
     this.panel = undefined;
   }
 
@@ -132,6 +134,22 @@ export class UIScene extends Phaser.Scene {
         .setDepth(10_002);
     } else {
       this.busyText.setX(width - 16);
+    }
+
+    // resident "open the scroll" hint, just left of the busy summary — tells
+    // the user the live bubble is a teaser and the full I/O lives on the archer.
+    const hintX = Phaser.Math.Clamp(width - 200, 16 + BAR_W + 10, width - 16);
+    if (!this.hintText) {
+      this.hintText = this.add
+        .text(hintX, HUD_H / 2, STR.hudHintOpenLogbook, {
+          fontFamily: CJK_FONT,
+          fontSize: '12px',
+          color: PALETTE.hudInkDim,
+        })
+        .setOrigin(1, 0.5)
+        .setDepth(10_002);
+    } else {
+      this.hintText.setX(hintX);
     }
 
     this.renderBudget();
