@@ -197,9 +197,10 @@ fn check_claude_version(claude_path: Option<&PathBuf>) -> EnvironmentCheck {
     }
 }
 
-/// Login state — checks ONLY for the existence of a non-empty credentials file
-/// (never reads its contents, so this costs nothing and leaks nothing). If an
-/// API key env var is present we surface a warn pointing at the API-key route.
+/// Login state — checks for the existence of a credentials file OR, on macOS,
+/// the login-Keychain item (never reads either's contents, so this costs nothing
+/// and leaks nothing). If an API key env var is present we surface a warn
+/// pointing at the API-key route.
 fn check_claude_auth() -> EnvironmentCheck {
     const ID: &str = "claude_auth";
     const LABEL: &str = "Claude 登录态";
@@ -243,6 +244,27 @@ fn check_claude_auth() -> EnvironmentCheck {
                     Some(path.display().to_string()),
                 );
             }
+        }
+    }
+
+    // On macOS the official CLI stores its OAuth credentials in the login
+    // Keychain (service "Claude Code-credentials"), not a plaintext file — so the
+    // file probe above misses a logged-in user. Query the item's existence with
+    // `security` (no `-w`, so it never prompts and never reads the secret).
+    #[cfg(target_os = "macos")]
+    {
+        let found = std::process::Command::new("security")
+            .args(["find-generic-password", "-s", "Claude Code-credentials"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if found {
+            return EnvironmentCheck::ok(
+                ID,
+                LABEL,
+                "已检测到 Claude 登录凭证（钥匙串）。".to_string(),
+                Some("macOS 钥匙串：Claude Code-credentials".to_string()),
+            );
         }
     }
 
