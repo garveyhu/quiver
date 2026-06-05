@@ -80,6 +80,37 @@ def key_out_checker(img: Image.Image) -> Image.Image:
     return img
 
 
+def strip_bottom_bleed(cell: Image.Image) -> Image.Image:
+    """Clear a thin content band at the very bottom of a frame cell.
+
+    The source rows aren't cleanly separated: the NEXT row's characters' hoods
+    overflow upward past the cell boundary, so a row-1 (bow) cell catches a strip
+    of row-2 hood-tops below the archer's feet. That band is thin and separated
+    from the body by a transparent gap, so we detect it (gap above + a real body
+    above the gap + band thinner than ~22% of the cell) and clear it. A character
+    whose feet are flush with the cell bottom has no gap, so it is left untouched
+    (the held ember sits at hand height, well inside the body span, so it
+    survives too).
+    """
+    w, h = cell.size
+    a = cell.split()[3].load()
+    rowfull = [any(a[x, y] > 0 for x in range(w)) for y in range(h)]
+    if not rowfull[h - 1]:
+        return cell
+    y = h - 1
+    while y >= 0 and rowfull[y]:
+        y -= 1
+    band_h = (h - 1) - y
+    if y < 0 or band_h > h * 0.22 or not any(rowfull[:y]):
+        return cell
+    cell = cell.copy()
+    px = cell.load()
+    for yy in range(y + 1, h):
+        for xx in range(w):
+            px[xx, yy] = (0, 0, 0, 0)
+    return cell
+
+
 def trim(img: Image.Image, pad: int = 4) -> Image.Image:
     """Crop to the non-transparent bounding box plus a little padding."""
     bbox = img.getbbox()
@@ -148,6 +179,11 @@ def slice_fire() -> None:
 ROWS, COLS = 3, 6
 NUM_CHARS = 4
 CHAR_SCALE = 0.5
+# Fixed output cell so EVERY char + frame is the same size — the loader uses a
+# single frameWidth/frameHeight (HallScene/PreloaderScene CHAR_CELL), so per-char
+# heights would mis-slice the strips. Content is scaled to fit inside the cell
+# minus the top safety band, then bottom-centred. Keep in lockstep with CHAR_CELL.
+OUT_W, OUT_H, TOP_BAND = 234, 268, 12
 
 # row-major frame indices in the 6x3 grid
 WALK_FRAMES = [0, 1, 2, 3, 4, 5]  # row 0: walk cycle
@@ -180,7 +216,7 @@ def slice_characters() -> None:
         bbox: list[int] | None = None
         crops: dict[int, Image.Image] = {}
         for idx in used:
-            c = sheet.crop(_frame_box(idx, fw, fh))
+            c = strip_bottom_bleed(sheet.crop(_frame_box(idx, fw, fh)))
             crops[idx] = c
             b = c.getbbox()
             if b is None:
@@ -202,34 +238,30 @@ def slice_characters() -> None:
             min(fh, bbox[3] + pad),
         ]
         crop_box = tuple(bbox)
-        # Top safety band: idle/celebrate frames place the hat pixels flush against
-        # the shared bbox top (source content touches row 0), so source padding
-        # clamps at 0 and the crown gets shaved by origin-bottom scaling. Reserve a
-        # transparent band ABOVE the content on the output cell itself — guaranteed
-        # regardless of where the source content sits. (≥12px scaled = TOP_BAND.)
-        TOP_BAND = 12
-        cw = int((crop_box[2] - crop_box[0]) * CHAR_SCALE)
-        ch = int((crop_box[3] - crop_box[1]) * CHAR_SCALE) + TOP_BAND
 
         def cell(idx: int) -> Image.Image:
-            scaled_crop = scaled(crops[idx].crop(crop_box), CHAR_SCALE)
-            canvas = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
-            # bottom-align the content; the TOP_BAND transparent strip sits on top.
-            canvas.paste(scaled_crop, (0, ch - scaled_crop.height), scaled_crop)
+            # Scale the shared crop to fit the fixed cell minus the top band (the
+            # same scale for every frame of a char, so feet stay registered), then
+            # bottom-centre it. The top band keeps the hat crown off the cell edge.
+            crop = crops[idx].crop(crop_box)
+            fit = min(CHAR_SCALE, OUT_W / crop.width, (OUT_H - TOP_BAND) / crop.height)
+            img = scaled(crop, fit)
+            canvas = Image.new("RGBA", (OUT_W, OUT_H), (0, 0, 0, 0))
+            canvas.paste(img, ((OUT_W - img.width) // 2, OUT_H - img.height), img)
             return canvas
 
         # animation strips
         for name, idxs in (("walk", WALK_FRAMES), ("bow", BOW_FRAMES)):
-            strip = Image.new("RGBA", (cw * len(idxs), ch), (0, 0, 0, 0))
+            strip = Image.new("RGBA", (OUT_W * len(idxs), OUT_H), (0, 0, 0, 0))
             for j, idx in enumerate(idxs):
-                strip.paste(cell(idx), (j * cw, 0))
+                strip.paste(cell(idx), (j * OUT_W, 0))
             strip.save(PUB / "sprites" / f"char{ci}-{name}.png", optimize=True)
 
         # single frames
         for name, idx in SINGLE_FRAMES.items():
             cell(idx).save(PUB / "sprites" / f"char{ci}-{name}.png", optimize=True)
 
-        print(f"char{ci}: frame {fw}x{fh} -> cell {cw}x{ch}")
+        print(f"char{ci}: frame {fw}x{fh} -> cell {OUT_W}x{OUT_H}")
 
 
 def main() -> None:
