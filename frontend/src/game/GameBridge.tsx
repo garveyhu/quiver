@@ -15,6 +15,7 @@ import {
 } from '@/game/EventBus';
 import { GameStateContext, type GameState } from '@/game/useGameState';
 import type { RunMode } from '@/types/run.types';
+import type { SettingsPatch } from '@/types/persistence.types';
 
 interface GameBridgeProps {
   /** A hotspot was clicked in the world — App opens the matching React overlay. */
@@ -78,6 +79,8 @@ export function GameBridge({ onOpenHotspot, children }: GameBridgeProps) {
     const flush = () => {
       EventBus.emit(BUS.officeEvents, officeEvents);
       EventBus.emit(BUS.settings, settings.settings);
+      // settings save chip, so the SettingsScene ledger re-hydrates on (re)launch.
+      EventBus.emit(BUS.settingsSave, settings.saveStatus);
       EventBus.emit(BUS.project, { projectPath: supervisor.projectPath });
       EventBus.emit(BUS.replay, { active: replay.active });
       // board snapshot, so the TaskBoardScene re-hydrates on (re)launch.
@@ -100,6 +103,10 @@ export function GameBridge({ onOpenHotspot, children }: GameBridgeProps) {
   useEffect(() => {
     EventBus.emit(BUS.settings, settings.settings);
   }, [settings.settings]);
+
+  useEffect(() => {
+    EventBus.emit(BUS.settingsSave, settings.saveStatus);
+  }, [settings.saveStatus]);
 
   useEffect(() => {
     EventBus.emit(BUS.project, { projectPath: supervisor.projectPath });
@@ -159,6 +166,17 @@ export function GameBridge({ onOpenHotspot, children }: GameBridgeProps) {
       EventBus.off(BUS.boardCancel, onCancel);
     };
   }, [board, mode]);
+
+  // Settings edits from the SettingsScene ledger → the unchanged useSettings.patch
+  // (debounced persistence, the only settings IPC seam). The bus carries a patch;
+  // the hook owns the optimistic merge + round-trip exactly as before.
+  useEffect(() => {
+    const onPatch = (p: SettingsPatch) => settings.patch(p);
+    EventBus.on(BUS.settingsPatch, onPatch);
+    return () => {
+      EventBus.off(BUS.settingsPatch, onPatch);
+    };
+  }, [settings]);
 
   const value: GameState = {
     supervisor,

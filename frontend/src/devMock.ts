@@ -32,6 +32,21 @@ interface MockTask {
 const MAX_WORKERS = 3;
 const STEP_MS = 900;
 
+// The mocked durable settings row. `update_settings` merges the patch into it and
+// returns the merged whole — mirroring the real Rust partial-write contract — so
+// the settings ledger's edits persist within the session and round-trip faithfully.
+const settingsRow: Record<string, unknown> = {
+  defaultMode: 'simulate',
+  model: 'sonnet',
+  maxWorkers: MAX_WORKERS,
+  monthlyCreditCapUsd: null,
+  nightlyBudgetUsd: null,
+  agentBinOverride: null,
+  fakeDelayMs: 700,
+  theme: 'cozy',
+  uiScale: 1,
+};
+
 const tasks: MockTask[] = [];
 let running = 0;
 let seq = 1000;
@@ -203,17 +218,7 @@ function handleCommand(cmd: string, args: Record<string, unknown>): unknown {
             ],
       };
     case 'get_settings':
-      return {
-        defaultMode: 'simulate',
-        model: 'sonnet',
-        maxWorkers: MAX_WORKERS,
-        monthlyCreditCapUsd: null,
-        nightlyBudgetUsd: null,
-        agentBinOverride: null,
-        fakeDelayMs: 700,
-        theme: 'cozy',
-        uiScale: 1,
-      };
+      return { ...settingsRow };
     case 'list_tasks': {
       // `list_tasks` filters by project/status; the archive passes both null to
       // get every run across projects (the bulletin board passes a project).
@@ -258,8 +263,15 @@ function handleCommand(cmd: string, args: Record<string, unknown>): unknown {
       emitBoard();
       return null;
     }
-    case 'update_settings':
-      return handleCommand('get_settings', {});
+    case 'update_settings': {
+      // Partial write: merge only the keys present in the patch (omit = unchanged,
+      // explicit null = clear a nullable cap) — exactly the Rust contract.
+      const patch = (args.patch ?? {}) as Record<string, unknown>;
+      for (const [k, v] of Object.entries(patch)) {
+        if (v !== undefined) settingsRow[k] = v;
+      }
+      return { ...settingsRow };
+    }
     default:
       return null;
   }

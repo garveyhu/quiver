@@ -5,7 +5,6 @@ import { STR } from '@/strings';
 import type { RunMode } from '@/types/run.types';
 import type { StoredEvent, TaskRecord } from '@/types/persistence.types';
 import { TaskInput } from '@/components/TaskInput';
-import { SettingsPanel } from '@/components/settings/SettingsPanel';
 import { ArchiveView } from '@/components/archive/ArchiveView';
 import { LogbookViewer } from '@/components/archive/LogbookViewer';
 import { ProjectPicker } from '@/components/ProjectPicker';
@@ -22,15 +21,15 @@ interface HotspotOverlayProps {
 /**
  * TEMPORARY BRIDGE for the not-yet-diegetic surfaces.
  *
- * The notice board is now an in-world Phaser scene (TaskBoardScene, P2), so it's
- * gone from here. The remaining hotspots — settings (账本) / archive (书架) /
- * project (门) — still open the matching *existing* React panel as a full-screen
- * overlay over the canvas; P3–P4 replace each with an in-world scene. The panels
- * read all data + actions from the shared GameState (the hooks the GameBridge
- * owns), so no IPC contract is touched.
+ * The notice board (TaskBoardScene, P2) and the ledger/settings (SettingsScene,
+ * P3) are now in-world Phaser scenes, so they're gone from here. The remaining
+ * hotspots — archive (书架) / project (门) — still open the matching *existing*
+ * React panel as a full-screen overlay over the canvas; P4 replaces each with an
+ * in-world scene. The panels read all data + actions from the shared GameState
+ * (the hooks the GameBridge owns), so no IPC contract is touched.
  */
 export function HotspotOverlay({ hotspot, onClose }: HotspotOverlayProps) {
-  const { supervisor, settings, board, archive, replay, mode, setMode } = useGameState();
+  const { supervisor, board, archive, replay, mode, setMode } = useGameState();
   const [openRecord, setOpenRecord] = useState<TaskRecord | null>(null);
 
   // "回放": start the re-enactment in the workshop, then close the overlay so
@@ -98,16 +97,6 @@ export function HotspotOverlay({ hotspot, onClose }: HotspotOverlayProps) {
           />
         )}
       </div>
-
-      {/* The settings ledger renders its own backdrop, so it sits outside body. */}
-      {hotspot === 'settings' && settings.settings && (
-        <SettingsPanel
-          settings={settings.settings}
-          saveStatus={settings.saveStatus}
-          patch={settings.patch}
-          onClose={onClose}
-        />
-      )}
 
       {openRecord && (
         <LogbookViewer

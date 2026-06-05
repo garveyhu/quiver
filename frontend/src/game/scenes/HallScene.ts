@@ -45,9 +45,10 @@ interface ArcherNode {
   dragged: boolean;
 }
 
-// A clickable world object. The notice board now opens an in-world scene
-// (TaskBoardScene, P2); the rest still open the temporary React overlays via the
-// bus (settings / archive / project) — so each node carries its own click action.
+// A clickable world object. The notice board (TaskBoardScene, P2) and the ledger
+// (SettingsScene, P3) now open in-world scenes; the rest still open the temporary
+// React overlays via the bus (archive / project) — so each node carries its own
+// click action.
 interface HotspotNode {
   zone: Phaser.GameObjects.Zone;
   label: Phaser.GameObjects.Container;
@@ -290,8 +291,8 @@ export class HallScene extends Phaser.Scene {
   // --- diegetic navigation hotspots --------------------------------------
 
   private makeHotspots(): void {
-    // The temporary React overlays (settings / archive / project) emit a bus
-    // command the App routes; the notice board opens its in-world scene directly.
+    // The temporary React overlays (archive / project) emit a bus command the App
+    // routes; the notice board + ledger open their in-world scenes directly.
     const overlay = (h: Hotspot) => () => EventBus.emit(BUS.openHotspot, { hotspot: h });
 
     const specs: Array<{
@@ -305,11 +306,11 @@ export class HallScene extends Phaser.Scene {
         anchor: (w, h) => ({ x: w * 0.84, y: h * 0.26 }),
         onClick: () => this.openBoard(),
       },
-      // 桌上账本 (设置) — right side, mid
+      // 桌上账本 (设置) — right side, mid → in-world SettingsScene
       {
         label: STR.hotspotSettings,
         anchor: (w, h) => ({ x: w * 0.9, y: h * 0.56 }),
-        onClick: overlay('settings'),
+        onClick: () => this.openSettings(),
       },
       // 书架/档案柜 (档案) — right side, lower
       {
@@ -355,6 +356,13 @@ export class HallScene extends Phaser.Scene {
     play('open');
     this.scene.sleep(SCENE.hall);
     this.scene.launch(SCENE.board);
+  }
+
+  // Sleep the world and flip the ledger (settings) open in front of it.
+  private openSettings(): void {
+    play('open');
+    this.scene.sleep(SCENE.hall);
+    this.scene.launch(SCENE.settings);
   }
 
   private makeHotspotLabel(text: string): Phaser.GameObjects.Container {

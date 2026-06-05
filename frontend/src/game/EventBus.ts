@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { TaskRecord } from '@/types/persistence.types';
+import type { TaskRecord, SettingsPatch } from '@/types/persistence.types';
 
 /**
  * The single React ↔ Phaser event seam (lifted from phaserjs/template-react-ts).
@@ -42,7 +42,7 @@ export const BUS = {
   boardMeta: 'board:meta',
 
   // Commands Phaser → React (GameBridge subscribes and calls the hooks).
-  // payload: { hotspot: 'board' | 'settings' | 'archive' | 'project' }
+  // payload: { hotspot: 'archive' | 'project' } — board + settings are in-world.
   openHotspot: 'cmd:open-hotspot',
   // a world scene asks for keyboard input via the React IME-safe overlay (P2+).
   // payload: TextInputRequest (see below); the overlay replies on `req.channel`.
@@ -51,6 +51,12 @@ export const BUS = {
   boardEnqueue: 'cmd:board-enqueue', // { prompt: string; mode: RunMode }
   boardReorder: 'cmd:board-reorder', // { id: string; position: number }
   boardCancel: 'cmd:board-cancel', // { id: string }
+  // a settings edit a world scene (the ledger, P3) issues; GameBridge routes it
+  // to the unchanged useSettings.patch (the sole settings IPC seam, debounced).
+  // payload: SettingsPatch
+  settingsPatch: 'cmd:settings-patch',
+  // `SaveStatus` — the ledger's "记录中… / 已记录" chip, pushed from useSettings.
+  settingsSave: 'settings:save-status',
 } as const;
 
 // Snapshot of the board's live concurrency, surfaced on the HUD.
@@ -60,10 +66,11 @@ export interface TaskBoardSummary {
   maxWorkers: number;
 }
 
-// The diegetic world objects a hotspot click can open. The notice board is now
-// an in-world scene (TaskBoardScene, P2); settings / archive / project still ride
-// the temporary React overlay bridge (P3..P4 replace those with in-world scenes).
-export type Hotspot = 'settings' | 'archive' | 'project';
+// The diegetic world objects a hotspot click can open via the temporary React
+// overlay bridge. The notice board (TaskBoardScene, P2) and the ledger/settings
+// (SettingsScene, P3) are now in-world scenes launched directly, so they're gone
+// from here; archive / project still ride the overlay (P4 replaces those).
+export type Hotspot = 'archive' | 'project';
 
 // Anchor rect (canvas/page pixels) the React overlay positions its field over.
 export interface TextInputAnchor {
@@ -113,5 +120,5 @@ export interface BoardMeta {
   error: string | null;
 }
 
-// Re-export so scenes import the board row shape from one place.
-export type { TaskRecord };
+// Re-export so scenes import the board row + settings-patch shapes from one place.
+export type { TaskRecord, SettingsPatch };

@@ -55,6 +55,46 @@ export const PALETTE = {
   badgeDone: 0x4f7a3a,
   badgeFailed: 0xb44637,
   badgeInk: '#fbf3df',
+
+  // --- 设置账本 (SettingsScene, P3) — an open ledger book ---
+  ledgerScrim: 0x1c130c, // dim wash over the slept world behind the book
+  ledgerCover: 0x4a2d16, // the book's leather cover / outer edge
+  ledgerCoverEdge: 0x2c1a0c, // cover shadow line
+  ledgerSpine: 0x35200f, // centre spine the two pages meet at
+  ledgerPage: 0xf3e6c8, // warm parchment page face
+  ledgerPageEdge: 0xd8c39a, // page edge / rule lines
+  ledgerPageShade: 0xe6d4ac, // inner-margin shade near the spine
+  ledgerInk: '#3a2e25', // primary written ink
+  ledgerInkDim: '#7a6651', // secondary / hint ink
+  ledgerRule: 0xcdb88c, // faint horizontal rule under a field row
+  // tabs (设置分组) — leather page-markers down the side
+  ledgerTab: 0x6b4424, // an inactive tab
+  ledgerTabActive: 0x9c6b3f, // the open tab (lighter, "lifted")
+  ledgerTabInk: '#f6ead0',
+  ledgerTabInkActive: '#3a2e25',
+  // carved wooden lever (boolean / enum toggle)
+  leverTrack: 0xcdb88c, // the slot the lever rides in
+  leverTrackEdge: 0xa98a5c,
+  leverKnob: 0x6b4424, // the carved handle
+  leverKnobEdge: 0x422914,
+  leverInk: '#3a2e25',
+  leverInkDim: '#9a8466',
+  // brass knob stepper (◀ n ▶)
+  knobArrow: 0x6b4424,
+  knobArrowDisabled: 0xc3b291,
+  knobInk: '#3a2e25',
+  knobWell: 0xe6d4ac, // the recessed value well
+  knobWellEdge: 0xcdb88c,
+  // a click-to-edit text/number cell (summons the IME overlay)
+  ledgerCell: 0xfaf2dd,
+  ledgerCellEdge: 0xcdb88c,
+  ledgerCellInk: '#3a2e25',
+  ledgerCellPlaceholder: '#a8997d',
+  // save chip (记录中… / 已记录)
+  ledgerSaveSaving: 0xc98a2e,
+  ledgerSaveSaved: 0x4f7a3a,
+  ledgerSaveError: 0xb44637,
+  ledgerSaveInk: '#fbf3df',
 } as const;
 
 // CJK-safe font stack reused across every canvas Text object.
@@ -67,4 +107,5 @@ export const SCENE = {
   hall: 'HallScene',
   ui: 'UIScene',
   board: 'TaskBoardScene',
+  settings: 'SettingsScene',
 } as const;

@@ -198,6 +198,18 @@ export const STR = {
   settingThemeMidnight: '夜幕',
   settingUiScale: '界面缩放',
   settingUiScaleTip: '整体界面缩放比例。觉得元素太小就调大，想看更多内容就调小。立即生效。',
+
+  // --- 世界内设置账本场景（里程碑 3 / P3）---
+  settingsSceneBack: '← 合上账本',
+  settingsSceneTitle: '设置账本',
+  // 点击数字 / 文本格时浮层的提交按钮文案
+  settingsFieldSave: '记下',
+  // 点空的文本格时的占位提示
+  settingMaxWorkersUnit: ' 名',
+  settingFakeDelayUnit: ' ms',
+  settingUiScaleUnit: '%',
+  settingModelTapHint: '点此填写模型名',
+  settingBudgetTapHint: '点此填写上限',
 } as const;
 
 // 公告板任务卡的状态徽章中文展示（与 Rust task.status 词表对齐）。
