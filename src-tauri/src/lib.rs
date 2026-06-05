@@ -91,6 +91,29 @@ fn get_initial_state(state: State<'_, AppState>) -> Result<InitialState, String>
     Ok(initial)
 }
 
+/// Forget a project from the recent list (durable). Does not touch the currently
+/// picked project — only the MRU entry is dropped.
+#[tauri::command]
+fn remove_recent_project(state: State<'_, AppState>, path: String) -> Result<(), String> {
+    let store = state.store()?;
+    store
+        .remove_recent_project(&path)
+        .map_err(|e| format!("{e:#}"))
+}
+
+/// Set (or clear, with `None`) a recent project's display alias.
+#[tauri::command]
+fn set_project_alias(
+    state: State<'_, AppState>,
+    path: String,
+    alias: Option<String>,
+) -> Result<(), String> {
+    let store = state.store()?;
+    store
+        .set_recent_project_alias(&path, alias.as_deref())
+        .map_err(|e| format!("{e:#}"))
+}
+
 /// Read the typed app settings (DESIGN §11, v1.0 module 1).
 #[tauri::command]
 fn get_settings(state: State<'_, AppState>) -> Result<Settings, String> {
@@ -337,6 +360,8 @@ pub fn run() {
     let builder = builder.invoke_handler(tauri::generate_handler![
         pick_project,
         select_recent_project,
+        remove_recent_project,
+        set_project_alias,
         get_initial_state,
         run_task_cmd,
         enqueue_task_cmd,
@@ -353,6 +378,8 @@ pub fn run() {
     let builder = builder.invoke_handler(tauri::generate_handler![
         pick_project,
         select_recent_project,
+        remove_recent_project,
+        set_project_alias,
         get_initial_state,
         run_task_cmd,
         enqueue_task_cmd,

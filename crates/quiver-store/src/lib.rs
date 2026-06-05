@@ -143,6 +143,49 @@ mod tests {
     }
 
     #[test]
+    fn remove_recent_project_drops_one_entry() {
+        let store = Store::open_in_memory().unwrap();
+        store.touch_recent_project("/repos/a", 100).unwrap();
+        store.touch_recent_project("/repos/b", 200).unwrap();
+        assert_eq!(store.recent_projects().unwrap().len(), 2);
+
+        store.remove_recent_project("/repos/a").unwrap();
+        let recents = store.recent_projects().unwrap();
+        assert_eq!(recents.len(), 1, "one entry removed");
+        assert_eq!(recents[0].path, "/repos/b");
+
+        // Removing a path that isn't there is a harmless no-op.
+        store.remove_recent_project("/repos/missing").unwrap();
+        assert_eq!(store.recent_projects().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn set_recent_project_alias_round_trips() {
+        let store = Store::open_in_memory().unwrap();
+        store.touch_recent_project("/repos/a", 100).unwrap();
+        // Defaults to no alias.
+        assert_eq!(store.recent_projects().unwrap()[0].alias, None);
+
+        store
+            .set_recent_project_alias("/repos/a", Some("Alpha"))
+            .unwrap();
+        assert_eq!(
+            store.recent_projects().unwrap()[0].alias.as_deref(),
+            Some("Alpha")
+        );
+
+        // Re-touching keeps the alias; only the timestamp moves.
+        store.touch_recent_project("/repos/a", 999).unwrap();
+        let after = store.recent_projects().unwrap();
+        assert_eq!(after[0].alias.as_deref(), Some("Alpha"), "alias survives touch");
+        assert_eq!(after[0].last_used_at, 999);
+
+        // Clearing it back to None.
+        store.set_recent_project_alias("/repos/a", None).unwrap();
+        assert_eq!(store.recent_projects().unwrap()[0].alias, None);
+    }
+
+    #[test]
     fn run_history_records_and_reads_newest_first() {
         let store = Store::open_in_memory().unwrap();
         let id1 = store.record_run(&new_run("/repos/a", "first", 1000)).unwrap();

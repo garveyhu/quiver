@@ -16,6 +16,28 @@
 
 use rusqlite::Connection;
 
+/// Add `column` (`decl` = its SQL type/decl) to `table` only if it isn't already
+/// there. SQLite has no `ADD COLUMN IF NOT EXISTS`, so we probe `PRAGMA
+/// table_info` first; this keeps `migrate` idempotent across re-opens and across
+/// DBs created before/after the column existed.
+fn add_column_if_absent(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    decl: &str,
+) -> anyhow::Result<()> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+    let exists = stmt
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<Result<Vec<_>, _>>()?
+        .iter()
+        .any(|name| name == column);
+    if !exists {
+        conn.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} {decl}"))?;
+    }
+    Ok(())
+}
+
 /// Idempotent schema creation. Safe to run on every open.
 pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
     conn.execute_batch(
@@ -25,7 +47,8 @@ pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
         );
         CREATE TABLE IF NOT EXISTS recent_projects (
             path         TEXT PRIMARY KEY,
-            last_used_at INTEGER NOT NULL
+            last_used_at INTEGER NOT NULL,
+            alias        TEXT
         );
         CREATE TABLE IF NOT EXISTS run_history (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,6 +101,12 @@ pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_task_project ON task(project);
         CREATE INDEX IF NOT EXISTS idx_task_status  ON task(status);",
     )?;
+
+    // Backfill columns onto already-deployed tables. `CREATE TABLE IF NOT
+    // EXISTS` above only shapes a *fresh* DB — an existing `recent_projects`
+    // keeps its original (alias-less) shape, so add the column idempotently for
+    // databases created before the alias feature landed.
+    add_column_if_absent(conn, "recent_projects", "alias", "TEXT")?;
 
     // Seed the single settings row with defaults if absent, so `get_settings`
     // always returns a complete config. `INSERT OR IGNORE` keeps it idempotent

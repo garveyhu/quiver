@@ -10,11 +10,15 @@ use serde::Serialize;
 use crate::Store;
 
 /// One entry in the most-recently-used project list (DESIGN §11 `recent_projects`).
+///
+/// `alias` is an optional user-given display name; when `None` the UI falls back
+/// to the path's last segment.
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct RecentProject {
     pub path: String,
     pub last_used_at: i64,
+    pub alias: Option<String>,
 }
 
 /// How many recent projects the UI shows.
@@ -47,6 +51,8 @@ impl Store {
     }
 
     /// Upsert a project into the recent list, stamping `used_at` as its last use.
+    /// Re-touching an existing entry only bumps its timestamp — a previously set
+    /// `alias` is left untouched.
     pub fn touch_recent_project(&self, path: &str, used_at: i64) -> anyhow::Result<()> {
         let conn = self.conn.lock().expect("store lock");
         conn.execute(
@@ -61,7 +67,7 @@ impl Store {
     pub fn recent_projects(&self) -> anyhow::Result<Vec<RecentProject>> {
         let conn = self.conn.lock().expect("store lock");
         let mut stmt = conn.prepare(
-            "SELECT path, last_used_at FROM recent_projects
+            "SELECT path, last_used_at, alias FROM recent_projects
              ORDER BY last_used_at DESC LIMIT ?1",
         )?;
         let rows = stmt
@@ -69,9 +75,31 @@ impl Store {
                 Ok(RecentProject {
                     path: row.get(0)?,
                     last_used_at: row.get(1)?,
+                    alias: row.get(2)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
+    }
+
+    /// Drop a project from the recent list. A no-op if the path isn't present.
+    pub fn remove_recent_project(&self, path: &str) -> anyhow::Result<()> {
+        let conn = self.conn.lock().expect("store lock");
+        conn.execute(
+            "DELETE FROM recent_projects WHERE path = ?1",
+            params![path],
+        )?;
+        Ok(())
+    }
+
+    /// Set (or clear, with `None`) a recent project's display alias. A no-op if
+    /// the path isn't in the recent list.
+    pub fn set_recent_project_alias(&self, path: &str, alias: Option<&str>) -> anyhow::Result<()> {
+        let conn = self.conn.lock().expect("store lock");
+        conn.execute(
+            "UPDATE recent_projects SET alias = ?2 WHERE path = ?1",
+            params![path, alias],
+        )?;
+        Ok(())
     }
 }
