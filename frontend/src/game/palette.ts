@@ -95,6 +95,58 @@ export const PALETTE = {
   ledgerSaveSaved: 0x4f7a3a,
   ledgerSaveError: 0xb44637,
   ledgerSaveInk: '#fbf3df',
+
+  // --- 委托档案库 (ArchiveScene, P4) — a wall of bookshelves ---
+  archiveScrim: 0x1c130c, // dim wash over the slept world behind the shelf
+  shelfWoodDark: 0x3a2412, // carved cabinet frame / shadow
+  shelfWood: 0x5e3a1e, // shelf plank face
+  shelfWoodLight: 0x7a4f2e, // shelf top sheen
+  shelfBack: 0x2c1a0c, // recessed shelf interior the books stand against
+  // a run-book spine. The cloth band colour = run status; the body is leather.
+  bookBody: 0x8a5a30,
+  bookBodyEdge: 0x3a2412,
+  bookPaper: 0xf3e6c8, // the page block peeking out the top of the spine
+  bookBandInk: '#fbf3df', // title ink on the cloth band
+  bookInk: '#f6ead0', // title ink on the leather spine
+  bookInkDim: '#e6d4ac',
+  // search field + filter dials chrome.
+  archiveField: 0xf3e6c8, // the parchment search cell
+  archiveFieldEdge: 0xcdb88c,
+  archiveFieldInk: '#3a2e25',
+  archiveFieldPlaceholder: '#a8997d',
+  archiveDial: 0x6b4424, // a filter dial (status / project) face
+  archiveDialEdge: 0x422914,
+  archiveDialActive: 0x9c6b3f, // the dial when a non-default value is selected
+  archiveDialInk: '#f6ead0',
+  archiveCountInk: '#e6d4ac',
+
+  // --- 委托卷轴 (LogbookScene, P4) — an unrolled parchment scroll ---
+  scrollScrim: 0x140d07, // deeper wash — the scroll is a focused reading mode
+  scrollRoller: 0x4a2d16, // the wooden roller bars top + bottom
+  scrollRollerCap: 0x6b4424, // the roller end caps
+  scrollParchment: 0xf3e6c8, // the unrolled parchment field
+  scrollParchmentEdge: 0xd8c39a,
+  scrollParchmentShade: 0xe6d4ac, // soft inner shadow at the rolled edges
+  scrollInk: '#3a2e25', // header ink on the parchment
+  scrollInkDim: '#7a6651',
+  // the transcript reading well (a clean inset surface; the two-layer rule —
+  // diegetic scroll frame, high-density monospace content inside).
+  transcriptWell: 0xfaf6ea,
+  transcriptWellEdge: 0xcdb88c,
+  transcriptInk: '#2c241d', // monospace body ink
+  transcriptInkDim: '#8a7a64', // timestamps / secondary
+  transcriptOutput: '#4a5a3a', // output_chunk verbatim text
+  transcriptError: '#b44637', // error lines
+  // per-kind row accent stripe down the transcript gutter.
+  kindWorker: 0x4f7a3a,
+  kindTool: 0x2f6fb0,
+  kindOutput: 0x8a7a5a,
+  kindResult: 0xc98a2e,
+  kindError: 0xb44637,
+  kindFinished: 0x6b4f9a,
+  // 回放 call-to-action.
+  replayBtn: 0x4f7a3a,
+  replayBtnInk: '#fbf3df',
 } as const;
 
 // CJK-safe font stack reused across every canvas Text object.
@@ -108,4 +160,6 @@ export const SCENE = {
   ui: 'UIScene',
   board: 'TaskBoardScene',
   settings: 'SettingsScene',
+  archive: 'ArchiveScene',
+  logbook: 'LogbookScene',
 } as const;

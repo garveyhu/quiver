@@ -1,12 +1,8 @@
-import { useState } from 'react';
 import { useGameState } from '@/game/useGameState';
 import type { Hotspot } from '@/game/EventBus';
 import { STR } from '@/strings';
 import type { RunMode } from '@/types/run.types';
-import type { StoredEvent, TaskRecord } from '@/types/persistence.types';
 import { TaskInput } from '@/components/TaskInput';
-import { ArchiveView } from '@/components/archive/ArchiveView';
-import { LogbookViewer } from '@/components/archive/LogbookViewer';
 import { ProjectPicker } from '@/components/ProjectPicker';
 import { RecentProjects } from '@/components/RecentProjects';
 import { ModeToggle } from '@/components/ModeToggle';
@@ -19,26 +15,17 @@ interface HotspotOverlayProps {
 }
 
 /**
- * TEMPORARY BRIDGE for the not-yet-diegetic surfaces.
+ * TEMPORARY BRIDGE for the last not-yet-diegetic surface.
  *
- * The notice board (TaskBoardScene, P2) and the ledger/settings (SettingsScene,
- * P3) are now in-world Phaser scenes, so they're gone from here. The remaining
- * hotspots — archive (书架) / project (门) — still open the matching *existing*
- * React panel as a full-screen overlay over the canvas; P4 replaces each with an
- * in-world scene. The panels read all data + actions from the shared GameState
- * (the hooks the GameBridge owns), so no IPC contract is touched.
+ * The notice board (TaskBoardScene, P2), the ledger/settings (SettingsScene, P3)
+ * and the run archive + Logbook (ArchiveScene / LogbookScene, P4) are now in-world
+ * Phaser scenes, so they're gone from here. Only the door/project picker still
+ * opens the existing React panel as a full-screen overlay; P5 absorbs it into the
+ * door/sign. The panel reads all data + actions from the shared GameState (the
+ * hooks the GameBridge owns), so no IPC contract is touched.
  */
 export function HotspotOverlay({ hotspot, onClose }: HotspotOverlayProps) {
-  const { supervisor, board, archive, replay, mode, setMode } = useGameState();
-  const [openRecord, setOpenRecord] = useState<TaskRecord | null>(null);
-
-  // "回放": start the re-enactment in the workshop, then close the overlay so
-  // the archer is visible doing the run again.
-  const handleReplay = (stored: StoredEvent[]) => {
-    setOpenRecord(null);
-    onClose();
-    replay.start(stored);
-  };
+  const { supervisor, board, mode, setMode } = useGameState();
 
   const handleEnqueue = (prompt: string, runMode: RunMode) => {
     void board.enqueue(prompt, runMode);
@@ -55,57 +42,38 @@ export function HotspotOverlay({ hotspot, onClose }: HotspotOverlayProps) {
           {STR.overlayClose}
         </button>
 
-        {hotspot === 'project' && (
-          <section className="hotspot-card">
-            <ProjectPicker
-              projectPath={supervisor.projectPath}
-              disabled={false}
-              onPick={supervisor.pickProject}
-            />
-            <RecentProjects
-              projects={supervisor.recentProjects}
-              activePath={supervisor.projectPath}
-              disabled={false}
-              onSelect={supervisor.selectRecentProject}
-            />
-            <ModeToggle mode={mode} disabled={false} onChange={setMode} />
-            <TaskInput
-              disabled={!supervisor.projectPath}
-              onSubmit={prompt => handleEnqueue(prompt, mode)}
-            />
-            {supervisor.projectPath ? (
-              <p className="app-hint">{STR.enqueueHint}</p>
-            ) : (
-              <div className="first-run">
-                <CozyEmpty glyph="🗂️" title={STR.firstRunTitle} hint={STR.firstRunHint} />
-              </div>
-            )}
-            {(supervisor.error || board.error) && (
-              <p className="app-error">
-                {STR.taskFailedPrefix}
-                {supervisor.error ?? board.error}
-              </p>
-            )}
-          </section>
-        )}
-
-        {hotspot === 'archive' && (
-          <ArchiveView
-            records={archive.records}
-            error={archive.error}
-            onOpen={setOpenRecord}
+        <section className="hotspot-card">
+          <ProjectPicker
+            projectPath={supervisor.projectPath}
+            disabled={false}
+            onPick={supervisor.pickProject}
           />
-        )}
+          <RecentProjects
+            projects={supervisor.recentProjects}
+            activePath={supervisor.projectPath}
+            disabled={false}
+            onSelect={supervisor.selectRecentProject}
+          />
+          <ModeToggle mode={mode} disabled={false} onChange={setMode} />
+          <TaskInput
+            disabled={!supervisor.projectPath}
+            onSubmit={prompt => handleEnqueue(prompt, mode)}
+          />
+          {supervisor.projectPath ? (
+            <p className="app-hint">{STR.enqueueHint}</p>
+          ) : (
+            <div className="first-run">
+              <CozyEmpty glyph="🗂️" title={STR.firstRunTitle} hint={STR.firstRunHint} />
+            </div>
+          )}
+          {(supervisor.error || board.error) && (
+            <p className="app-error">
+              {STR.taskFailedPrefix}
+              {supervisor.error ?? board.error}
+            </p>
+          )}
+        </section>
       </div>
-
-      {openRecord && (
-        <LogbookViewer
-          record={openRecord}
-          loadEvents={archive.loadEvents}
-          onClose={() => setOpenRecord(null)}
-          onReplay={handleReplay}
-        />
-      )}
     </div>
   );
 }

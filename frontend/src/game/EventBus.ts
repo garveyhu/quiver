@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { TaskRecord, SettingsPatch } from '@/types/persistence.types';
+import type { TaskRecord, SettingsPatch, StoredEvent } from '@/types/persistence.types';
 
 /**
  * The single React ↔ Phaser event seam (lifted from phaserjs/template-react-ts).
@@ -40,10 +40,23 @@ export const BUS = {
   boardTasks: 'board:tasks',
   // `{ projectPath: string | null; error: string | null }` — board-scene gating.
   boardMeta: 'board:meta',
+  // every persisted run (`TaskRecord[]`, newest first) for the in-world
+  // ArchiveScene bookshelf (P4). Pushed from useArchive.records.
+  archiveRecords: 'archive:records',
+  // `{ error: string | null }` — archive-scene error surface.
+  archiveMeta: 'archive:meta',
 
   // Commands Phaser → React (GameBridge subscribes and calls the hooks).
-  // payload: { hotspot: 'archive' | 'project' } — board + settings are in-world.
+  // payload: { hotspot: 'project' } — board / settings / archive are in-world.
   openHotspot: 'cmd:open-hotspot',
+  // the LogbookScene asks the bridge to load ONE run's full §11 event log; the
+  // bridge calls useArchive.loadEvents and replies once on `req.channel`.
+  // payload: LogbookRequest (see below).
+  logbookLoad: 'cmd:logbook-load',
+  // the LogbookScene asks the bridge to start a "回放" re-enactment in the Hall.
+  // payload: StoredEvent[] — the run's raw stored log; the bridge calls
+  // useReplay.start with it (the workshop then re-enacts via the archer).
+  replayStart: 'cmd:replay-start',
   // a world scene asks for keyboard input via the React IME-safe overlay (P2+).
   // payload: TextInputRequest (see below); the overlay replies on `req.channel`.
   textInput: 'cmd:text-input',
@@ -67,10 +80,11 @@ export interface TaskBoardSummary {
 }
 
 // The diegetic world objects a hotspot click can open via the temporary React
-// overlay bridge. The notice board (TaskBoardScene, P2) and the ledger/settings
-// (SettingsScene, P3) are now in-world scenes launched directly, so they're gone
-// from here; archive / project still ride the overlay (P4 replaces those).
-export type Hotspot = 'archive' | 'project';
+// overlay bridge. The notice board (TaskBoardScene, P2), the ledger/settings
+// (SettingsScene, P3) and the bookshelf/archive (ArchiveScene, P4) are now
+// in-world scenes launched directly, so only the door/project picker still rides
+// the temporary overlay (P5 absorbs it into the door/sign).
+export type Hotspot = 'project';
 
 // Anchor rect (canvas/page pixels) the React overlay positions its field over.
 export interface TextInputAnchor {
@@ -120,5 +134,22 @@ export interface BoardMeta {
   error: string | null;
 }
 
-// Re-export so scenes import the board row + settings-patch shapes from one place.
-export type { TaskRecord, SettingsPatch };
+// `archive:meta` snapshot: the archive load error, if any.
+export interface ArchiveMeta {
+  error: string | null;
+}
+
+/**
+ * The LogbookScene's request for ONE run's full §11 event log (scene →
+ * GameBridge → useArchive.loadEvents). Like {@link TextInputRequest} it carries a
+ * one-shot reply `channel`: the bridge resolves it exactly once with the loaded
+ * `StoredEvent[]` (or `null` on failure), so concurrent opens never cross wires.
+ */
+export interface LogbookRequest {
+  channel: string;
+  taskId: string;
+}
+
+// Re-export so scenes import the board/archive row + settings-patch + stored
+// event shapes from one place.
+export type { TaskRecord, SettingsPatch, StoredEvent };

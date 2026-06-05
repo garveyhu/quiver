@@ -199,6 +199,32 @@ export const STR = {
   settingUiScale: '界面缩放',
   settingUiScaleTip: '整体界面缩放比例。觉得元素太小就调大，想看更多内容就调小。立即生效。',
 
+  // --- 世界内档案库场景（里程碑 4 / P4）---
+  archiveSceneTitle: '委托档案库',
+  archiveSceneBack: '← 回到工坊',
+  archiveSceneEmpty: '书架空空 — 完成几次委托后，记录会装订上架',
+  archiveSceneNoMatch: '没有符合条件的卷宗 — 换个筛选或搜索词',
+  archiveSceneSearchHint: '点此搜索委托内容…',
+  archiveSceneSearchClear: '清除搜索',
+  archiveSceneFilterStatusAll: '全部状态',
+  archiveSceneFilterProjectAll: '全部项目',
+  archiveSceneSearchSubmit: '搜索',
+  archiveSceneCountPrefix: '共 ',
+  archiveSceneCountSuffix: ' 卷',
+  archiveSceneOpenTip: '抽出这卷委托记录展开卷轴',
+
+  // --- 世界内卷轴场景（里程碑 4 / P4）---
+  logbookSceneBack: '← 卷起卷轴',
+  logbookSceneReplay: '▶ 在工坊回放',
+  logbookSceneReplayTip: '让弓箭手按原始节奏重演这次运行（仅视觉，不消耗额度）',
+  logbookSceneLoading: '正在展开卷轴…',
+  logbookSceneError: '卷轴读取失败，请稍后重试',
+  logbookSceneEmpty: '这卷委托没有留下任何事件记录。',
+  logbookSceneTotalEvents: '事件 ',
+  logbookSceneTotalCost: '花费 ',
+  logbookSceneTotalDuration: '历时 ',
+  logbookSceneTurnsPrefix: '轮次 ',
+
   // --- 世界内设置账本场景（里程碑 3 / P3）---
   settingsSceneBack: '← 合上账本',
   settingsSceneTitle: '设置账本',

@@ -12,10 +12,11 @@ import {
   type BoardEnqueuePayload,
   type BoardReorderPayload,
   type BoardCancelPayload,
+  type LogbookRequest,
 } from '@/game/EventBus';
 import { GameStateContext, type GameState } from '@/game/useGameState';
 import type { RunMode } from '@/types/run.types';
-import type { SettingsPatch } from '@/types/persistence.types';
+import type { SettingsPatch, StoredEvent } from '@/types/persistence.types';
 
 interface GameBridgeProps {
   /** A hotspot was clicked in the world — App opens the matching React overlay. */
@@ -89,6 +90,9 @@ export function GameBridge({ onOpenHotspot, children }: GameBridgeProps) {
         projectPath: supervisor.projectPath,
         error: board.error,
       });
+      // archive snapshot, so the ArchiveScene bookshelf re-hydrates on (re)launch.
+      EventBus.emit(BUS.archiveRecords, archive.records);
+      EventBus.emit(BUS.archiveMeta, { error: archive.error });
     };
     EventBus.on(BUS.sceneReady, flush);
     return () => {
@@ -141,6 +145,15 @@ export function GameBridge({ onOpenHotspot, children }: GameBridgeProps) {
     });
   }, [supervisor.projectPath, board.error]);
 
+  // Full archive snapshot + meta for the in-world ArchiveScene (P4).
+  useEffect(() => {
+    EventBus.emit(BUS.archiveRecords, archive.records);
+  }, [archive.records]);
+
+  useEffect(() => {
+    EventBus.emit(BUS.archiveMeta, { error: archive.error });
+  }, [archive.error]);
+
   // --- bus: world commands → App / hooks --------------------------------
 
   useEffect(() => {
@@ -177,6 +190,33 @@ export function GameBridge({ onOpenHotspot, children }: GameBridgeProps) {
       EventBus.off(BUS.settingsPatch, onPatch);
     };
   }, [settings]);
+
+  // LogbookScene event loads → useArchive.loadEvents (the only §11 IPC caller).
+  // The request carries a one-shot reply channel; resolve it exactly once with
+  // the loaded log, or null on failure — so a bad load never wedges the scroll.
+  useEffect(() => {
+    const onLoad = (req: LogbookRequest) => {
+      archive
+        .loadEvents(req.taskId)
+        .then(events => EventBus.emit(req.channel, events))
+        .catch(() => EventBus.emit(req.channel, null));
+    };
+    EventBus.on(BUS.logbookLoad, onLoad);
+    return () => {
+      EventBus.off(BUS.logbookLoad, onLoad);
+    };
+  }, [archive]);
+
+  // "回放" from the LogbookScene → useReplay.start (the workshop then re-enacts
+  // the run via the archer; replay.events already feed officeEvents above, so the
+  // HallScene swaps to the replay stream with no extra wiring).
+  useEffect(() => {
+    const onReplay = (stored: StoredEvent[]) => replay.start(stored);
+    EventBus.on(BUS.replayStart, onReplay);
+    return () => {
+      EventBus.off(BUS.replayStart, onReplay);
+    };
+  }, [replay]);
 
   const value: GameState = {
     supervisor,

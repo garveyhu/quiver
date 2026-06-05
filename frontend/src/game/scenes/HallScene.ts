@@ -45,10 +45,10 @@ interface ArcherNode {
   dragged: boolean;
 }
 
-// A clickable world object. The notice board (TaskBoardScene, P2) and the ledger
-// (SettingsScene, P3) now open in-world scenes; the rest still open the temporary
-// React overlays via the bus (archive / project) — so each node carries its own
-// click action.
+// A clickable world object. The notice board (TaskBoardScene, P2), the ledger
+// (SettingsScene, P3) and the bookshelf (ArchiveScene, P4) now open in-world
+// scenes; only the door/project picker still opens a temporary React overlay via
+// the bus — so each node carries its own click action.
 interface HotspotNode {
   zone: Phaser.GameObjects.Zone;
   label: Phaser.GameObjects.Container;
@@ -106,14 +106,34 @@ export class HallScene extends Phaser.Scene {
     // so a restart never double-subscribes (the one good footgun, §6).
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.teardown, this);
 
-    // DEV-ONLY visual harness: drive one archer through states without a backend.
+    // DEV-ONLY visual harness: drive one archer through states without a backend,
+    // and expose the diegetic navigation actions so the headless verification
+    // harness can exercise the REAL click handlers (open the shelf, click an
+    // archer to unroll its Logbook) without simulating canvas pixel clicks.
     if (import.meta.env.DEV) {
-      const w = window as unknown as { __hall?: unknown; __hallScene?: unknown };
+      const w = window as unknown as {
+        __hall?: unknown;
+        __hallScene?: unknown;
+        __hallNav?: unknown;
+      };
       w.__hall = (v: WorkerView) => {
         this.workers.set(v.taskId, v);
         this.applyWorker(v);
       };
       w.__hallScene = this;
+      w.__hallNav = {
+        openArchive: () => this.openArchive(),
+        openSettings: () => this.openSettings(),
+        openBoard: () => this.openBoard(),
+        // click the first spawned archer (Mockup C); returns its taskId or null.
+        clickFirstArcher: (): string | null => {
+          const first = this.nodes.values().next().value as ArcherNode | undefined;
+          if (!first) return null;
+          this.openArcherLogbook(first.view.taskId);
+          return first.view.taskId;
+        },
+        archerTaskIds: (): string[] => [...this.nodes.keys()],
+      };
     }
   }
 
@@ -291,8 +311,8 @@ export class HallScene extends Phaser.Scene {
   // --- diegetic navigation hotspots --------------------------------------
 
   private makeHotspots(): void {
-    // The temporary React overlays (archive / project) emit a bus command the App
-    // routes; the notice board + ledger open their in-world scenes directly.
+    // The remaining temporary React overlay (project/door) emits a bus command the
+    // App routes; the board / ledger / bookshelf open their in-world scenes directly.
     const overlay = (h: Hotspot) => () => EventBus.emit(BUS.openHotspot, { hotspot: h });
 
     const specs: Array<{
@@ -312,11 +332,11 @@ export class HallScene extends Phaser.Scene {
         anchor: (w, h) => ({ x: w * 0.9, y: h * 0.56 }),
         onClick: () => this.openSettings(),
       },
-      // 书架/档案柜 (档案) — right side, lower
+      // 书架/档案柜 (档案) — right side, lower → in-world ArchiveScene
       {
         label: STR.hotspotArchive,
         anchor: (w, h) => ({ x: w * 0.9, y: h * 0.8 }),
-        onClick: overlay('archive'),
+        onClick: () => this.openArchive(),
       },
       // 门 (选项目) — bottom-left
       {
@@ -363,6 +383,22 @@ export class HallScene extends Phaser.Scene {
     play('open');
     this.scene.sleep(SCENE.hall);
     this.scene.launch(SCENE.settings);
+  }
+
+  // Sleep the world and dolly to the bookshelf (run archive) in front of it.
+  private openArchive(): void {
+    play('open');
+    this.scene.sleep(SCENE.hall);
+    this.scene.launch(SCENE.archive);
+  }
+
+  // Mockup C: click a station archer → unroll THAT run's Logbook scroll. The
+  // world sleeps (stays warm) and the LogbookScene opens for the archer's taskId;
+  // closing the scroll wakes the hall back. Works for live + finished archers.
+  private openArcherLogbook(taskId: string): void {
+    play('open');
+    this.scene.sleep(SCENE.hall);
+    this.scene.launch(SCENE.logbook, { taskId, from: 'hall' });
   }
 
   private makeHotspotLabel(text: string): Phaser.GameObjects.Container {
@@ -464,12 +500,26 @@ export class HallScene extends Phaser.Scene {
       dragged: false,
     };
 
-    // Drag-to-reposition (kept from OfficeScene). Tap/hover detail is deferred
-    // to a later phase (WorkerDetail → in-world card), so no React callbacks.
+    // Tap vs drag (Mockup C): a clean tap opens this archer's Logbook scroll; a
+    // drag just repositions the station. We track whether the pointer moved past a
+    // small threshold between down and up to tell them apart.
+    let downX = 0;
+    let downY = 0;
+    let moved = false;
+    container.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      downX = p.x;
+      downY = p.y;
+      moved = false;
+    });
     container.on('drag', (_p: Phaser.Input.Pointer, dx: number, dy: number) => {
       node.dragged = true;
+      moved = true;
       container.setPosition(dx, dy);
       container.setDepth(dy);
+    });
+    container.on('pointerup', (p: Phaser.Input.Pointer) => {
+      const dist = Phaser.Math.Distance.Between(downX, downY, p.x, p.y);
+      if (!moved && dist < 6) this.openArcherLogbook(view.taskId);
     });
 
     this.applyState(node, view);

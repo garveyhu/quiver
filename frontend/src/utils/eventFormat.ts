@@ -51,3 +51,72 @@ export function parseStoredPayload(payloadJson: string): AgentEvent | null {
     return null;
   }
 }
+
+/** A HH:MM:SS clock stamp for one event's wall time (transcript gutter). */
+export function clockStamp(tsMs: number): string {
+  const d = new Date(tsMs);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+/**
+ * The dense, scan-readable body for one transcript line in the Logbook scroll
+ * (the §6 two-layer rule: the scroll is a diegetic frame, but its contents are a
+ * clean monospace log — never handwritten parchment script). Returns the line's
+ * head (kind + key facts) and an optional verbatim block (output text) so the
+ * scene can render the block in a distinct ink.
+ */
+export interface TranscriptLine {
+  glyph: string;
+  /** Short head: kind label + inline facts (tool name, ok/turns/cost, status). */
+  head: string;
+  /** Verbatim multi-line output (only for output_chunk / error message). */
+  block: string | null;
+  /** Drives the per-kind accent stripe + block ink. */
+  kind: AgentEvent['kind'];
+}
+
+export function transcriptLine(event: AgentEvent): TranscriptLine {
+  const glyph = EVENT_KIND_GLYPH[event.kind];
+  switch (event.kind) {
+    case 'worker_started':
+      return {
+        glyph,
+        head: `worker_started  model=${event.model ?? '—'}  auth=${event.authMode}  runner=${event.runner}`,
+        block: null,
+        kind: event.kind,
+      };
+    case 'tool_use':
+      return {
+        glyph,
+        head: `tool_use ${event.tool}  ${event.summary}`,
+        block: null,
+        kind: event.kind,
+      };
+    case 'output_chunk':
+      return { glyph, head: 'output', block: event.text, kind: event.kind };
+    case 'result':
+      return {
+        glyph,
+        head: `result  ok=${event.ok}  turns=${event.numTurns}  cost=${formatCost(event.costUsd)}`,
+        block: null,
+        kind: event.kind,
+      };
+    case 'error':
+      return {
+        glyph,
+        head: `error [${event.code}]`,
+        block: event.message,
+        kind: event.kind,
+      };
+    case 'finished': {
+      const branch = event.branch ? `  branch=${event.branch}` : '';
+      return {
+        glyph,
+        head: `finished  ${event.status}  cost=${formatCost(event.costUsd)}${branch}`,
+        block: null,
+        kind: event.kind,
+      };
+    }
+  }
+}
