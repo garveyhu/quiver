@@ -250,7 +250,9 @@ body {
 .logbook-overlay {
   position: fixed;
   inset: 0;
-  z-index: 70;
+  /* Above the archive (z 70) so a volume drilled into from the 档案库 stacks on
+     top of the list; closing it reveals the list underneath. */
+  z-index: 80;
   display: flex;
   align-items: center;
   justify-content: center;

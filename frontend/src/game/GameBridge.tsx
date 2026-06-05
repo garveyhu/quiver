@@ -298,6 +298,33 @@ export function GameBridge(): null {
     };
   }, [archive]);
 
+  // Mutual exclusion: only one of {logbook, archive, projects} shows at a time.
+  // Opening a fresh top-level surface closes the others; a logbook drilled into
+  // FROM the archive keeps the archive behind it (it has a lower z-index) so
+  // closing the logbook returns to the list. Without this the overlays stack.
+  useEffect(() => {
+    const onArchive = () => {
+      EventBus.emit(BUS.closeLogbook);
+      EventBus.emit(BUS.closeProjects);
+    };
+    const onProjects = () => {
+      EventBus.emit(BUS.closeArchive);
+      EventBus.emit(BUS.closeLogbook);
+    };
+    const onLogbook = (req: LogbookOpen) => {
+      EventBus.emit(BUS.closeProjects);
+      if (req.from !== 'archive') EventBus.emit(BUS.closeArchive);
+    };
+    EventBus.on(BUS.openArchive, onArchive);
+    EventBus.on(BUS.openProjects, onProjects);
+    EventBus.on(BUS.openLogbook, onLogbook);
+    return () => {
+      EventBus.off(BUS.openArchive, onArchive);
+      EventBus.off(BUS.openProjects, onProjects);
+      EventBus.off(BUS.openLogbook, onLogbook);
+    };
+  }, []);
+
   // "回放" from the Logbook overlay → useReplay.start (the workshop then re-enacts
   // the run via the archer; replay.events already feed officeEvents above, so the
   // HallScene swaps to the replay stream with no extra wiring).
