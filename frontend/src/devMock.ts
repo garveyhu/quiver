@@ -148,6 +148,24 @@ function seedHistory(
 
 const DEMO_PROJECT = '/Users/demo/repos/quiver';
 const DEMO_PROJECT_2 = '/Users/demo/repos/sage';
+
+// `?mock&noproject` exercises the cozy first-run (no repo picked) empty state.
+const NO_PROJECT = location.search.includes('noproject');
+
+// The mocked durable §11 recent-projects MRU list + current pick, so the 项目管理
+// overlay can exercise its full CRUD (select / remove / alias) within a session.
+interface MockRecentProject {
+  path: string;
+  lastUsedAt: number;
+  alias?: string | null;
+}
+let currentProject: string | null = NO_PROJECT ? null : DEMO_PROJECT;
+const recentProjects: MockRecentProject[] = NO_PROJECT
+  ? []
+  : [
+      { path: DEMO_PROJECT, lastUsedAt: Date.now() - 3_600_000, alias: '工坊主仓' },
+      { path: DEMO_PROJECT_2, lastUsedAt: Date.now() - 86_400_000, alias: null },
+    ];
 seedHistory('arc-1', DEMO_PROJECT, '为召回模块接入 bge-reranker 二阶段重排', 'real', 'verified', 0.42, 'quiver/arc-1/attempt-1', 86_400_000);
 seedHistory('arc-2', DEMO_PROJECT, '把运行历史改成可搜索的档案库', 'simulate', 'verified', 0.07, null, 43_200_000);
 seedHistory('arc-3', DEMO_PROJECT_2, '修复 token 过期后无法刷新的问题', 'real', 'failed', 0.19, null, 21_600_000);
@@ -201,22 +219,33 @@ function pump(): void {
   }
 }
 
-// `?mock&noproject` exercises the cozy first-run (no repo picked) empty state.
-const NO_PROJECT = location.search.includes('noproject');
-
 /** The mocked command surface (mirrors src-tauri/src/lib.rs). */
 function handleCommand(cmd: string, args: Record<string, unknown>): unknown {
   switch (cmd) {
     case 'get_initial_state':
       return {
-        lastProject: NO_PROJECT ? null : '/Users/demo/repos/quiver',
-        recentProjects: NO_PROJECT
-          ? []
-          : [
-              { path: '/Users/demo/repos/quiver', lastUsedAt: now() - 3_600_000 },
-              { path: '/Users/demo/repos/sage', lastUsedAt: now() - 86_400_000 },
-            ],
+        lastProject: currentProject,
+        recentProjects: recentProjects.map(p => ({ ...p })),
       };
+    case 'select_recent_project': {
+      const path = String(args.path ?? '');
+      if (recentProjects.some(p => p.path === path)) currentProject = path;
+      return null;
+    }
+    case 'remove_recent_project': {
+      const path = String(args.path ?? '');
+      const i = recentProjects.findIndex(p => p.path === path);
+      if (i >= 0) recentProjects.splice(i, 1);
+      if (currentProject === path) currentProject = recentProjects[0]?.path ?? null;
+      return null;
+    }
+    case 'set_project_alias': {
+      const path = String(args.path ?? '');
+      const alias = args.alias == null ? null : String(args.alias);
+      const p = recentProjects.find(x => x.path === path);
+      if (p) p.alias = alias;
+      return null;
+    }
     case 'get_settings':
       return { ...settingsRow };
     case 'list_tasks': {
@@ -290,7 +319,7 @@ function handleCommand(cmd: string, args: Record<string, unknown>): unknown {
       const id = `task-${now()}-${tasks.length}`;
       const task: MockTask = {
         id,
-        project: '/Users/demo/repos/quiver',
+        project: currentProject ?? DEMO_PROJECT,
         prompt: String(args.prompt ?? '任务'),
         mode: String(args.mode ?? 'simulate'),
         status: 'queued',

@@ -55,6 +55,13 @@
   --replay-btn: #4f7a3a; /* 回放 call-to-action green */
   --replay-btn-ink: #fbf3df;
 
+  /* run-status spine colours for the 档案库 list (mirror PALETTE.badge*). */
+  --status-queued: #8a7a5a;
+  --status-running: #2f6fb0;
+  --status-verifying: #c98a2e;
+  --status-done: #4f7a3a;
+  --status-failed: #b44637;
+
   /* CJK-safe monospace stack: a true mono for the latin runs, CJK fonts as a
      wrap-safe fallback so Chinese in the transcript never breaks the layout. */
   --mono-font: 'SFMono-Regular', 'Menlo', 'Consolas', 'Liberation Mono', 'PingFang SC',
@@ -605,6 +612,512 @@ body {
     animation: none;
   }
   .logbook-btn {
+    transition: none;
+  }
+}
+
+/* ============================================================
+   委托档案库 / Archive overlay (replaces the Phaser ArchiveScene).
+   Same §6 two-layer rule as the Logbook: a parchment/timber skin
+   wrapping a native scrollable run list — native overflow never
+   overruns the panel, native hover hit-testing is pixel-exact (the
+   two bugs the hand-painted canvas list had).
+   Reuses the shared --scroll-* / --transcript-* tokens.
+   ============================================================ */
+.archive-overlay,
+.projects-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(16px, 4vh, 48px) clamp(16px, 4vw, 64px);
+}
+
+.archive-scrim,
+.projects-scrim {
+  position: fixed;
+  inset: 0;
+  background: var(--scroll-scrim);
+  backdrop-filter: blur(2px);
+  animation: logbook-fade-in 0.22s ease both;
+}
+
+/* the panel: a parchment column on a timber-shadowed lift, a flex column so the
+   list takes the remaining height and scrolls within it (header stays put). */
+.archive-panel,
+.projects-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(820px, 100%);
+  max-height: 100%;
+  background: var(--scroll-parchment);
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(20, 13, 7, 0.5), inset 0 0 0 1px var(--scroll-parchment-edge);
+  overflow: hidden;
+  animation: logbook-rise 0.22s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+/* --- header (title + close + controls) -------------------------------- */
+.archive-header,
+.projects-header {
+  flex: 0 0 auto;
+  padding: 18px 26px 14px;
+  background: linear-gradient(180deg, var(--scroll-parchment-shade), var(--scroll-parchment));
+  border-bottom: 1px solid var(--scroll-parchment-edge);
+}
+
+.archive-headline,
+.projects-headline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.archive-title,
+.projects-title {
+  margin: 0;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--scroll-ink);
+}
+
+.archive-subtitle,
+.projects-subtitle {
+  margin: 6px 0 0;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  font-size: 12.5px;
+  color: var(--scroll-ink-dim);
+}
+
+.archive-close,
+.projects-close {
+  flex: 0 0 auto;
+  padding: 6px 14px;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--parchment);
+  background: linear-gradient(180deg, var(--scroll-roller-cap), var(--scroll-roller));
+  border: 2px solid var(--scroll-roller);
+  border-radius: var(--radius-ctrl);
+  cursor: pointer;
+  transition: filter var(--t-fast) ease, transform var(--t-fast) ease;
+}
+
+.archive-close:hover,
+.projects-close:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+/* search + filter controls band. */
+.archive-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-top: 14px;
+}
+
+.archive-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 220px;
+  min-width: 180px;
+  padding: 0 10px;
+  height: 34px;
+  background: var(--transcript-well);
+  border: 1px solid var(--transcript-well-edge);
+  border-radius: 8px;
+}
+
+.archive-search-glyph {
+  flex: 0 0 auto;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.archive-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  font-size: 14px;
+  color: var(--transcript-ink);
+}
+
+.archive-search-input::placeholder {
+  color: var(--scroll-ink-dim);
+  font-style: italic;
+}
+
+.archive-search-clear {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--scroll-ink-dim);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.archive-search-clear:hover {
+  color: var(--transcript-error);
+}
+
+.archive-filter {
+  flex: 0 0 auto;
+  height: 34px;
+  padding: 0 10px;
+  background: var(--transcript-well);
+  border: 1px solid var(--transcript-well-edge);
+  border-radius: 8px;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  font-size: 13px;
+  color: var(--transcript-ink);
+  cursor: pointer;
+}
+
+.archive-count {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-family: var(--mono-font);
+  font-size: 12px;
+  color: var(--scroll-ink-dim);
+}
+
+/* --- the scrollable list (the whole point) ---------------------------- */
+.archive-list,
+.projects-list {
+  flex: 1 1 auto;
+  min-height: 140px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  margin: 12px 18px 16px;
+  padding: 4px;
+  background: var(--transcript-well);
+  border: 1px solid var(--transcript-well-edge);
+  border-radius: 8px;
+  outline: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-roller-cap) transparent;
+}
+
+.archive-list::-webkit-scrollbar,
+.projects-list::-webkit-scrollbar {
+  width: 9px;
+}
+
+.archive-list::-webkit-scrollbar-thumb,
+.projects-list::-webkit-scrollbar-thumb {
+  background: var(--scroll-roller-cap);
+  border: 2px solid var(--transcript-well);
+  border-radius: 999px;
+}
+
+.archive-status,
+.projects-status {
+  margin: 0;
+  padding: 36px 24px;
+  text-align: center;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  font-size: 14px;
+  color: var(--scroll-ink-dim);
+}
+
+.archive-status-error,
+.projects-status-error {
+  color: var(--transcript-error);
+}
+
+/* one run-book row: spine | body (title + meta foot). A real <button> so hover /
+   focus / hit-testing are native (the old canvas list mis-highlighted). */
+.archive-row {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: none;
+  border-bottom: 1px solid rgba(205, 184, 140, 0.4);
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--t-fast) ease;
+}
+
+.archive-row:last-child {
+  border-bottom: none;
+}
+
+.archive-row:hover,
+.archive-row:focus-visible {
+  background: rgba(201, 138, 46, 0.12);
+  outline: none;
+}
+
+.archive-spine {
+  flex: 0 0 5px;
+  align-self: stretch;
+  border-radius: 3px;
+  background: var(--status-failed);
+}
+
+.archive-status-queued {
+  background: var(--status-queued);
+}
+.archive-status-running {
+  background: var(--status-running);
+}
+.archive-status-verifying {
+  background: var(--status-verifying);
+}
+.archive-status-done {
+  background: var(--status-done);
+}
+.archive-status-failed {
+  background: var(--status-failed);
+}
+
+.archive-row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.archive-row-title {
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--transcript-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archive-row-foot {
+  font-family: var(--mono-font);
+  font-size: 11.5px;
+  color: var(--transcript-ink-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   项目管理 / Project manager overlay (door hotspot → 增改删查).
+   Same parchment/timber skin; a native list of recent projects.
+   ============================================================ */
+.projects-add {
+  margin-top: 14px;
+  padding: 8px 18px;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--replay-btn-ink);
+  background: linear-gradient(180deg, var(--replay-btn), #3f6630);
+  border: 2px solid #3f6630;
+  border-radius: var(--radius-ctrl);
+  cursor: pointer;
+  transition: filter var(--t-fast) ease, transform var(--t-fast) ease;
+}
+
+.projects-add:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+/* one project row: main (name + path + inline rename) | actions. */
+.projects-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid rgba(205, 184, 140, 0.4);
+}
+
+.projects-row:last-child {
+  border-bottom: none;
+}
+
+.projects-row-current {
+  background: rgba(79, 122, 58, 0.12);
+  border-radius: 8px;
+}
+
+.projects-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.projects-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.projects-name {
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--transcript-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.projects-badge {
+  flex: 0 0 auto;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--replay-btn-ink);
+  background: var(--status-done);
+  border-radius: 999px;
+}
+
+.projects-path {
+  font-family: var(--mono-font);
+  font-size: 11.5px;
+  color: var(--transcript-ink-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.projects-rename {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.projects-rename-input {
+  flex: 1 1 200px;
+  min-width: 120px;
+  height: 30px;
+  padding: 0 10px;
+  background: var(--transcript-well);
+  border: 1px solid var(--transcript-well-edge);
+  border-radius: 8px;
+  outline: none;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  font-size: 13px;
+  color: var(--transcript-ink);
+}
+
+.projects-rename-input:focus-visible {
+  border-color: var(--accent);
+}
+
+.projects-rename-save,
+.projects-rename-cancel {
+  flex: 0 0 auto;
+  padding: 5px 12px;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  font-size: 12.5px;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: filter var(--t-fast) ease;
+}
+
+.projects-rename-save {
+  color: var(--replay-btn-ink);
+  background: var(--replay-btn);
+  border: 2px solid #3f6630;
+}
+
+.projects-rename-cancel {
+  color: var(--scroll-ink);
+  background: transparent;
+  border: 2px solid var(--scroll-parchment-edge);
+}
+
+.projects-rename-save:hover,
+.projects-rename-cancel:hover {
+  filter: brightness(1.06);
+}
+
+.projects-row-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.projects-action {
+  padding: 5px 12px;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--scroll-ink);
+  background: rgba(255, 253, 248, 0.55);
+  border: 1px solid var(--scroll-parchment-edge);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: filter var(--t-fast) ease, background var(--t-fast) ease;
+}
+
+.projects-action:hover {
+  background: rgba(255, 253, 248, 0.9);
+}
+
+.projects-action-select {
+  color: var(--replay-btn-ink);
+  background: var(--replay-btn);
+  border-color: #3f6630;
+}
+
+.projects-action-remove {
+  color: var(--transcript-error);
+  border-color: rgba(180, 70, 55, 0.5);
+}
+
+.projects-action-remove:hover {
+  background: rgba(180, 70, 55, 0.12);
+}
+
+@media (max-width: 560px) {
+  .projects-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .projects-row-actions {
+    flex-wrap: wrap;
+  }
+  .archive-count {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .archive-scrim,
+  .archive-panel,
+  .projects-scrim,
+  .projects-panel {
+    animation: none;
+  }
+  .archive-close,
+  .projects-close,
+  .projects-add,
+  .archive-row,
+  .projects-action {
     transition: none;
   }
 }

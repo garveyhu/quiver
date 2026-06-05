@@ -159,7 +159,9 @@ export function fadeMs(): number {
   return prefersReducedMotion() ? 0 : FADE_MS;
 }
 
-// Scene keys — one registry so launch/start calls never drift on a typo.
+// Scene keys — one registry so launch/start calls never drift on a typo. The
+// former 档案库 ArchiveScene was replaced by the React DOM ArchiveOverlay, so it's
+// no longer a Phaser scene.
 export const SCENE = {
   boot: 'BootScene',
   preloader: 'PreloaderScene',
@@ -167,5 +169,4 @@ export const SCENE = {
   ui: 'UIScene',
   board: 'TaskBoardScene',
   settings: 'SettingsScene',
-  archive: 'ArchiveScene',
 } as const;

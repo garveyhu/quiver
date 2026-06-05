@@ -7,7 +7,6 @@ import { HallScene } from '@/game/scenes/HallScene';
 import { UIScene } from '@/game/scenes/UIScene';
 import { TaskBoardScene } from '@/game/scenes/TaskBoardScene';
 import { SettingsScene } from '@/game/scenes/SettingsScene';
-import { ArchiveScene } from '@/game/scenes/ArchiveScene';
 import { PALETTE } from '@/game/palette';
 
 export interface PhaserGameHandle {
@@ -53,7 +52,6 @@ export const PhaserGame = forwardRef<PhaserGameHandle>(function PhaserGame(_prop
         UIScene,
         TaskBoardScene,
         SettingsScene,
-        ArchiveScene,
       ],
     });
     gameRef.current = game;

@@ -3,6 +3,7 @@ import { useSupervisor } from '@/hooks/useSupervisor';
 import { useSettings } from '@/hooks/useSettings';
 import { useTaskBoard } from '@/hooks/useTaskBoard';
 import { useArchive } from '@/hooks/useArchive';
+import { useProjects } from '@/hooks/useProjects';
 import { useReplay } from '@/hooks/useReplay';
 import { useEnvironmentCheck } from '@/hooks/useEnvironmentCheck';
 import {
@@ -14,6 +15,10 @@ import {
   type BoardCancelPayload,
   type LogbookOpen,
   type LogbookState,
+  type ProjectsState,
+  type ProjectSelectPayload,
+  type ProjectRemovePayload,
+  type ProjectAliasPayload,
 } from '@/game/EventBus';
 import { logbookTotals } from '@/game/logbookState';
 import type { RunMode } from '@/types/run.types';
@@ -40,6 +45,7 @@ export function GameBridge(): null {
   const settings = useSettings();
   const board = useTaskBoard(supervisor.projectPath);
   const archive = useArchive();
+  const projects = useProjects();
   const replay = useReplay();
   const health = useEnvironmentCheck();
 
@@ -80,9 +86,15 @@ export function GameBridge(): null {
         projectPath: supervisor.projectPath,
         error: board.error,
       });
-      // archive snapshot, so the ArchiveScene bookshelf re-hydrates on (re)launch.
+      // archive snapshot, so the 档案库 DOM overlay re-hydrates on (re)open.
       EventBus.emit(BUS.archiveRecords, archive.records);
       EventBus.emit(BUS.archiveMeta, { error: archive.error });
+      // projects snapshot, so the 项目管理 DOM overlay re-hydrates on (re)open.
+      EventBus.emit(BUS.projectsState, {
+        recent: projects.recent,
+        current: supervisor.projectPath,
+        error: projects.error ?? supervisor.error,
+      } satisfies ProjectsState);
       // health snapshot, so the ledger's 工坊体检 page re-hydrates on (re)launch.
       EventBus.emit(BUS.health, {
         checks: health.checks,
@@ -150,6 +162,15 @@ export function GameBridge(): null {
     EventBus.emit(BUS.archiveMeta, { error: archive.error });
   }, [archive.error]);
 
+  // Recent-projects list + current pick for the 项目管理 DOM overlay (door hotspot).
+  useEffect(() => {
+    EventBus.emit(BUS.projectsState, {
+      recent: projects.recent,
+      current: supervisor.projectPath,
+      error: projects.error ?? supervisor.error,
+    } satisfies ProjectsState);
+  }, [projects.recent, projects.error, supervisor.projectPath, supervisor.error]);
+
   // Workshop pre-flight self-diagnosis for the ledger's 工坊体检 page (M4-UI).
   useEffect(() => {
     EventBus.emit(BUS.health, {
@@ -162,8 +183,9 @@ export function GameBridge(): null {
   // --- bus: world commands → hooks --------------------------------------
 
   // The door/sign hotspot → useSupervisor.pickProject (the native folder dialog
-  // over the unchanged pick_project IPC). No React overlay; the door drives the
-  // hook directly.
+  // over the unchanged pick_project IPC). Kept for any direct pick caller; the
+  // door now opens the 项目管理 overlay (BUS.openProjects), whose 添加 button routes
+  // through BUS.projectAdd below.
   useEffect(() => {
     const onPick = () => void supervisor.pickProject();
     EventBus.on(BUS.pickProject, onPick);
@@ -171,6 +193,30 @@ export function GameBridge(): null {
       EventBus.off(BUS.pickProject, onPick);
     };
   }, [supervisor]);
+
+  // Project CRUD from the 项目管理 overlay → the existing hooks (the only IPC
+  // callers; the bus never touches Rust). Add (folder dialog) + select-as-current
+  // stay in useSupervisor, which owns projectPath (the world's project gate);
+  // remove + rename are in useProjects. After a supervisor mutation we also
+  // refresh useProjects so its recent list (which feeds the overlay) stays live.
+  useEffect(() => {
+    const onAdd = () =>
+      void supervisor.pickProject().then(() => projects.refresh());
+    const onSelect = (p: ProjectSelectPayload) =>
+      void supervisor.selectRecentProject(p.path).then(() => projects.refresh());
+    const onRemove = (p: ProjectRemovePayload) => void projects.remove(p.path);
+    const onAlias = (p: ProjectAliasPayload) => void projects.rename(p.path, p.alias);
+    EventBus.on(BUS.projectAdd, onAdd);
+    EventBus.on(BUS.projectSelect, onSelect);
+    EventBus.on(BUS.projectRemove, onRemove);
+    EventBus.on(BUS.projectAlias, onAlias);
+    return () => {
+      EventBus.off(BUS.projectAdd, onAdd);
+      EventBus.off(BUS.projectSelect, onSelect);
+      EventBus.off(BUS.projectRemove, onRemove);
+      EventBus.off(BUS.projectAlias, onAlias);
+    };
+  }, [supervisor, projects]);
 
   // Board mutations from the TaskBoardScene → the existing useTaskBoard actions
   // (the only IPC caller). New commissions read the live default mode.

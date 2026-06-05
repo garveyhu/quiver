@@ -2,6 +2,8 @@ import { PhaserGame } from '@/game/PhaserGame';
 import { GameBridge } from '@/game/GameBridge';
 import { TextInputOverlay } from '@/game/TextInputOverlay';
 import { LogbookOverlay } from '@/game/LogbookOverlay';
+import { ArchiveOverlay } from '@/game/ArchiveOverlay';
+import { ProjectManagerOverlay } from '@/game/ProjectManagerOverlay';
 
 /**
  * The app shell, after the game-first flip is complete. There is no tab bar, no
@@ -18,7 +20,12 @@ import { LogbookOverlay } from '@/game/LogbookOverlay';
  *  - LogbookOverlay: the 委托卷轴 — a cozy parchment-scroll skin (CSS) wrapping a
  *    native scrollable transcript, opened over the world when a Hall archer or an
  *    Archive book is clicked (the §6 two-layer rule, replacing the old Phaser scene
- *    whose hand-painted masked text overflowed on large windows).
+ *    whose hand-painted masked text overflowed on large windows);
+ *  - ArchiveOverlay: the 委托档案库 — the same DOM-over-world范式, a parchment run
+ *    list opened from the bookshelf hotspot (replaces the old Phaser ArchiveScene
+ *    whose hand-painted list mis-hit on hover + overflowed on large windows);
+ *  - ProjectManagerOverlay: the 项目管理 panel opened from the door hotspot — full
+ *    增改删查 over the recent-projects list (replaces the door's old direct dialog).
  */
 export function App() {
   return (
@@ -27,6 +34,8 @@ export function App() {
       <GameBridge />
       <TextInputOverlay />
       <LogbookOverlay />
+      <ArchiveOverlay />
+      <ProjectManagerOverlay />
     </main>
   );
 }

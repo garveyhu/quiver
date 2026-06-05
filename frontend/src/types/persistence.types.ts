@@ -4,6 +4,9 @@
 export interface RecentProject {
   path: string;
   lastUsedAt: number;
+  // Optional user-given display name; when null/absent the UI falls back to the
+  // path's last segment. Set/cleared via `set_project_alias`.
+  alias?: string | null;
 }
 
 // Returned by the `get_initial_state` command on app load. The legacy

@@ -682,7 +682,8 @@ export class HallScene extends Phaser.Scene {
         anchor: (w, h) => ({ x: w * 0.82, y: h * 0.5 }),
         onClick: () => this.openSettings(),
       },
-      // 书架/档案柜 (档案) → in-world ArchiveScene.
+      // 书架/档案柜 (档案) → the 档案库 DOM overlay (replaces the old in-world
+      // ArchiveScene whose hand-painted list mis-hit + overflowed on big windows).
       {
         label: STR.hotspotArchive,
         icon: '📚',
@@ -691,7 +692,8 @@ export class HallScene extends Phaser.Scene {
         onClick: () => this.openArchive(),
       },
       // 门 (选项目) — bottom-left, deliberately offset from the right stack so the
-      // "enter the workshop" decision sits on its own. Drives pickProject directly.
+      // "enter the workshop" decision sits on its own. Opens the 项目管理 DOM overlay
+      // (增改删查), which drives pickProject / select / remove / alias via the bridge.
       {
         label: STR.hotspotProject,
         icon: '🚪',
@@ -699,7 +701,7 @@ export class HallScene extends Phaser.Scene {
         anchor: (w, h) => ({ x: w * 0.1, y: h * 0.86 }),
         onClick: () => {
           play('open');
-          EventBus.emit(BUS.pickProject);
+          EventBus.emit(BUS.openProjects);
         },
       },
     ];
@@ -808,8 +810,12 @@ export class HallScene extends Phaser.Scene {
     this.openScene(SCENE.settings);
   }
 
+  // 书架 → the 档案库 DOM overlay (a React parchment list; the world stays put
+  // under its scrim, like the Logbook). No scene launch — no Phaser list to
+  // mis-hit or overflow.
   private openArchive(): void {
-    this.openScene(SCENE.archive);
+    play('open');
+    EventBus.emit(BUS.openArchive);
   }
 
   // Mockup C: click a station archer → unroll THAT run's Logbook scroll (now a

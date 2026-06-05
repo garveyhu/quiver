@@ -1,5 +1,10 @@
 import Phaser from 'phaser';
-import type { TaskRecord, SettingsPatch, StoredEvent } from '@/types/persistence.types';
+import type {
+  TaskRecord,
+  SettingsPatch,
+  StoredEvent,
+  RecentProject,
+} from '@/types/persistence.types';
 import type { EnvironmentCheck } from '@/types/environment.types';
 
 /**
@@ -49,6 +54,9 @@ export const BUS = {
   // `HealthSnapshot` — the workshop pre-flight self-diagnosis result (DESIGN §9),
   // pushed from useEnvironmentCheck for the ledger's 工坊体检 page (M4-UI).
   health: 'health:changed',
+  // `ProjectsState` — the recent-projects list + current project for the door's
+  // 项目管理 DOM overlay. Pushed from useSupervisor / useProjects via the bridge.
+  projectsState: 'projects:state',
 
   // Commands Phaser → React (GameBridge subscribes and calls the hooks).
   // the door/sign hotspot asks to pick a project (the native folder dialog via the
@@ -88,6 +96,31 @@ export const BUS = {
   // No payload; GameBridge routes it to useEnvironmentCheck.refresh (the only
   // check_environment IPC caller), which re-pushes the result on `BUS.health`.
   healthRefresh: 'cmd:health-refresh',
+
+  // --- 档案库 DOM overlay (book shelf hotspot) -------------------------------
+  // the Hall's bookshelf hotspot asks to open the 档案库 overlay (a React DOM
+  // parchment list — replaces the old in-world ArchiveScene whose hand-painted
+  // list overflowed + mis-hit on large windows). No payload; App renders the
+  // <ArchiveOverlay/> which reads the records the bridge already pushes on
+  // `BUS.archiveRecords` / `BUS.archiveMeta`.
+  openArchive: 'cmd:archive-open',
+  // the overlay asks to close (its 关闭 button / scrim click / Escape).
+  closeArchive: 'cmd:archive-close',
+
+  // --- 项目管理 DOM overlay (door hotspot) -----------------------------------
+  // the Hall's door hotspot asks to open the 项目管理 overlay (a React DOM
+  // panel — the door no longer drives pickProject directly; it now opens a full
+  // CRUD panel over the dimmed world). No payload; App renders <ProjectManagerOverlay/>.
+  openProjects: 'cmd:projects-open',
+  // the overlay asks to close (its 关闭 button / scrim click / Escape).
+  closeProjects: 'cmd:projects-close',
+  // project mutations the overlay issues; the bridge routes each to the existing
+  // useSupervisor / useProjects action (the only IPC callers — the bus never
+  // touches Rust). No payload for add (opens the native folder dialog).
+  projectAdd: 'cmd:project-add',
+  projectSelect: 'cmd:project-select', // { path: string }
+  projectRemove: 'cmd:project-remove', // { path: string }
+  projectAlias: 'cmd:project-alias', // { path: string; alias: string | null }
 } as const;
 
 // Snapshot of the board's live concurrency, surfaced on the HUD.
@@ -148,6 +181,31 @@ export interface BoardMeta {
 // `archive:meta` snapshot: the archive load error, if any.
 export interface ArchiveMeta {
   error: string | null;
+}
+
+/**
+ * The recent-projects list + current selection the 项目管理 DOM overlay renders.
+ * Pushed by the GameBridge from useSupervisor (recentProjects / projectPath).
+ * The overlay only renders this; every mutation goes back over the project
+ * command channels and is satisfied by the hooks (the bus never touches Rust).
+ */
+export interface ProjectsState {
+  recent: RecentProject[];
+  current: string | null;
+  error: string | null;
+}
+
+// Project mutation command payloads (overlay → GameBridge → useProjects/useSupervisor).
+export interface ProjectSelectPayload {
+  path: string;
+}
+export interface ProjectRemovePayload {
+  path: string;
+}
+export interface ProjectAliasPayload {
+  path: string;
+  /** New alias, or `null` to clear it (fall back to the path leaf). */
+  alias: string | null;
 }
 
 /**
@@ -214,6 +272,6 @@ export interface HealthSnapshot {
 }
 
 // Re-export so scenes import the board/archive row + settings-patch + stored
-// event + health-check shapes from one place.
-export type { TaskRecord, SettingsPatch, StoredEvent };
+// event + health-check + recent-project shapes from one place.
+export type { TaskRecord, SettingsPatch, StoredEvent, RecentProject };
 export type { EnvironmentCheck };
