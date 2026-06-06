@@ -13,7 +13,7 @@ ComfyUI 有两种工作流 JSON,**别混**:
 | **API / 执行格式** | `{ "1": {"class_type","inputs"}, ... }` | ❌ **不能(画布显示"画布为空")** | `raw` 直接跑 |
 
 → **想在画布里编辑的工作流必须存成 UI 格式**(在画布里搭好后**保存**就是 UI 格式)。
-→ `*.api.json` 是给 skill/headless 跑的导出件,**画布打不开它**(这就是你点开 `keyable-prop` 空白的原因)。
+→ `*.api.json` 是给 skill/headless 跑的导出件,**画布打不开它**(在画布里加载会显示"画布为空")。
 
 ## 推荐工作方式(画布编辑 + git 共享)
 
@@ -54,24 +54,13 @@ ComfyUI 有两种工作流 JSON,**别混**:
 ```bash
 ~/.venvs/current/bin/python ~/.claude/skills/comfyui/scripts/build/api2ui.py <api.json> <out_ui.json>
 ```
-本目录的 `keyable-prop.json` 就是这样从 `keyable-prop.api.json` 生成的(已用 ui2api 回转逐节点校验一致)。
+本目录的 `prop-gen.json` 就是这样从 `prop-gen.api.json` 生成的(已用 ui2api 回转逐节点校验一致、拓扑分层布局)。
 
-## 配方:在画布搭出 keyable-prop(得到可编辑的 UI 版)
+## 模板占位:`--var` 从外面填提示词
 
-最省事:打开 ComfyUI 自带的 **`image_z_image_turbo`**(侧边栏里,UI 格式能开),在它的 `VAEDecode` 之后**接 3 个节点**,再存成 `projects/quiver/keyable-prop`:
-
+`prop-gen` 的 prompt 里写了 `<object>` 占位。`raw --var K=V` 会把工作流里所有字符串中的 `<K>` 替换成 `V`,所以一条命令出不同道具:
+```bash
+comfy.py raw .../comfy-workflows/prop-gen.json --var object="a wooden barrel" \
+  --project quiver --prefix props/decor/barrel --keyflat --pixelize --px 96 --colors 32
 ```
-VAEDecode ──IMAGE──┬──────────────► JoinImageWithAlpha.image
-                   └► RemoveBackground.image
-LoadBackgroundRemovalModel(BiRefNet.safetensors) ──► RemoveBackground.bg_removal_model
-RemoveBackground ──MASK──► JoinImageWithAlpha.alpha
-JoinImageWithAlpha ──IMAGE──► SaveImage
-```
-
-- 提示词改成**平光、纯底、无光晕**(可抠道具关键):
-  `16-bit pixel art game prop, flat even neutral lighting, a single isolated <对象>, plain solid flat grey background, no glow, no halo, no shadow, nothing else, no text.`
-- 保存后:`comfy.py raw <repo>/comfy-workflows/keyable-prop.json --project quiver --prefix props/decor/<名>`。
-
-## 抠图模型
-
-`LoadBackgroundRemovalModel` 用 **BiRefNet**(Swin-L, 1024)。已装:`<ComfyUI>/models/background_removal/BiRefNet.safetensors`(来自 hf-mirror 的 `ZhengPeng7/BiRefNet`,444MB)。换机器需重下到该目录。
+画布里直接改那段文字也等价。

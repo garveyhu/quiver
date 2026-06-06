@@ -97,15 +97,16 @@ cd ~/.claude/skills/comfyui   # 或 ~/.agents/extra-skills/comfyui
 - **首次搭**:`mkdir -p <repo>/comfy-workflows && ln -sfn <repo>/comfy-workflows <ComfyUI>/user/default/workflows/projects/<项目>`。
 - **运行**:`comfy.py raw <repo>/comfy-workflows/<wf>.json --project <项目> --prefix <类>/<名>`。`--project/--prefix` 会**改写工作流里 SaveImage 的前缀**,产物落进 `assets/<类>/`(同资产管线)。
 - **何时用**:普通文生图 → 默认 `t2i`;**要可复现的特定产线 / 出图即透明 / 固定构图** → 专用工作流 + `raw`。
-- 旗舰示例:`comfy-workflows/keyable-prop.json`(Z-Image → `RemoveBackground` → `JoinImageWithAlpha` → 透明 PNG)。⚠️ 需先在 ComfyUI 装一个本地抠图模型(RMBG-2.0 / BiRefNet),`LoadBackgroundRemovalModel` 才有可选项;详见该目录 README。
+- 旗舰示例:`comfy-workflows/prop-gen.json`(纯 Z-Image 出图,画布可编辑;prompt 用 `<object>` 占位,`raw --var object=…` 填)。**抠图/像素化交给后处理 `--keyflat`/`--pixelize`,不放进工作流**;详见该目录 README。
+- **职责分离**:工作流只管"生成";可复用的后处理(抠图 `--keyflat`、像素化 `--pixelize`)在 `t2i`/`raw` 上统一作用。固定构图/多视图这类才值得固化进工作流。
 
-> 这是"高质量自动抠图道具""角色三视图"等定制需求的正路:把节点链固化成工作流,而不是每次靠默认 builder + 手动后处理。
+> 把可复现的节点链固化成工作流,而不是每次手搭;但抠图这类后处理放 Python 步,对所有生成路径统一生效。
 
 ## 6. 抠图与接入代码
 
 - **透明底(扁平美术用 color-key,别用神经抠图)**:Z-Image 出的是带底图。
   - ✅ **正路**:提示词加 `on a solid uniform magenta background`,再 `comfy.py t2i … --keyflat`(或 `scripts/post/keyflat.py <in> <out>`)——洪水填充把边缘连通的纯色底抠成透明,对扁平像素/插画又稳又干净。`slice_assets.py` 抠角色/道具同理。
-  - ❌ **坑**:`keyable-prop`(BiRefNet `RemoveBackground`)是**写实照片**的显著性分割,对扁平 2D 会把整张当前景(实测背景 alpha~254、没抠掉)。**只在写实/3D 渲染风资产时才用 BiRefNet**。
+  - ❌ **坑**:in-graph 神经抠图(BiRefNet `RemoveBackground`)是**写实照片**的显著性分割,对扁平 2D 会把整张当前景(实测背景 alpha~254、没抠掉)——之前的 BiRefNet 工作流已因此退役。**只在写实/3D 渲染风资产时才考虑 BiRefNet**。
   - 加颜色词(`clearly coloured …`)防主体过曝发白。
 - **9-slice**:UI 面板生成"边角厚、中间空"的框,切四角四边给 Phaser `NineSlice` 或 CSS `border-image`。
 - **接入**:成品切片后放 `frontend/public/{bg,props,sprites,ui,fx}/`,在 `PreloaderScene` 加载、对应 scene 引用;`frontend/public/` 这份**进 git**(代码实际加载的)。接入后 README 状态标 📦。
