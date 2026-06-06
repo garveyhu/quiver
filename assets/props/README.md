@@ -6,7 +6,11 @@
 
 > 风格基准见 [`../README.md`](../README.md)。独立道具统一追加:`a single <对象> centered on a flat plain light-grey background, no scene, soft, no text`。
 > 多帧动画(壁炉)做成**横向条带**,每帧等宽。
-> ⚠️ **隔离经验**:Z-Image 即便写了 "a single object" 也常**补几个底部杂物**(实测 `lantern.png` 多生了小桌/木墩)。对策:① 提示词再加 `isolated single object, nothing else, completely empty background`;② 或生成后裁出主体。所以独立道具默认状态先标 🔁(待裁切/重做),裁干净接入前端后再转 ✅/📦。
+> ⚠️ **抠图经验(重要,实测踩坑)**:
+> - **扁平 2D 美术别用神经抠图(BiRefNet)**——它是给真实照片做分割的,对扁平像素/插画会把整张当前景(实测背景 alpha~254、根本没抠掉)。
+> - **正路 = 纯色底 + color-key**:提示词加 `on a solid uniform magenta background`,用 `comfy.py t2i … --keyflat`(或 `scripts/keyflat.py`)洪水填充抠底→干净透明。`anvil.png` 就是这么来的。
+> - **加颜色词**防止主体过曝发白(写 `clearly coloured dark iron / brown wood`,别只说 cozy)。
+> - Z-Image 偶尔补杂物 → 加 `nothing else`;纯色底让 color-key 容易兜掉。
 
 ## furniture/ 状态表
 
@@ -24,8 +28,8 @@
 |------|------|------|------|------|
 | 壁炉(4 帧火焰条带) | `decor/fireplace.png` | 预算电力槽 | ⬜ | — |
 | 挂灯笼 | `decor/lantern.png` | 氛围光 | 🔁 | ![lantern](decor/lantern.png) |
-| 铁砧 | `decor/anvil.png` | 工坊装饰(**keyable-prop 透明产线首个成品**:真 alpha 抠图) | 🔁 | ![anvil](decor/anvil.png) |
-| 蜡烛 | `decor/candle.png` | 桌上点缀 | ⬜ | — |
+| 铁砧 | `decor/anvil.png` | 工坊装饰(**color-key 透明素材**:t2i 纯洋红底 + keyflat 抠底) | ✅ | ![anvil](decor/anvil.png) |
+| 蜡烛 | `decor/candle_00001_.png` | 桌上点缀(color-key 透明,t2i --keyflat 一条命令) | ✅ | ![candle](decor/candle_00001_.png) |
 | 圆地毯 | `decor/rug.png` | 地面 | ⬜ | — |
 | 箭靶 | `decor/target.png` | 墙面装饰 | ⬜ | — |
 | 箭桶(成捆的箭) | `decor/arrow-barrel.png` | 角落点缀 | ⬜ | — |

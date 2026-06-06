@@ -31,8 +31,16 @@ ComfyUI 有两种工作流 JSON,**别混**:
 
 | 工作流 | 用途 | 格式 | 状态 |
 |--------|------|------|------|
-| `keyable-prop.json` | 单道具 → **自动抠成透明 PNG**(Z-Image → RemoveBackground(BiRefNet) → JoinImageWithAlpha) | **UI**(画布可开 + `raw` 可跑) | ✅ 可用 |
-| `keyable-prop.api.json` | 同上的 API 导出(headless / CI 用) | API | ✅ 可用 |
+| `keyable-prop.json` | 道具 → BiRefNet `RemoveBackground` → 透明 PNG | **UI**(画布可开 + `raw` 可跑) | ⚠️ **仅写实/3D 风** |
+| `keyable-prop.api.json` | 同上 API 导出 | API | ⚠️ 仅写实/3D 风 |
+
+> ⚠️ **抠图实测结论**:BiRefNet 是给**真实照片**做分割的,对**扁平像素/插画会失败**(整张当前景,背景 alpha~254 抠不掉)。
+> **扁平 2D 美术的正路 = 纯色底 + color-key**,一条命令:
+> ```bash
+> comfy.py t2i "…game prop… on a solid uniform magenta background, clearly coloured …, no text." \
+>   --project quiver --prefix props/decor/<名> --keyflat --key-tol 95
+> ```
+> `--keyflat` 生成后自动用 `scripts/keyflat.py` 洪水填充抠底。实测 `anvil.png` / `candle_00001_.png` 都是这么来的,干净透明。`keyable-prop`(BiRefNet)只留给写实/3D 渲染风资产。
 
 > `keyable-prop.json` 是 **UI 格式**——在 ComfyUI 画布侧边栏 `projects/quiver/` 下**直接点开即可编辑**,改完保存还是 UI 格式;`raw` 跑它会自动转 API。两个文件由 `api2ui` 保持一致(见下)。
 

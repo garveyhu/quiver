@@ -103,7 +103,10 @@ cd ~/.claude/skills/comfyui   # 或 ~/.agents/extra-skills/comfyui
 
 ## 6. 抠图与接入代码
 
-- **透明底**:Z-Image 出的是带底图。需要独立道具/UI → 用 `scripts/slice_assets.py` 同款 **alpha key-out**(边缘连通的灰/黑底 flood-fill 透明,见该脚本)。
+- **透明底(扁平美术用 color-key,别用神经抠图)**:Z-Image 出的是带底图。
+  - ✅ **正路**:提示词加 `on a solid uniform magenta background`,再 `comfy.py t2i … --keyflat`(或 `scripts/keyflat.py <in> <out>`)——洪水填充把边缘连通的纯色底抠成透明,对扁平像素/插画又稳又干净。`slice_assets.py` 抠角色/道具同理。
+  - ❌ **坑**:`keyable-prop`(BiRefNet `RemoveBackground`)是**写实照片**的显著性分割,对扁平 2D 会把整张当前景(实测背景 alpha~254、没抠掉)。**只在写实/3D 渲染风资产时才用 BiRefNet**。
+  - 加颜色词(`clearly coloured …`)防主体过曝发白。
 - **9-slice**:UI 面板生成"边角厚、中间空"的框,切四角四边给 Phaser `NineSlice` 或 CSS `border-image`。
 - **接入**:成品切片后放 `frontend/public/{bg,props,sprites,ui,fx}/`,在 `PreloaderScene` 加载、对应 scene 引用;`frontend/public/` 这份**进 git**(代码实际加载的)。接入后 README 状态标 📦。
 - **换主场景的代价**:背景换了要重调 `HallScene` 的地板线 + 热点坐标(壁炉/公告板/书架/门),否则热点指空、小人浮空——属于真集成工作,别只换图。
