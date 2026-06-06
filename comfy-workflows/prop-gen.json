@@ -7,7 +7,7 @@
       "type": "UNETLoader",
       "pos": [
         60,
-        60
+        80
       ],
       "size": [
         320,
@@ -56,8 +56,8 @@
       "id": 2,
       "type": "CLIPLoader",
       "pos": [
-        420,
-        60
+        60,
+        400
       ],
       "size": [
         320,
@@ -115,8 +115,8 @@
       "id": 3,
       "type": "VAELoader",
       "pos": [
-        780,
-        60
+        60,
+        720
       ],
       "size": [
         320,
@@ -156,8 +156,8 @@
       "id": 4,
       "type": "ModelSamplingAuraFlow",
       "pos": [
-        1140,
-        60
+        440,
+        80
       ],
       "size": [
         320,
@@ -202,8 +202,8 @@
       "id": 5,
       "type": "CLIPTextEncode",
       "pos": [
-        60,
-        340
+        440,
+        400
       ],
       "size": [
         320,
@@ -249,8 +249,8 @@
       "id": 6,
       "type": "ConditioningZeroOut",
       "pos": [
-        420,
-        340
+        820,
+        80
       ],
       "size": [
         320,
@@ -285,8 +285,8 @@
       "id": 7,
       "type": "EmptySD3LatentImage",
       "pos": [
-        780,
-        340
+        60,
+        1040
       ],
       "size": [
         320,
@@ -344,8 +344,8 @@
       "id": 8,
       "type": "KSampler",
       "pos": [
-        1140,
-        340
+        1200,
+        80
       ],
       "size": [
         320,
@@ -459,8 +459,8 @@
       "id": 9,
       "type": "VAEDecode",
       "pos": [
-        60,
-        620
+        1580,
+        80
       ],
       "size": [
         320,
@@ -500,8 +500,8 @@
       "id": 13,
       "type": "SaveImage",
       "pos": [
-        420,
-        620
+        1960,
+        80
       ],
       "size": [
         320,
