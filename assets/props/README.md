@@ -24,6 +24,7 @@
 |------|------|------|------|------|
 | 壁炉(4 帧火焰条带) | `decor/fireplace.png` | 预算电力槽 | ⬜ | — |
 | 挂灯笼 | `decor/lantern.png` | 氛围光 | 🔁 | ![lantern](decor/lantern.png) |
+| 铁砧 | `decor/anvil.png` | 工坊装饰(**keyable-prop 透明产线首个成品**:真 alpha 抠图) | 🔁 | ![anvil](decor/anvil.png) |
 | 蜡烛 | `decor/candle.png` | 桌上点缀 | ⬜ | — |
 | 圆地毯 | `decor/rug.png` | 地面 | ⬜ | — |
 | 箭靶 | `decor/target.png` | 墙面装饰 | ⬜ | — |

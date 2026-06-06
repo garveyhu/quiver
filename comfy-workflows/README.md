@@ -1,44 +1,56 @@
 # comfy-workflows/ — Quiver 专用 ComfyUI 工作流
 
-> 为本项目的**特定资产类型**定制的 ComfyUI 工作流,**随仓库 git 提交、供所有开发者共用**。
-> 不再只靠 skill 的默认 builder——**按图片需求选不同工作流**(透明道具 / 角色 / 图标…)。
+> 为本项目特定资产类型定制的 ComfyUI 工作流,**随仓库 git 提交、供所有开发者共用**。
+> 按图片需求选不同工作流(透明道具 / 角色 / 图标…),而不是只靠 skill 的默认 builder。
 
-## 这套怎么运作
+## ⚠️ 两种格式:UI(画布能开) vs API(只能 `raw` 跑)
 
-- **真实目录在仓里**:`quiver/comfy-workflows/`(committed)。
-- **ComfyUI 反向软链**:`<ComfyUI>/user/default/workflows/projects/quiver` → 本目录。
-  - 在 ComfyUI **网页画布**里它出现在 `projects/quiver/` 下,可直接打开编辑;
-  - 在画布里改好 **保存**,文件就落回本目录(随 git 提交)。
-- **跑工作流**(skill 的 `raw`,UI 格式自动转 API):
-  ```bash
-  cd ~/.claude/skills/comfyui
-  ~/.venvs/current/bin/python scripts/comfy.py raw \
-    /Users/links/Coding/Archer/quiver/comfy-workflows/keyable-prop.json \
-    --project quiver --prefix props/decor/anvil
-  ```
-  `--project/--prefix` 会**改写工作流里 SaveImage 的前缀**,产物落进 `assets/props/decor/`(同资产管线)。
+ComfyUI 有两种工作流 JSON,**别混**:
 
-## 何时用自定义工作流 vs 默认 builder
+| 格式 | 长相 | 画布能打开? | 怎么跑 |
+|------|------|------------|--------|
+| **UI / litegraph** | `{ "nodes": [...], "links": [...] }` | ✅ 能(侧边栏点开即编辑) | `raw`(自动转 API) |
+| **API / 执行格式** | `{ "1": {"class_type","inputs"}, ... }` | ❌ **不能(画布显示"画布为空")** | `raw` 直接跑 |
 
-| 需求 | 用什么 |
-|------|--------|
-| 普通文生图(场景/草图) | `t2i`(默认 builder,最省事) |
-| **特定类型、要可复现的高质量产线** | **本目录的专用工作流 + `raw`** |
-| 出图即透明(免手动抠图) | `keyable-prop.json`(t2i + 自动抠图 → RGBA) |
-| 角色/三视图/特定构图… | 在画布里搭好存进来,再 `raw` |
+→ **想在画布里编辑的工作流必须存成 UI 格式**(在画布里搭好后**保存**就是 UI 格式)。
+→ `*.api.json` 是给 skill/headless 跑的导出件,**画布打不开它**(这就是你点开 `keyable-prop` 空白的原因)。
+
+## 推荐工作方式(画布编辑 + git 共享)
+
+1. 在 ComfyUI 画布里搭/改工作流 → **保存**,存到 `projects/quiver/`(= 本目录,反向软链)。这是 **UI 格式**,画布随时能再打开。
+2. 提交进 git,别人 clone 即可在自己的画布里打开同一条工作流。
+3. 跑它(headless / 批量):`comfy.py raw <repo>/comfy-workflows/<wf>.json --project quiver --prefix <类>/<名>`。
+
+## 这套怎么运作(反向软链)
+
+- 真实目录在仓里:`quiver/comfy-workflows/`(committed)。
+- ComfyUI 反向软链:`<ComfyUI>/user/default/workflows/projects/quiver` → 本目录。画布里在 `projects/quiver/` 下可见可编辑;保存即落回仓。
+- `raw --project/--prefix` 会改写工作流里 SaveImage 的前缀,产物落进 `assets/<类>/`(同资产管线)。
 
 ## 工作流目录册
 
 | 工作流 | 用途 | 格式 | 状态 |
 |--------|------|------|------|
-| `keyable-prop.json` | 单个道具 → **自动抠成透明 PNG**(Z-Image → RemoveBackground → JoinImageWithAlpha) | API | ⚠️ 需先装抠图模型(见下) |
+| `keyable-prop.api.json` | 单道具 → **自动抠成透明 PNG**(Z-Image → RemoveBackground(BiRefNet) → JoinImageWithAlpha) | **API**(headless 跑) | ✅ 可用(BiRefNet 已装) |
 
-> 加新工作流:在画布搭好 → 保存到 `projects/quiver/` → 回来在本表登记一行(用途/格式/状态)。
+> 想要可在画布编辑的 `keyable-prop`(UI 格式),按下面配方在画布搭一次并保存。
 
-## ⚠️ keyable-prop 需要一个抠图模型
+## 配方:在画布搭出 keyable-prop(得到可编辑的 UI 版)
 
-`LoadBackgroundRemovalModel` 当前**没有可选模型**(`bg_removal_name` 选项为空)。要让这条产线跑起来,先装一个本地抠图模型(无需 API key),例如 **RMBG-2.0** 或 **BiRefNet**:
-- 放到 ComfyUI 对应模型目录后,`bg_removal_name` 就能选到;把 `keyable-prop.json` 第 10 节点的 `"RMBG-2.0"` 换成实际可选项即可。
-- 没装时直接跑会报 `value_not_in_list` 并**列出你真实的可选项**——照着填回去。
+最省事:打开 ComfyUI 自带的 **`image_z_image_turbo`**(侧边栏里,UI 格式能开),在它的 `VAEDecode` 之后**接 3 个节点**,再存成 `projects/quiver/keyable-prop`:
 
-> 想让我帮你下一个抠图模型把这条产线打通,说一声。
+```
+VAEDecode ──IMAGE──┬──────────────► JoinImageWithAlpha.image
+                   └► RemoveBackground.image
+LoadBackgroundRemovalModel(BiRefNet.safetensors) ──► RemoveBackground.bg_removal_model
+RemoveBackground ──MASK──► JoinImageWithAlpha.alpha
+JoinImageWithAlpha ──IMAGE──► SaveImage
+```
+
+- 提示词改成**平光、纯底、无光晕**(可抠道具关键):
+  `16-bit pixel art game prop, flat even neutral lighting, a single isolated <对象>, plain solid flat grey background, no glow, no halo, no shadow, nothing else, no text.`
+- 保存后:`comfy.py raw <repo>/comfy-workflows/keyable-prop.json --project quiver --prefix props/decor/<名>`。
+
+## 抠图模型
+
+`LoadBackgroundRemovalModel` 用 **BiRefNet**(Swin-L, 1024)。已装:`<ComfyUI>/models/background_removal/BiRefNet.safetensors`(来自 hf-mirror 的 `ZhengPeng7/BiRefNet`,444MB)。换机器需重下到该目录。
