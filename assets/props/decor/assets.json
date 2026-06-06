@@ -1,0 +1,25 @@
+{
+  "category": "props/decor",
+  "out_prefix": "props/decor",
+  "defaults": {
+    "workflow": "t2i",
+    "style_prefix": "16-bit cozy pixel art, warm amber and brown palette, crisp clean pixels, a single isolated",
+    "suffix": "clearly coloured, flat even lighting, centered, on a solid uniform magenta background, nothing else, no glow, no text",
+    "size": [768, 768],
+    "keyflat": { "tol": 95 },
+    "pixelize": { "px": 120, "colors": 32 },
+    "variants": 3
+  },
+  "items": [
+    { "name": "anvil",  "status": "done" },
+    { "name": "candle", "status": "done" },
+    { "name": "lantern", "status": "redo", "prompt": "hanging iron lantern with a warm amber candle flame inside, brass and dark iron" },
+    { "name": "bookshelf", "status": "todo", "prompt": "tall wooden bookshelf filled with leather books, scrolls and a quiver of arrows, warm wood tones, front view" },
+    { "name": "workbench", "status": "todo", "prompt": "cozy wooden workbench with a few archer's tools and a candle on top, isometric 3/4 view, warm wood" },
+    { "name": "rug", "status": "todo", "prompt": "round woven rug with a simple warm geometric pattern, top-down view" },
+    { "name": "target", "status": "todo", "prompt": "round straw archery target with red and white rings and a few arrows stuck in it, front view" },
+    { "name": "arrow-barrel", "status": "todo", "prompt": "wooden barrel full of a bundle of arrows with feathered fletching, dark iron bands" },
+    { "name": "potion-shelf", "status": "todo", "prompt": "small wooden wall shelf holding a few glowing coloured potion bottles, warm wood" },
+    { "name": "notice-board", "status": "todo", "prompt": "wooden cork notice board with pinned parchment notes and red pushpins, front view" }
+  ]
+}

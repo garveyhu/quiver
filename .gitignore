@@ -29,3 +29,7 @@ dist
 # Python
 __pycache__/
 *.pyc
+
+# 批量生图运行日志(不入库)
+assets/**/batch.log
+assets/**/batch-progress.json
