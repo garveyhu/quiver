@@ -88,6 +88,19 @@ cd ~/.claude/skills/comfyui   # 或 ~/.agents/extra-skills/comfyui
 
 ---
 
+## 5b. 自定义工作流(按需选,不止默认 builder)
+
+默认 builder(`t2i`/`i2v`)够用,但**特定资产类型值得做专用工作流**——可复现、质量稳、还能内置后处理(自动抠图、固定构图等)。这些工作流**像资产一样在项目仓里管理、给所有开发者共用**。
+
+- **真实目录在仓里**:`quiver/comfy-workflows/`(committed)。
+- **ComfyUI 反向软链**:`<ComfyUI>/user/default/workflows/projects/quiver` → `quiver/comfy-workflows`。在 ComfyUI 网页画布里于 `projects/quiver/` 下可编辑;画布保存即落回仓(随 git)。
+- **首次搭**:`mkdir -p <repo>/comfy-workflows && ln -sfn <repo>/comfy-workflows <ComfyUI>/user/default/workflows/projects/<项目>`。
+- **运行**:`comfy.py raw <repo>/comfy-workflows/<wf>.json --project <项目> --prefix <类>/<名>`。`--project/--prefix` 会**改写工作流里 SaveImage 的前缀**,产物落进 `assets/<类>/`(同资产管线)。
+- **何时用**:普通文生图 → 默认 `t2i`;**要可复现的特定产线 / 出图即透明 / 固定构图** → 专用工作流 + `raw`。
+- 旗舰示例:`comfy-workflows/keyable-prop.json`(Z-Image → `RemoveBackground` → `JoinImageWithAlpha` → 透明 PNG)。⚠️ 需先在 ComfyUI 装一个本地抠图模型(RMBG-2.0 / BiRefNet),`LoadBackgroundRemovalModel` 才有可选项;详见该目录 README。
+
+> 这是"高质量自动抠图道具""角色三视图"等定制需求的正路:把节点链固化成工作流,而不是每次靠默认 builder + 手动后处理。
+
 ## 6. 抠图与接入代码
 
 - **透明底**:Z-Image 出的是带底图。需要独立道具/UI → 用 `scripts/slice_assets.py` 同款 **alpha key-out**(边缘连通的灰/黑底 flood-fill 透明,见该脚本)。
