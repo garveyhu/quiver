@@ -1,0 +1,37 @@
+{
+  "category": "characters",
+  "out_prefix": "characters",
+  "defaults": {
+    "workflow": "char-edit",
+    "variants": 2
+  },
+  "items": [
+    {
+      "name": "archer-1",
+      "status": "done"
+    },
+    {
+      "name": "archer-2",
+      "status": "done"
+    },
+    {
+      "name": "archer-3",
+      "status": "done"
+    },
+    {
+      "name": "archer-4",
+      "status": "done"
+    },
+    {
+      "name": "archer-5-concept",
+      "type": "character",
+      "status": "skip",
+      "workflow": "char-edit",
+      "vars": {
+        "ref": "<先 comfy.py upload 一张参考帧>",
+        "change": "a new archer character, different hair and outfit colours, same cozy pixel style, full body idle"
+      },
+      "_note": "角色扩展示例:需先上传参考图;type=character 默认批量跳过,要跑加 --with-chars"
+    }
+  ]
+}

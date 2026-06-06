@@ -1,0 +1,33 @@
+{
+  "category": "ui/buttons",
+  "out_prefix": "ui/buttons",
+  "defaults": {
+    "workflow": "t2i",
+    "style_prefix": "16-bit cozy pixel art, warm amber and brown palette, crisp clean pixels, cozy fantasy archer's-guild workshop style,",
+    "suffix": "clearly coloured, flat even lighting, centered, on a solid uniform magenta background, nothing else, no glow, no shadow, no text",
+    "size": [
+      512,
+      512
+    ],
+    "keyflat": {
+      "tol": 95
+    },
+    "pixelize": {
+      "px": 96,
+      "colors": 24
+    },
+    "variants": 3
+  },
+  "items": [
+    {
+      "name": "wood-button",
+      "status": "todo",
+      "prompt": "a single isolated rounded wooden UI button with a warm bevel and a flat empty face, front view"
+    },
+    {
+      "name": "pin",
+      "status": "todo",
+      "prompt": "a single isolated small glossy red pushpin thumbtack, slight 3/4 view, red and metal"
+    }
+  ]
+}

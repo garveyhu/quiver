@@ -1,0 +1,48 @@
+{
+  "category": "props/furniture",
+  "out_prefix": "props/furniture",
+  "defaults": {
+    "workflow": "t2i",
+    "style_prefix": "16-bit cozy pixel art, warm amber and brown palette, crisp clean pixels, cozy fantasy archer's-guild workshop style,",
+    "suffix": "clearly coloured, flat even lighting, centered, on a solid uniform magenta background, nothing else, no glow, no shadow, no text",
+    "size": [
+      768,
+      768
+    ],
+    "keyflat": {
+      "tol": 95
+    },
+    "pixelize": {
+      "px": 128,
+      "colors": 32
+    },
+    "variants": 3
+  },
+  "items": [
+    {
+      "name": "workbench",
+      "status": "todo",
+      "prompt": "a single isolated cozy wooden workbench with a stool, a few archer's tools, a candle and an open ledger on top, isometric 3/4 view, warm wood"
+    },
+    {
+      "name": "stool",
+      "status": "todo",
+      "prompt": "a single isolated simple round wooden stool, isometric 3/4 view, warm wood"
+    },
+    {
+      "name": "bookshelf",
+      "status": "todo",
+      "prompt": "a single isolated tall wooden bookshelf filled with leather-bound books, rolled scrolls and small quivers of arrows, front view, warm wood"
+    },
+    {
+      "name": "ledger-book",
+      "status": "todo",
+      "prompt": "a single isolated open leather ledger book with parchment pages, neat handwriting and a quill resting across it, top-down 3/4 view, warm tones"
+    },
+    {
+      "name": "door",
+      "status": "todo",
+      "prompt": "a single isolated arched wooden guild door with iron hinges and a small round window, front view, warm wood and dark iron"
+    }
+  ]
+}

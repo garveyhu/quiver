@@ -1,0 +1,48 @@
+{
+  "category": "fx",
+  "out_prefix": "fx",
+  "defaults": {
+    "workflow": "t2i",
+    "style_prefix": "16-bit cozy pixel art, warm amber and brown palette, crisp clean pixels, cozy fantasy archer's-guild workshop style,",
+    "suffix": "single small particle, glowing, centered, on a solid uniform magenta background, nothing else, no text",
+    "size": [
+      256,
+      256
+    ],
+    "keyflat": {
+      "tol": 110
+    },
+    "pixelize": {
+      "px": 48,
+      "colors": 16
+    },
+    "variants": 3
+  },
+  "items": [
+    {
+      "name": "star",
+      "status": "todo",
+      "prompt": "a single isolated small bright golden four-point star sparkle"
+    },
+    {
+      "name": "spark",
+      "status": "todo",
+      "prompt": "a single isolated tiny glowing warm-orange ember spark"
+    },
+    {
+      "name": "glint",
+      "status": "todo",
+      "prompt": "a single isolated small white four-point sparkle glint"
+    },
+    {
+      "name": "petal",
+      "status": "todo",
+      "prompt": "a single isolated small soft pink falling flower petal"
+    },
+    {
+      "name": "smoke-puff",
+      "status": "todo",
+      "prompt": "a single isolated small soft grey smoke puff"
+    }
+  ]
+}

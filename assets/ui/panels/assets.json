@@ -1,0 +1,60 @@
+{
+  "category": "ui/panels",
+  "out_prefix": "ui/panels",
+  "defaults": {
+    "workflow": "t2i",
+    "style_prefix": "16-bit cozy pixel art, warm amber and brown palette, crisp clean pixels, cozy fantasy archer's-guild workshop style,",
+    "suffix": "clearly coloured, flat even lighting, centered, on a solid uniform magenta background, nothing else, no glow, no shadow, no text",
+    "size": [
+      768,
+      768
+    ],
+    "keyflat": {
+      "tol": 95
+    },
+    "pixelize": {
+      "px": 160,
+      "colors": 32
+    },
+    "variants": 3
+  },
+  "items": [
+    {
+      "name": "parchment",
+      "status": "todo",
+      "prompt": "a single isolated aged parchment panel with worn edges, a thick uniform border and a flat empty centre suitable for a 9-slice UI frame, top-down flat view"
+    },
+    {
+      "name": "wood-frame",
+      "status": "todo",
+      "prompt": "a single isolated ornate wooden UI frame with carved corners, a thick border and a flat empty centre for 9-slice, flat front view, warm wood"
+    },
+    {
+      "name": "scroll",
+      "status": "todo",
+      "prompt": "a single isolated unrolled vertical parchment scroll with wooden rods top and bottom, flat empty middle, front view",
+      "size": [
+        640,
+        896
+      ]
+    },
+    {
+      "name": "book-open",
+      "status": "todo",
+      "prompt": "a single isolated open leather book spread with two blank parchment pages, top-down view, warm tones",
+      "size": [
+        1024,
+        768
+      ]
+    },
+    {
+      "name": "tab",
+      "status": "todo",
+      "prompt": "a single isolated small leather page tab bookmark, front view, warm tones",
+      "size": [
+        512,
+        512
+      ]
+    }
+  ]
+}

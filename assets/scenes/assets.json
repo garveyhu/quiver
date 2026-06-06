@@ -1,0 +1,41 @@
+{
+  "category": "scenes",
+  "out_prefix": "scenes",
+  "defaults": {
+    "workflow": "t2i",
+    "style_prefix": "16-bit cozy pixel art, warm amber and brown palette, soft glowing lamplight, gentle dithering, crisp clean pixels, cozy fantasy archer's-guild workshop interior",
+    "suffix": "wide cozy interior composition, no characters, no people, no text",
+    "size": [
+      1216,
+      832
+    ],
+    "keyflat": null,
+    "pixelize": null,
+    "variants": 2
+  },
+  "items": [
+    {
+      "name": "workshop-hall",
+      "status": "done"
+    },
+    {
+      "name": "workshop-hall-empty",
+      "status": "todo",
+      "prompt": "a quiet unlit archer's-guild workshop interior at cold blue-grey dawn, fire burnt low to embers, empty workstations, a calm waiting mood"
+    },
+    {
+      "name": "workshop-hall-night",
+      "status": "todo",
+      "prompt": "the archer's-guild workshop interior at deep cozy night, warm lantern and fireplace glow against deep blue shadows, snug and intimate"
+    },
+    {
+      "name": "title-splash",
+      "status": "todo",
+      "prompt": "an inviting archer's-guild workshop glimpsed through a warm open doorway at dusk, golden light spilling out, generous empty sky space at the top for a title",
+      "size": [
+        1280,
+        800
+      ]
+    }
+  ]
+}

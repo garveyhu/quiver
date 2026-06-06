@@ -1,0 +1,57 @@
+{
+  "category": "ui/icons",
+  "out_prefix": "ui/icons",
+  "defaults": {
+    "workflow": "t2i",
+    "style_prefix": "16-bit cozy pixel art, warm amber and brown palette, crisp clean pixels, cozy fantasy archer's-guild workshop style,",
+    "suffix": "clearly coloured, flat even lighting, centered, on a solid uniform magenta background, nothing else, no glow, no shadow, no text",
+    "size": [
+      512,
+      512
+    ],
+    "keyflat": {
+      "tol": 95
+    },
+    "pixelize": {
+      "px": 48,
+      "colors": 16
+    },
+    "variants": 3
+  },
+  "items": [
+    {
+      "name": "board",
+      "status": "todo",
+      "prompt": "a single isolated bold simple flat icon of a cork notice board with one pinned note, minimal, front view"
+    },
+    {
+      "name": "ledger",
+      "status": "todo",
+      "prompt": "a single isolated bold simple flat icon of a closed leather ledger book, minimal, front view"
+    },
+    {
+      "name": "shelf",
+      "status": "todo",
+      "prompt": "a single isolated bold simple flat icon of a small bookshelf with books, minimal, front view"
+    },
+    {
+      "name": "door",
+      "status": "todo",
+      "prompt": "a single isolated bold simple flat icon of an arched wooden door, minimal, front view"
+    },
+    {
+      "name": "cursor",
+      "status": "todo",
+      "prompt": "a single isolated bold simple pointer cursor shaped like a small wooden arrowhead, minimal",
+      "size": [
+        256,
+        256
+      ]
+    },
+    {
+      "name": "status-badges",
+      "status": "skip",
+      "prompt": "(queued/running/verifying/done 4 态条带 — 需逐态生成后拼条带或代码上色,不走自动批量)"
+    }
+  ]
+}
