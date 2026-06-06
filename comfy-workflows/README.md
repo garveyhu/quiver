@@ -31,9 +31,18 @@ ComfyUI 有两种工作流 JSON,**别混**:
 
 | 工作流 | 用途 | 格式 | 状态 |
 |--------|------|------|------|
-| `keyable-prop.api.json` | 单道具 → **自动抠成透明 PNG**(Z-Image → RemoveBackground(BiRefNet) → JoinImageWithAlpha) | **API**(headless 跑) | ✅ 可用(BiRefNet 已装) |
+| `keyable-prop.json` | 单道具 → **自动抠成透明 PNG**(Z-Image → RemoveBackground(BiRefNet) → JoinImageWithAlpha) | **UI**(画布可开 + `raw` 可跑) | ✅ 可用 |
+| `keyable-prop.api.json` | 同上的 API 导出(headless / CI 用) | API | ✅ 可用 |
 
-> 想要可在画布编辑的 `keyable-prop`(UI 格式),按下面配方在画布搭一次并保存。
+> `keyable-prop.json` 是 **UI 格式**——在 ComfyUI 画布侧边栏 `projects/quiver/` 下**直接点开即可编辑**,改完保存还是 UI 格式;`raw` 跑它会自动转 API。两个文件由 `api2ui` 保持一致(见下)。
+
+## 用 api2ui 把 API 工作流转成画布可开的 UI 格式
+
+手写的/builder 拼的是 API 格式(画布打不开)。skill 新增 `scripts/api2ui.py`:用运行中 ComfyUI 的 `/object_info` 真实 schema 把 API 转成扁平 UI/litegraph(画布能开),并处理 widget 顺序 + seed 后的 `control_after_generate` 幽灵 widget。
+```bash
+~/.venvs/current/bin/python ~/.claude/skills/comfyui/scripts/api2ui.py <api.json> <out_ui.json>
+```
+本目录的 `keyable-prop.json` 就是这样从 `keyable-prop.api.json` 生成的(已用 ui2api 回转逐节点校验一致)。
 
 ## 配方:在画布搭出 keyable-prop(得到可编辑的 UI 版)
 

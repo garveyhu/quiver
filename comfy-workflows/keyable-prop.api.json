@@ -65,7 +65,7 @@
         "4",
         0
       ],
-      "seed": 20260607,
+      "seed": 88888,
       "steps": 8,
       "cfg": 1.0,
       "sampler_name": "res_multistep",
