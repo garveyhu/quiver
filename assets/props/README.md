@@ -6,6 +6,7 @@
 
 > 风格基准见 [`../README.md`](../README.md)。独立道具统一追加:`a single <对象> centered on a flat plain light-grey background, no scene, soft, no text`。
 > 多帧动画(壁炉)做成**横向条带**,每帧等宽。
+> ⚠️ **隔离经验**:Z-Image 即便写了 "a single object" 也常**补几个底部杂物**(实测 `lantern.png` 多生了小桌/木墩)。对策:① 提示词再加 `isolated single object, nothing else, completely empty background`;② 或生成后裁出主体。所以独立道具默认状态先标 🔁(待裁切/重做),裁干净接入前端后再转 ✅/📦。
 
 ## furniture/ 状态表
 
@@ -22,7 +23,7 @@
 | 资源 | 文件 | 用途 | 状态 | 预览 |
 |------|------|------|------|------|
 | 壁炉(4 帧火焰条带) | `decor/fireplace.png` | 预算电力槽 | ⬜ | — |
-| 挂灯笼 | `decor/lantern.png` | 氛围光 | ⬜ | — |
+| 挂灯笼 | `decor/lantern.png` | 氛围光 | 🔁 | ![lantern](decor/lantern.png) |
 | 蜡烛 | `decor/candle.png` | 桌上点缀 | ⬜ | — |
 | 圆地毯 | `decor/rug.png` | 地面 | ⬜ | — |
 | 箭靶 | `decor/target.png` | 墙面装饰 | ⬜ | — |
