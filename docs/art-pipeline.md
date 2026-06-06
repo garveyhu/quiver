@@ -5,13 +5,13 @@
 
 ---
 
-## 1. 资产库在哪
+## 1. 资产库在哪(资产在仓里,ComfyUI 反向软链)
 
-- **规范存储**:`<ComfyUI>/output/projects/quiver/`(默认 `/Users/links/Coding/Hub/ComfyUI/output/projects/quiver/`)。
-- **仓内访问**:仓库根 `assets` 软链 → 上面那个目录。代码里就地取用,但 `assets` 已 **gitignore**(指向仓外、是生成的二进制媒体,不进版本库)。
-- **跨项目汇总**:所有项目都落在 `<ComfyUI>/output/projects/<项目>/`,在 ComfyUI 输出目录一眼看全。
-- **真正进 git 的**:① 本规约 `docs/art-pipeline.md`;② 切片接入后的成品在 `frontend/public/`(代码实际加载的那份)。
-  - ⚠️ 取舍:各目录 `README.md`(含提示词)随 `assets` 软链住在仓外、不进 git。提示词的"权威方法论"在本文;若要把目录册也纳入版本控制,可定期把 `assets/**/README.md` 快照进仓(见 §7)。
+- **资产库 = `quiver/assets/`,项目仓内的真实目录,随 git 提交。** 美术源资产(各类 `README.md` 目录册 + 生成的图)都在这——别人 clone 仓库就能参与维护。
+- **ComfyUI 反向软链**:`<ComfyUI>/output/projects/quiver` 软链 → `quiver/assets`。ComfyUI 按 `projects/quiver/...` 前缀出图时,**穿过软链直接落进项目仓**(不再是仓外)。
+- **跨项目汇总**:每个项目在 `<ComfyUI>/output/projects/<项目>` 放一个指向各自仓的软链,在 ComfyUI 输出目录仍能一眼看全所有项目。
+- **进 git 的**:① `quiver/assets/`(源资产 + 含提示词的目录册 README);② `frontend/public/`(切片接入的运行时成品);③ 本规约。ComfyUI 那侧的软链在仓外、不入库。
+- **首次为一个项目搭**:`mkdir -p <repo>/assets && ln -sfn <repo>/assets <ComfyUI>/output/projects/<项目>`。
 
 ---
 
@@ -101,9 +101,9 @@ cd ~/.claude/skills/comfyui   # 或 ~/.agents/extra-skills/comfyui
 
 - **t2i 能做什么**:场景、独立道具、UI 纹理、fx、品牌图 → 走 ComfyUI。
 - **t2i 不能做**:**角色多姿势精灵表**(一致性做不到)→ 手绘/Gemini,标 🖐。
-- **单一真源**:每类资源以 `assets/<类>/` 为准;`frontend/public/` 是"接入后的成品快照"。
-- **不提交软链**:`/assets` 已 gitignore;成品在 `frontend/public/` 才进 git。
-- **目录册快照(可选)**:想把提示词纳入 git,周期性 `cp assets/**/README.md` 到仓内 `docs/art/` 或直接在仓内维护一份镜像。
+- **单一真源**:每类资源以 `assets/<类>/` 为准(在仓里、随 git 提交,含目录册 README 与提示词);`frontend/public/` 是"接入后的成品快照"。
+- **协作**:`assets/` 在仓内,clone 即得;别人改提示词/补资源直接走 git。ComfyUI 那侧只是个软链(仓外、不入库),换机器重建一次软链即可。
+- **二进制体量**:生成图是 PNG,会让仓变大。量大时考虑 git-lfs 跟踪 `assets/**/*.png`(本项目暂直接提交)。
 - **命名**:kebab-case,描述性;变体加 `-v2`/`-empty`/`-night`;动画用横向条带,每帧等宽。
 - **风格一致 > 单图惊艳**:宁可统一也别每张换风格;新资源先对齐 Style Bible。
 

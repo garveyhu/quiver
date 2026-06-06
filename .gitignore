@@ -29,6 +29,3 @@ dist
 # Python
 __pycache__/
 *.pyc
-
-# ComfyUI generated media (symlink to ComfyUI output/projects/quiver — local only)
-/assets
