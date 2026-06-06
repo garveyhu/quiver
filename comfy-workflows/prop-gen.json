@@ -1,6 +1,6 @@
 {
   "last_node_id": 13,
-  "last_link_id": 14,
+  "last_link_id": 10,
   "nodes": [
     {
       "id": 1,
@@ -242,7 +242,7 @@
         "Node name for S&R": "CLIPTextEncode"
       },
       "widgets_values": [
-        "16-bit pixel art game prop, warm wood and dark iron tones, flat even neutral lighting, crisp clean pixels. A single isolated blacksmith anvil on a wooden stump, centered, front 3/4 view, plain solid flat grey background, no glow, no halo, no cast shadow, no scene, nothing else, no text."
+        "16-bit pixel art game prop, a single isolated <object>, clearly coloured, flat even lighting, crisp pixels, on a solid uniform magenta background, nothing else, no text."
       ]
     },
     {
@@ -486,8 +486,7 @@
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
-            10,
-            12
+            10
           ],
           "slot_index": 0
         }
@@ -498,8 +497,8 @@
       "widgets_values": []
     },
     {
-      "id": 10,
-      "type": "LoadBackgroundRemovalModel",
+      "id": 13,
+      "type": "SaveImage",
       "pos": [
         360,
         500
@@ -513,132 +512,9 @@
       "mode": 0,
       "inputs": [
         {
-          "name": "bg_removal_name",
-          "type": "COMBO",
-          "widget": {
-            "name": "bg_removal_name"
-          },
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "name": "bg_model",
-          "type": "BACKGROUND_REMOVAL",
-          "links": [
-            11
-          ],
-          "slot_index": 0
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "LoadBackgroundRemovalModel"
-      },
-      "widgets_values": [
-        "BiRefNet.safetensors"
-      ]
-    },
-    {
-      "id": 11,
-      "type": "RemoveBackground",
-      "pos": [
-        680,
-        500
-      ],
-      "size": [
-        300,
-        200
-      ],
-      "flags": {},
-      "order": 10,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "link": 10
-        },
-        {
-          "name": "bg_removal_model",
-          "type": "BACKGROUND_REMOVAL",
-          "link": 11
-        }
-      ],
-      "outputs": [
-        {
-          "name": "mask",
-          "type": "MASK",
-          "links": [
-            13
-          ],
-          "slot_index": 0
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "RemoveBackground"
-      },
-      "widgets_values": []
-    },
-    {
-      "id": 12,
-      "type": "JoinImageWithAlpha",
-      "pos": [
-        1000,
-        500
-      ],
-      "size": [
-        300,
-        200
-      ],
-      "flags": {},
-      "order": 11,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "link": 12
-        },
-        {
-          "name": "alpha",
-          "type": "MASK",
-          "link": 13
-        }
-      ],
-      "outputs": [
-        {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "links": [
-            14
-          ],
-          "slot_index": 0
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "JoinImageWithAlpha"
-      },
-      "widgets_values": []
-    },
-    {
-      "id": 13,
-      "type": "SaveImage",
-      "pos": [
-        40,
-        730
-      ],
-      "size": [
-        300,
-        200
-      ],
-      "flags": {},
-      "order": 12,
-      "mode": 0,
-      "inputs": [
-        {
           "name": "images",
           "type": "IMAGE",
-          "link": 14
+          "link": 10
         },
         {
           "name": "filename_prefix",
@@ -654,7 +530,7 @@
         "Node name for S&R": "SaveImage"
       },
       "widgets_values": [
-        "projects/quiver/props/decor/anvil"
+        "projects/quiver/props/decor/prop"
       ]
     }
   ],
@@ -734,38 +610,6 @@
     [
       10,
       9,
-      0,
-      11,
-      0,
-      "IMAGE"
-    ],
-    [
-      11,
-      10,
-      0,
-      11,
-      1,
-      "BACKGROUND_REMOVAL"
-    ],
-    [
-      12,
-      9,
-      0,
-      12,
-      0,
-      "IMAGE"
-    ],
-    [
-      13,
-      11,
-      0,
-      12,
-      1,
-      "MASK"
-    ],
-    [
-      14,
-      12,
       0,
       13,
       0,

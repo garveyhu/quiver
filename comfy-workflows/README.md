@@ -31,18 +31,22 @@ ComfyUI 有两种工作流 JSON,**别混**:
 
 | 工作流 | 用途 | 格式 | 状态 |
 |--------|------|------|------|
-| `keyable-prop.json` | 道具 → BiRefNet `RemoveBackground` → 透明 PNG | **UI**(画布可开 + `raw` 可跑) | ⚠️ **仅写实/3D 风** |
-| `keyable-prop.api.json` | 同上 API 导出 | API | ⚠️ 仅写实/3D 风 |
+| `prop-gen.json` | 单道具出图(纯 Z-Image,纯洋红底);抠图交给 `--keyflat` | **UI**(画布可开 + `raw` 可跑) | ✅ |
+| `prop-gen.api.json` | 同上 API 导出(headless/CI) | API | ✅ |
 
-> ⚠️ **抠图实测结论**:BiRefNet 是给**真实照片**做分割的,对**扁平像素/插画会失败**(整张当前景,背景 alpha~254 抠不掉)。
-> **扁平 2D 美术的正路 = 纯色底 + color-key**,一条命令:
+> **职责分离(实测后的正确架构)**:**工作流只管"生成"**,**抠图交给 `--keyflat` 后处理**(洪水填充 color-key,扁平美术比任何 in-graph 抠图节点都稳)。
 > ```bash
+> # 改 prop-gen 里 node5 的 <object>,然后:
+> comfy.py raw .../comfy-workflows/prop-gen.json --project quiver --prefix props/decor/<名> --keyflat --key-tol 95
+> # 或不用工作流、直接 builder:
 > comfy.py t2i "…game prop… on a solid uniform magenta background, clearly coloured …, no text." \
 >   --project quiver --prefix props/decor/<名> --keyflat --key-tol 95
 > ```
-> `--keyflat` 生成后自动用 `scripts/keyflat.py` 洪水填充抠底。实测 `anvil.png` / `candle_00001_.png` 都是这么来的,干净透明。`keyable-prop`(BiRefNet)只留给写实/3D 渲染风资产。
-
-> `keyable-prop.json` 是 **UI 格式**——在 ComfyUI 画布侧边栏 `projects/quiver/` 下**直接点开即可编辑**,改完保存还是 UI 格式;`raw` 跑它会自动转 API。两个文件由 `api2ui` 保持一致(见下)。
+> `--keyflat`(t2i 和 raw 都支持)生成后自动用 `scripts/keyflat.py` 抠纯色底。实测 `anvil.png`/`candle_00001_.png` 都是这么来的,干净透明。
+>
+> ⚠️ **已退役 BiRefNet `keyable-prop`**:BiRefNet 是给真实照片做分割的,对扁平像素/插画会失败(整张当前景、背景 alpha~254 抠不掉)。in-graph 神经抠图对本项目无用,已删。模型文件留着,仅以后做写实/3D 风时再用。
+>
+> `prop-gen.json` 是 **UI 格式**——画布侧边栏 `projects/quiver/` 下点开即编辑,保存仍是 UI 格式;`raw` 跑它自动转 API。两个文件由 `api2ui` 保持一致(见下)。
 
 ## 用 api2ui 把 API 工作流转成画布可开的 UI 格式
 

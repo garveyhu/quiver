@@ -1,5 +1,4 @@
 {
-  "_comment": "Quiver 专用工作流:生成单个道具并自动抠成透明 PNG(出图即可用,免手动 key-out)。Z-Image t2i -> RemoveBackground(本地模型) -> JoinImageWithAlpha -> SaveImage(RGBA)。API 格式,用 `comfy.py raw` 跑。⚠️ 需先在 ComfyUI 装一个抠图模型(见 README),否则节点 10 的 bg_removal_name 会报 value_not_in_list 并列出可选项。",
   "1": {
     "class_type": "UNETLoader",
     "inputs": {
@@ -38,7 +37,7 @@
         "2",
         0
       ],
-      "text": "16-bit pixel art game prop, warm wood and dark iron tones, flat even neutral lighting, crisp clean pixels. A single isolated blacksmith anvil on a wooden stump, centered, front 3/4 view, plain solid flat grey background, no glow, no halo, no cast shadow, no scene, nothing else, no text."
+      "text": "16-bit pixel art game prop, a single isolated <object>, clearly coloured, flat even lighting, crisp pixels, on a solid uniform magenta background, nothing else, no text."
     }
   },
   "6": {
@@ -98,46 +97,15 @@
       ]
     }
   },
-  "10": {
-    "class_type": "LoadBackgroundRemovalModel",
-    "inputs": {
-      "bg_removal_name": "BiRefNet.safetensors"
-    }
-  },
-  "11": {
-    "class_type": "RemoveBackground",
-    "inputs": {
-      "image": [
-        "9",
-        0
-      ],
-      "bg_removal_model": [
-        "10",
-        0
-      ]
-    }
-  },
-  "12": {
-    "class_type": "JoinImageWithAlpha",
-    "inputs": {
-      "image": [
-        "9",
-        0
-      ],
-      "alpha": [
-        "11",
-        0
-      ]
-    }
-  },
   "13": {
     "class_type": "SaveImage",
     "inputs": {
       "images": [
-        "12",
+        "9",
         0
       ],
-      "filename_prefix": "projects/quiver/props/decor/anvil"
+      "filename_prefix": "projects/quiver/props/decor/prop"
     }
-  }
+  },
+  "_comment": "Quiver 道具出图工作流(纯 Z-Image,画布可编辑)。在纯洋红底上出单个道具,抠图交给 `raw --keyflat`(或 t2i --keyflat)。改 node 5 的 <object> 为具体道具。"
 }
