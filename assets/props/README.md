@@ -8,7 +8,7 @@
 > 多帧动画(壁炉)做成**横向条带**,每帧等宽。
 > ⚠️ **抠图经验(重要,实测踩坑)**:
 > - **扁平 2D 美术别用神经抠图(BiRefNet)**——它是给真实照片做分割的,对扁平像素/插画会把整张当前景(实测背景 alpha~254、根本没抠掉)。
-> - **正路 = 纯色底 + color-key**:提示词加 `on a solid uniform magenta background`,用 `comfy.py t2i … --keyflat`(或 `scripts/keyflat.py`)洪水填充抠底→干净透明。`anvil.png` 就是这么来的。
+> - **正路 = 纯色底 + color-key**:提示词加 `on a solid uniform magenta background`,用 `comfy.py t2i … --keyflat`(或 `scripts/post/keyflat.py`)洪水填充抠底→干净透明。`anvil.png` 就是这么来的。
 > - **加颜色词**防止主体过曝发白(写 `clearly coloured dark iron / brown wood`,别只说 cozy)。
 > - Z-Image 偶尔补杂物 → 加 `nothing else`;纯色底让 color-key 容易兜掉。
 

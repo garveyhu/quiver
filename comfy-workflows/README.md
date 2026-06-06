@@ -42,7 +42,7 @@ ComfyUI 有两种工作流 JSON,**别混**:
 > comfy.py t2i "…game prop… on a solid uniform magenta background, clearly coloured …, no text." \
 >   --project quiver --prefix props/decor/<名> --keyflat --key-tol 95
 > ```
-> `--keyflat`(t2i 和 raw 都支持)生成后自动用 `scripts/keyflat.py` 抠纯色底。实测 `anvil.png`/`candle_00001_.png` 都是这么来的,干净透明。
+> `--keyflat`(t2i 和 raw 都支持)生成后自动用 `scripts/post/keyflat.py` 抠纯色底。实测 `anvil.png`/`candle_00001_.png` 都是这么来的,干净透明。
 >
 > ⚠️ **已退役 BiRefNet `keyable-prop`**:BiRefNet 是给真实照片做分割的,对扁平像素/插画会失败(整张当前景、背景 alpha~254 抠不掉)。in-graph 神经抠图对本项目无用,已删。模型文件留着,仅以后做写实/3D 风时再用。
 >
@@ -50,9 +50,9 @@ ComfyUI 有两种工作流 JSON,**别混**:
 
 ## 用 api2ui 把 API 工作流转成画布可开的 UI 格式
 
-手写的/builder 拼的是 API 格式(画布打不开)。skill 新增 `scripts/api2ui.py`:用运行中 ComfyUI 的 `/object_info` 真实 schema 把 API 转成扁平 UI/litegraph(画布能开),并处理 widget 顺序 + seed 后的 `control_after_generate` 幽灵 widget。
+手写的/builder 拼的是 API 格式(画布打不开)。skill 新增 `scripts/build/api2ui.py`:用运行中 ComfyUI 的 `/object_info` 真实 schema 把 API 转成扁平 UI/litegraph(画布能开),并处理 widget 顺序 + seed 后的 `control_after_generate` 幽灵 widget。
 ```bash
-~/.venvs/current/bin/python ~/.claude/skills/comfyui/scripts/api2ui.py <api.json> <out_ui.json>
+~/.venvs/current/bin/python ~/.claude/skills/comfyui/scripts/build/api2ui.py <api.json> <out_ui.json>
 ```
 本目录的 `keyable-prop.json` 就是这样从 `keyable-prop.api.json` 生成的(已用 ui2api 回转逐节点校验一致)。
 
