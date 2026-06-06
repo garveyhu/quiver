@@ -116,8 +116,11 @@ cd ~/.claude/skills/comfyui   # 或 ~/.agents/extra-skills/comfyui
 
 ## 7. 管理规约(governance)
 
-- **t2i 能做什么**:场景、独立道具、UI 纹理、fx、品牌图 → 走 ComfyUI。
-- **t2i 不能做**:**角色多姿势精灵表**(一致性做不到)→ 手绘/Gemini,标 🖐。
+- **t2i 能做什么**:场景、独立道具、UI 纹理、fx、品牌图 → 走 ComfyUI(`prop-gen`/builder + `--keyflat`/`--pixelize`)。
+- **角色现在也能做了**(2026 更新):用**图像编辑模型 Qwen-Image-Edit-2511**(工作流 `comfy-workflows/char-edit`)——给一张参考图,锁住同一角色换姿势/换装/视角/出新角色,**不用 ControlNet、不用训 LoRA**。实测身份保持很好(见 `comfy-workflows/README.md`)。
+  - 适合:出姿势帧/立绘/换装变体/新角色概念。
+  - 仍有边界:**逐帧动画级的完全一致**(同一精灵表 18 帧丝滑)可能需要训角色 LoRA;Mac 上 156s/张偏慢,量产建议云 GPU。
+  - 旧结论"t2i 做不了角色"已作废;但**已手绘且满意的角色表**(archer-1~4)继续用,不必重做。
 - **单一真源**:每类资源以 `assets/<类>/` 为准(在仓里、随 git 提交,含目录册 README 与提示词);`frontend/public/` 是"接入后的成品快照"。
 - **协作**:`assets/` 在仓内,clone 即得;别人改提示词/补资源直接走 git。ComfyUI 那侧只是个软链(仓外、不入库),换机器重建一次软链即可。
 - **二进制体量**:生成图是 PNG,会让仓变大。量大时考虑 git-lfs 跟踪 `assets/**/*.png`(本项目暂直接提交)。
@@ -131,7 +134,7 @@ cd ~/.claude/skills/comfyui   # 或 ~/.agents/extra-skills/comfyui
 | 分类 | 进度 | 备注 |
 |------|------|------|
 | scenes | 1/4 | 主场景 `workshop-hall.png` ✅ |
-| characters | 4 可用 | 🖐 手绘;「换人物」玩法待定 |
+| characters | 4 可用 | 🖐 手绘 4 个;新增 **Qwen-Image-Edit 角色管线**(`char-edit`)可出姿势/换装/新角色;「换人物」玩法待定 |
 | props | 0/16 | 待生成 |
 | ui | 0/14 | 待生成;当前 DOM 浮层用 CSS 皮 |
 | fx | 0/6 | 待生成;当前 juice 程序绘制 |
