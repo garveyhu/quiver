@@ -2,7 +2,7 @@
   "category": "characters",
   "out_prefix": "characters",
   "defaults": {
-    "workflow": "char-edit",
+    "workflow": "i2i",
     "variants": 2
   },
   "items": [
@@ -26,12 +26,12 @@
       "name": "archer-5-concept",
       "type": "character",
       "status": "skip",
-      "workflow": "char-edit",
+      "workflow": "i2i",
       "vars": {
-        "ref": "<先 comfy.py upload 一张参考帧>",
-        "change": "a new archer character, different hair and outfit colours, same cozy pixel style, full body idle"
+        "image": "_base/archer-ref.png",
+        "prompt": "a new archer character, different hair and outfit colours, same cozy pixel style, full body idle"
       },
-      "_note": "角色扩展示例:需先上传参考图;type=character 默认批量跳过,要跑加 --with-chars"
+      "_note": "角色扩展示例:image 填本地参考图(相对 assets/characters);type=character 默认批量跳过,要跑加 --with-chars(i2i 会自动上传,无需手动 upload)"
     }
   ]
 }
