@@ -718,7 +718,7 @@
     },
     {
       "id": 14,
-      "type": "SaveImage",
+      "type": "SaveImageClean",
       "pos": [
         2340,
         80
@@ -747,7 +747,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "SaveImage"
+        "Node name for S&R": "SaveImageClean"
       },
       "widgets_values": [
         "projects/quiver/characters/poses/out"

@@ -152,7 +152,7 @@
     }
   },
   "14": {
-    "class_type": "SaveImage",
+    "class_type": "SaveImageClean",
     "inputs": {
       "images": [
         "13",

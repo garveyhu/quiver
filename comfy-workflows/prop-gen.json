@@ -498,7 +498,7 @@
     },
     {
       "id": 13,
-      "type": "SaveImage",
+      "type": "SaveImageClean",
       "pos": [
         1960,
         80
@@ -527,7 +527,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "SaveImage"
+        "Node name for S&R": "SaveImageClean"
       },
       "widgets_values": [
         "projects/quiver/props/decor/prop"
