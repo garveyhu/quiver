@@ -11,8 +11,6 @@
   "dependencies": {
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2.7.1",
-    "phaser": "^4.1.0",
-    "phaser4-rex-plugins": "^4.0.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

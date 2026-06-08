@@ -1,9 +1,9 @@
-// The pixel-office domain types. Kept separate from Phaser so the pose state
-// machine stays a pure, testable function with no rendering dependency.
+// The pixel-office domain types. Kept separate from the renderer so the pose
+// state machine stays a pure, testable function with no rendering dependency.
 
 // The behavioural states one archer can be in. Each maps to a frame animation
 // (walk / bow) or a single sliced frame (idle / reading / celebrate / sick) in
-// the Phaser scene — see OfficeScene.applyState.
+// the React pixel scene — see StudioRoom.
 export type Pose =
   | 'arriving' // walking in to the station (walk strip)
   | 'idle' // standing relaxed, waiting (idle frame + breathing bob)
@@ -31,7 +31,7 @@ export interface WorkerLogEntry {
   text: string;
 }
 
-// Live view-model for one worker (one task). The Phaser scene renders this.
+// Live view-model for one worker (one task). The React pixel scene renders this.
 export interface WorkerView {
   taskId: string;
   slot: number; // stable 0-based index; character sheet = slot % 4 (4 archers)

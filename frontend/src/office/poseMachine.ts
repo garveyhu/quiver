@@ -38,7 +38,7 @@ function pushLog(prev: WorkerView, event: AgentEvent, text: string): WorkerLogEn
 }
 
 // Compute the next worker view from the current one + an incoming event.
-// Returns a NEW object (immutable) so React/Phaser can diff cheaply.
+// Returns a NEW object (immutable) so React can diff cheaply.
 export function reduceWorker(prev: WorkerView, event: AgentEvent): WorkerView {
   // Latched terminal poses are sticky — ignore everything except a fresh start.
   if (prev.terminal && event.kind !== 'worker_started') {

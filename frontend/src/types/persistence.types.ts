@@ -31,6 +31,8 @@ export interface Settings {
   fakeDelayMs: number;
   theme: string;
   uiScale: number;
+  /** 验证关命令(sh -c),空=不真正校验(等同总是通过) */
+  verifyCommand: string;
 }
 
 // Partial update sent to `update_settings`: omit a key to leave it unchanged,
