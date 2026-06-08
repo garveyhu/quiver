@@ -6,6 +6,52 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 8 轮
+
+**落了什么**
+- 验证轮(无代码改动)→ 仅 `docs(build-log)` 记录运行时验证结果。
+
+**这轮做了什么:前端运行时验证(真窗口,非只读代码)**
+- 用 `scripts/agent-debug.sh` 对着 live 实例(已有一个在跑,vite :1420 服务当前=已提交
+  前端)做运行时验证(bridge eval 走 localhost HTTP):
+  - app 在跑:title `Quiver`、渲染 `QuiverShell`。
+  - 真实 UI:导航 `看板/档案/设置`、模式 `模拟/真实`、`钉上去` 入队、命令栏 `⌘K`。
+  - **HUD 显示真实后端统计**:`$0.90 今夜花费 / 42 已完成 / Lv7 / 0 运行中 / 0 排队`
+    —— 说明 `get_stats` 等 IPC 已接通、前后端打通。
+  - **像素办公室真在渲染**:`.qv-stage` 存在、204 个子元素;**`<img>` 标签 = 0**
+    —— 确认"美术全代码生成、绝不用图片资源"✓。
+  - console 4s 无 error/warn。
+
+**验证过的**
+- 运行时(bridge eval):app 跑起来 + 渲染 + IPC 实时数据 + 像素办公室 + 零图片 + 无报错。
+- (第 7 轮已:`tsc --noEmit` 通过。)
+
+**⚠ 没做成的**
+- **截图没截成**:`agent-debug.sh shot` 报"没找到 Quiver 窗口"——bridge 活着(eval 正常)
+  但 CoreGraphics 枚举不到原生窗口(可能窗口被最小化/移到别的 Space,或截屏权限)。
+  非代码问题,没死磕(纪律:工具失败别 rabbit-hole)。**后果**:像素级"对照原型
+  逐项查缺补漏"这轮做不了(要肉眼看画面)。早上你若能让窗口可见 + 给终端 Screen
+  Recording 权限,下一轮就能 `shot`+Read 做视觉对照。
+
+**各阶段进度**
+- 后端 P0:#1–#4 ✅、#5 ◐。
+- **前端:✅ 已落定 + 运行时验证通过**(app 跑、IPC 通、像素办公室渲染、零图片)。
+
+**今天该接哪**(优先级从上到下)
+1. **P0 #5 killpg 混沌测试**(后端最后一块,基线干净可独立做)。实现计划:
+   - `claude/mod.rs` base_command 加 `#[cfg(unix)] command.process_group(0)`
+     (tokio 1.52 支持)→ 子进程成为自己进程组的组长(pgid==pid)。
+   - `lib.rs` `kill_pid` 改 **killpg**(杀整个进程组,`libc::kill(-pid, SIGKILL)`
+     或 `killpg`)而非单 pid——对应 DESIGN §23 P3"真急停(killpg)"。
+   - `fake-claude` 加一个会**派生子进程**的场景(否则"无孤儿"无从验证:当前 fake
+     不 fork,单 pid 杀也不留孤儿,测不出区别)。
+   - `cancel.rs` 升级:kill **-9** 整组,断言 grandchild 子进程也被杀、无孤儿残留。
+2. **前端视觉对照查缺补漏**(需先解决截图):`shot`+Read 对照
+   `docs/redesign-iso-directions.html`,逐项核对(连续缩放/时间轴/信任卡/晨报/命令栏),
+   哪个交互缺/没接 IPC 就补成纵向切片。
+
+---
+
 ### 2026-06-09 · 第 7 轮
 
 **落了什么**
@@ -342,6 +388,12 @@
 ---
 
 ## 📜 历轮记录
+
+### 第 8 轮(2026-06-09)
+- 前端运行时验证(真窗口,bridge eval):app 跑、渲染 QuiverShell、HUD 显示真实后端
+  统计(IPC 通)、`.qv-stage` 像素办公室 204 元素渲染、`<img>`=0(零图片)、无 console 报错。
+- 截图未成(CoreGraphics 找不到窗口,环境问题,未死磕)。
+- 无代码改动(验证轮),仅 BUILD-LOG。
 
 ### 第 7 轮(2026-06-09)
 - 发现前端已有整套 tsc 通过的 React/CSS 像素办公室实现(未提交),按既定标准
