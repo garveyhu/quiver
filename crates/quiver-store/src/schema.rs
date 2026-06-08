@@ -107,6 +107,9 @@ pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
     // keeps its original (alias-less) shape, so add the column idempotently for
     // databases created before the alias feature landed.
     add_column_if_absent(conn, "recent_projects", "alias", "TEXT")?;
+    // The verify-gate command (DESIGN §7) — added after the original settings table,
+    // so existing DBs gain it idempotently (default '' = no real gate / always-pass).
+    add_column_if_absent(conn, "settings", "verify_command", "TEXT NOT NULL DEFAULT ''")?;
 
     // Seed the single settings row with defaults if absent, so `get_settings`
     // always returns a complete config. `INSERT OR IGNORE` keeps it idempotent

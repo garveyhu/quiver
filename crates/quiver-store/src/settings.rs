@@ -59,6 +59,10 @@ pub struct Settings {
     pub theme: String,
     /// UI scale factor (1.0 = 100%).
     pub ui_scale: f64,
+    /// The verify-gate command (DESIGN §7), run as `sh -c <cmd>` in each task's
+    /// worktree before merge. Empty = no real gate (treated as always-pass, the
+    /// original behavior) so existing setups are unchanged until a command is set.
+    pub verify_command: String,
 }
 
 impl Default for Settings {
@@ -73,6 +77,7 @@ impl Default for Settings {
             fake_delay_ms: DEFAULT_FAKE_DELAY_MS,
             theme: DEFAULT_THEME.to_string(),
             ui_scale: DEFAULT_UI_SCALE,
+            verify_command: String::new(),
         }
     }
 }
@@ -97,6 +102,7 @@ pub struct SettingsPatch {
     pub fake_delay_ms: Option<i64>,
     pub theme: Option<String>,
     pub ui_scale: Option<f64>,
+    pub verify_command: Option<String>,
 }
 
 /// Deserialize a present-but-maybe-null JSON field into `Some(Option<f64>)`,
@@ -126,7 +132,8 @@ impl Store {
         let row = conn
             .query_row(
                 "SELECT default_mode, model, max_workers, monthly_credit_cap_usd,
-                        nightly_budget_usd, agent_bin_override, fake_delay_ms, theme, ui_scale
+                        nightly_budget_usd, agent_bin_override, fake_delay_ms, theme, ui_scale,
+                        verify_command
                  FROM settings WHERE id = 1",
                 [],
                 |row| {
@@ -140,6 +147,7 @@ impl Store {
                         fake_delay_ms: row.get(6)?,
                         theme: row.get(7)?,
                         ui_scale: row.get(8)?,
+                        verify_command: row.get(9)?,
                     })
                 },
             )
@@ -159,7 +167,8 @@ impl Store {
         let mut current: Settings = conn
             .query_row(
                 "SELECT default_mode, model, max_workers, monthly_credit_cap_usd,
-                        nightly_budget_usd, agent_bin_override, fake_delay_ms, theme, ui_scale
+                        nightly_budget_usd, agent_bin_override, fake_delay_ms, theme, ui_scale,
+                        verify_command
                  FROM settings WHERE id = 1",
                 [],
                 |row| {
@@ -173,6 +182,7 @@ impl Store {
                         fake_delay_ms: row.get(6)?,
                         theme: row.get(7)?,
                         ui_scale: row.get(8)?,
+                        verify_command: row.get(9)?,
                     })
                 },
             )
@@ -206,12 +216,16 @@ impl Store {
         if let Some(v) = patch.ui_scale {
             current.ui_scale = v;
         }
+        if let Some(v) = &patch.verify_command {
+            current.verify_command = v.clone();
+        }
 
         conn.execute(
             "INSERT INTO settings
                 (id, default_mode, model, max_workers, monthly_credit_cap_usd,
-                 nightly_budget_usd, agent_bin_override, fake_delay_ms, theme, ui_scale)
-             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                 nightly_budget_usd, agent_bin_override, fake_delay_ms, theme, ui_scale,
+                 verify_command)
+             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
              ON CONFLICT(id) DO UPDATE SET
                 default_mode           = excluded.default_mode,
                 model                  = excluded.model,
@@ -221,7 +235,8 @@ impl Store {
                 agent_bin_override     = excluded.agent_bin_override,
                 fake_delay_ms          = excluded.fake_delay_ms,
                 theme                  = excluded.theme,
-                ui_scale               = excluded.ui_scale",
+                ui_scale               = excluded.ui_scale,
+                verify_command         = excluded.verify_command",
             params![
                 current.default_mode,
                 current.model,
@@ -232,6 +247,7 @@ impl Store {
                 current.fake_delay_ms,
                 current.theme,
                 current.ui_scale,
+                current.verify_command,
             ],
         )?;
         Ok(current)
