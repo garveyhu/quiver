@@ -74,6 +74,12 @@ impl ClaudeRunner {
             .stdout(Stdio::piped())
             .stderr(Stdio::null());
         apply_env_allowlist(&mut command);
+        // Put the child in its OWN process group (pgid == child pid). On cancel the
+        // app signals the negative pid → the whole group dies, reaping any
+        // grandchildren the agent spawned. Without this, killing only the agent pid
+        // would orphan its children (DESIGN §23 P3 killpg). Unix-only.
+        #[cfg(unix)]
+        command.process_group(0);
         command
     }
 

@@ -243,11 +243,28 @@ fn reorder_task(
 
 /// Send SIGTERM to a child PID. The agent exits → its stdout closes → the run's
 /// drain loop ends through the normal path, which GCs the worktree (§8.4).
+/// Cancel a running task by killing its agent's whole PROCESS GROUP, not just the
+/// agent pid (DESIGN §23 P3 "真急停 killpg"). The runner spawns each agent as its
+/// own process-group leader (pgid == pid via `process_group(0)`), so signalling
+/// the negative pid reaps the agent AND any children it spawned — never leaving an
+/// orphan. SIGKILL is decisive (cancel must stop work now); the dead agent's
+/// stdout EOF still routes the run through the normal §8.4 cleanup path.
 fn kill_pid(pid: u32) {
-    let _ = std::process::Command::new("kill")
-        .arg("-TERM")
-        .arg(pid.to_string())
-        .status();
+    #[cfg(unix)]
+    {
+        // SAFETY: a plain kill(2) syscall. A negative pid targets the process
+        // group whose id is the absolute value — here the agent's own group.
+        unsafe {
+            libc::kill(-(pid as i32), libc::SIGKILL);
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = std::process::Command::new("kill")
+            .arg("-KILL")
+            .arg(pid.to_string())
+            .status();
+    }
 }
 
 /// Cancel a task. QUEUED → remove its commission from the board. RUNNING /

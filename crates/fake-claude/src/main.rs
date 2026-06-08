@@ -39,6 +39,9 @@ fn main() -> ExitCode {
     // stream (a resumed run continues an existing session) so a test can assert the
     // handle was threaded through. Absent → the default fresh session.
     let session = parse_resume(args.iter().cloned()).unwrap_or_else(|| SESSION_ID.to_string());
+    // Test-only: where the `spawn_child` scenario records its forked grandchild's
+    // PID (passed as an extra arg by the killpg chaos test). Ignored otherwise.
+    let child_pidfile = parse_flag(args.iter().cloned(), "--child-pidfile");
     let delay = resolve_delay(std::env::var("QUIVER_FAKE_DELAY_MS").ok());
 
     match scenario.as_str() {
@@ -48,6 +51,17 @@ fn main() -> ExitCode {
         "crash" => {
             emit_init(&session, delay);
             return ExitCode::FAILURE;
+        }
+        // Test hook for the killpg chaos test (DESIGN §23 P3): fork a long-lived
+        // grandchild that records its PID, emit init so a worker appears, then stay
+        // alive so the run is genuinely in-flight when the test kills the process
+        // GROUP. The grandchild inherits this process group, so a correct killpg
+        // reaps it too — leaving no orphan.
+        "spawn_child" => {
+            spawn_orphan_probe(child_pidfile.as_deref());
+            emit_init(&session, delay);
+            std::thread::sleep(Duration::from_secs(30));
+            return ExitCode::SUCCESS;
         }
         // Reserved for later phases (DESIGN §13.1). Fall back to happy for now.
         "verify_fail" | "credit_exhausted" => emit_happy(&session, &prompt, delay),
@@ -114,6 +128,22 @@ fn parse_prompt(args: impl Iterator<Item = String>) -> String {
     "(no prompt provided)".to_string()
 }
 
+/// Extract the value of `--<name> <value>` (or `--<name>=<value>`) from the args.
+/// Generic flag reader for the test-injection flags the runner forwards verbatim.
+fn parse_flag(args: impl Iterator<Item = String>, name: &str) -> Option<String> {
+    let eq = format!("{name}=");
+    let mut args = args.peekable();
+    while let Some(arg) = args.next() {
+        if let Some(value) = arg.strip_prefix(&eq) {
+            return Some(value.to_string());
+        }
+        if arg == name {
+            return args.next();
+        }
+    }
+    None
+}
+
 /// Extract the value of `--resume <session_id>` (or `--resume=<id>`) the runner
 /// passes to continue a prior session. `None` when absent (a fresh spawn). All
 /// other args are accepted and ignored.
@@ -151,6 +181,21 @@ fn json_escape(s: &str) -> String {
 
 const SESSION_ID: &str = "fake-session-0001";
 const MODEL: &str = "claude-sonnet-4-5";
+
+/// Test hook for the killpg chaos test: fork a long-lived grandchild that writes
+/// its own PID to `pidfile`, then sleeps well past the test's lifetime. The
+/// grandchild inherits this process's group, so the test can verify that killing
+/// the GROUP (not just the agent pid) reaps it too — no orphan. No-op when no
+/// `--child-pidfile` was passed (i.e. a normal run).
+fn spawn_orphan_probe(pidfile: Option<&str>) {
+    let Some(pidfile) = pidfile else {
+        return;
+    };
+    let _ = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(format!("echo $$ > '{pidfile}'; sleep 30"))
+        .spawn();
+}
 
 /// Print the `system / init` line — carries session_id + model. Shared by the
 /// happy and crash scripts so both produce a `WorkerStarted` event.
