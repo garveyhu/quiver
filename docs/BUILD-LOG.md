@@ -6,6 +6,47 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 5 轮
+
+**落了什么**
+- `10eb1f8` feat(runner): AgentRunner 加 resume(--resume session_id)（**P0 #2**)
+
+**这轮做了什么**
+- 给 `AgentRunner` trait 加 `resume(session_id, prompt, cwd, bin)`,让 #1/#4 持久化的
+  session_id 真正可用(续接而非从头重跑)。
+  - ClaudeRunner:抽 `base_command` + `drive` 复用,spawn/resume 共享;resume 多加
+    `--resume <id>`。
+  - fake-claude:认 `--resume`(空格/=两式),把该 id 当 session 回显整个 stream,
+    供测试断言句柄透传。
+  - 测试:spawn_fake resume 用例(首个 WorkerStarted 携带 resumed id)+ fake-claude
+    parse_resume 单测。
+
+**验证过的**
+- `cargo check --workspace` ✅(exit 0)
+- `cargo test --workspace` ✅ 全绿 0 失败:quiver-core 41 / spawn_fake 2(含 resume)/
+  fake-claude 10(含 parse_resume)/ quiver-store 30 / quiver-app 19+1 / cancel/merge/
+  parallel/run_task/streaming 全过。
+- ⚠ 经验:`cargo test -p quiver-core` 不会重建 fake-claude 二进制,集成测试会跑到
+  旧 fake-claude。改了 fake-claude 后要先 `cargo build -p fake-claude`(或 `cargo
+  test --workspace`)再跑 spawn_fake / cancel 这类集成测试。
+
+**各阶段进度**
+- 后端 P0:#1 ✅ #2 ✅(resume 能力;crates/quiver-agent 独立 crate 拆分未做=纯
+  搬家,低优先)#3 ✅ #4 ✅ #5 ◐。**P0 主体基本完成**,剩两处精炼 + 前端。
+- 前端:未开始(工作树前端大重构仍未提交,我没碰)。
+
+**今天该接哪**(优先级从上到下)
+1. **接 reconcile → resume**(完成后端 P0 最后一环):supervisor 加 resume 路径
+   (`run_task_streaming` 接受可选 session_id → 走 runner.resume 而非 spawn),
+   reconcile/run.rs 把 store 里的 `task_session_id` 传进去。这样崩溃恢复真正"续接"
+   而非从头跑。⚠ 改 run_task_streaming 签名会波及多个测试调用点,注意一起改。
+2. **转前端纵向切片**(P0 后端主体已完成,该并进前端了):先评估 frontend 工作树
+   现状(game→shell 重构是否可编译/可作基线),挑一个最小切片(如等距像素办公室
+   地板 + 一个 worker sprite,纯 CSS/canvas)搬进 React/TS。**绝不用图片资源**。
+3. P0 #5 精炼:cancel.rs kill -9 杀进程组 + 断言无孤儿(需 spawn 设进程组)。
+
+---
+
 ### 2026-06-09 · 第 4 轮
 
 **落了什么**
@@ -194,7 +235,7 @@
 | # | 任务 | 现状 |
 |---|------|------|
 | 1 | adapter.rs `RawLine::Init` 丢 `session_id` 的 bug | ✅ 端到端贯通:事件层(`a8502fd`)+ store 持久化(`caa313a`/`2918425`)+ run.rs 落库(`cdc12cf`);**剩** reconcile 读回接 `--resume`(并入 #4) |
-| 2 | 抽 `AgentRunner` trait(spawn/resume/cancel/set_permission) | ◐ trait 已有 `spawn`+`kind`,返回 `SpawnedAgent{events,pid}`(`75ee6c5`);缺 resume/cancel/set_permission;仍在 quiver-core 内,未拆 `crates/quiver-agent` |
+| 2 | 抽 `AgentRunner` trait(spawn/resume/cancel/set_permission) | ✅ 能力齐:spawn/resume(`10eb1f8`)+ kind;cancel=外部杀 pid(`75ee6c5` running_pids/cancel_task_cmd)、set_permission=extra_args(--permission-mode)。**未做**:拆独立 `crates/quiver-agent`(纯搬家,低优先);reconcile 实际改走 resume(见晨报 #1) |
 | 3 | quiver-store schema 加 saga_step + 完成标记 + fence(幂等 migrate) | ✅ session_id/saga_step/fence/done_at + 迁移测试(`caa313a`)+ session_id 读写访问器(`2918425`) |
 | 4 | `setup()` 写 `reconcile()`:重启后从账本恢复在途任务 | ✅ `scheduler::reconcile` + store requeue/列项目 + setup 异步调用(`6fd1da4`);**剩** 重跑时真正接 `--resume`(依赖 #2) |
 | 5 | fake-claude kill -9 混沌测试,确认杀进程组不留孤儿 | ◐ `tests/cancel.rs` 已提交 + 过(`75ee6c5`),用 kill **-TERM** 单 PID。任务要 kill **-9** + 进程组无孤儿——属精炼 |
@@ -222,6 +263,12 @@
 ---
 
 ## 📜 历轮记录
+
+### 第 5 轮(2026-06-09)
+- P0 #2:AgentRunner 加 resume(--resume),ClaudeRunner base_command+drive 复用,
+  fake-claude 认 --resume 回显 session,集成测试断言句柄透传(`10eb1f8`)。
+- 验证:`cargo test --workspace` 全绿(0 失败)。
+- 记下集成测试需先重建 fake-claude 的坑(见晨报)。
 
 ### 第 4 轮(2026-06-09)
 - P0 #4 reconcile 崩溃恢复:store requeue/列待办项目 + scheduler::reconcile
