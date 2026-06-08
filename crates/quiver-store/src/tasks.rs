@@ -244,6 +244,40 @@ impl Store {
         Ok(())
     }
 
+    /// Persist a task's backend session handle (Claude `--resume` token),
+    /// stamping `updated_at`. Threaded from the `WorkerStarted` event so the
+    /// manager can durably resume this worker's context after a restart
+    /// (DESIGN §4/§6 — pairs with the §20 `session_id` column).
+    pub fn set_task_session_id(
+        &self,
+        id: &str,
+        session_id: &str,
+        updated_at: i64,
+    ) -> anyhow::Result<()> {
+        let conn = self.conn.lock().expect("store lock");
+        conn.execute(
+            "UPDATE task SET session_id = ?2, updated_at = ?3 WHERE id = ?1",
+            params![id, session_id, updated_at],
+        )?;
+        Ok(())
+    }
+
+    /// Read back a task's persisted session handle, or `None` if the task is gone
+    /// or never reported one. The reconcile path reads this to resume in-flight
+    /// workers (DESIGN §23 P0).
+    pub fn task_session_id(&self, id: &str) -> anyhow::Result<Option<String>> {
+        let conn = self.conn.lock().expect("store lock");
+        let got = conn
+            .query_row(
+                "SELECT session_id FROM task WHERE id = ?1",
+                params![id],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()?
+            .flatten();
+        Ok(got)
+    }
+
     /// Set a task's board `position` (drag-to-reorder). Lower = nearer the top.
     pub fn reorder_task(&self, id: &str, position: i64, updated_at: i64) -> anyhow::Result<()> {
         let conn = self.conn.lock().expect("store lock");
@@ -532,5 +566,23 @@ mod tests {
         assert!((store.cost_since(5_000).unwrap() - 3.0).abs() < 1e-9);
         // Window covering both.
         assert!((store.cost_since(0).unwrap() - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn session_id_round_trips_and_survives_reopen() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        {
+            let store = Store::open(file.path()).unwrap();
+            store.enqueue_task(&new_task("t", "/r", "p", "running", 1)).unwrap();
+            // Unset until the WorkerStarted event reports one.
+            assert_eq!(store.task_session_id("t").unwrap(), None);
+            store.set_task_session_id("t", "sess-abc", 2).unwrap();
+            assert_eq!(store.task_session_id("t").unwrap(), Some("sess-abc".to_string()));
+        }
+        // Persisted across reopen — the manager can resume after a restart.
+        let store = Store::open(file.path()).unwrap();
+        assert_eq!(store.task_session_id("t").unwrap(), Some("sess-abc".to_string()));
+        // A missing task reads None, not an error.
+        assert_eq!(store.task_session_id("nope").unwrap(), None);
     }
 }
