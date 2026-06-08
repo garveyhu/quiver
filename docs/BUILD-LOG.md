@@ -6,6 +6,40 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 4 轮
+
+**落了什么**
+- `6fd1da4` feat(scheduler): 启动 reconcile 崩溃恢复（**P0 #4 ✅**)
+
+**这轮做了什么**
+- P0 #4 完整 vertical slice:重启后从账本恢复在途任务。
+  - store:`requeue_running_tasks`(running→queued,保留 session_id)、
+    `projects_with_pending_tasks`(列有 queued 的项目)+ 单测。
+  - scheduler:`reconcile()` = 重新入队 + 逐项目 `sweep_orphan_worktrees` 清孤儿 +
+    `ensure_running` 重启 dispatcher。
+  - setup():打开 store 后异步 spawn 调 reconcile,不阻塞启动。
+
+**验证过的**
+- `cargo check --workspace` ✅(exit 0)
+- `cargo test -p quiver-store` ✅(30 过,新增 reconcile 往返测试)、
+  `cargo test -p quiver-app` ✅(19+1)
+
+**各阶段进度**
+- 后端 P0:#1 ✅、#3 ✅、#4 ✅、#2 ◐(trait 有 spawn/kind+SpawnedAgent,缺
+  resume/cancel/set_permission)、#5 ◐(cancel.rs 已提交+过,kill -9 进程组精炼待做)。
+- 前端:未开始(工作树前端大重构仍未提交,我没碰)。
+
+**今天该接哪**(优先级从上到下)
+1. P0 #2:给 `AgentRunner` trait 加 `resume(session_id,...)`,ClaudeRunner 实现为
+   `claude --resume <session_id> -p ...`——让 #1 持久化的 session_id 真正可用
+   (reconcile 重跑时续接而非从头)。**需** fake-claude 认 `--resume` 才能测
+   (给它加个 resume 分支吐 init 行带原 session_id)。再视情况补 cancel/set_permission。
+2. P0 #5 精炼:cancel.rs 升级 kill **-9** 杀**进程组** + 断言无孤儿子进程
+   (需 claude/mod.rs spawn 设进程组 setsid/process_group)。
+3. 前端纵向切片:把 redesign-iso 原型搬进 React/TS(纯 CSS/canvas 像素)。
+
+---
+
 ### 2026-06-09 · 第 3 轮
 
 **落了什么**
@@ -162,7 +196,7 @@
 | 1 | adapter.rs `RawLine::Init` 丢 `session_id` 的 bug | ✅ 端到端贯通:事件层(`a8502fd`)+ store 持久化(`caa313a`/`2918425`)+ run.rs 落库(`cdc12cf`);**剩** reconcile 读回接 `--resume`(并入 #4) |
 | 2 | 抽 `AgentRunner` trait(spawn/resume/cancel/set_permission) | ◐ trait 已有 `spawn`+`kind`,返回 `SpawnedAgent{events,pid}`(`75ee6c5`);缺 resume/cancel/set_permission;仍在 quiver-core 内,未拆 `crates/quiver-agent` |
 | 3 | quiver-store schema 加 saga_step + 完成标记 + fence(幂等 migrate) | ✅ session_id/saga_step/fence/done_at + 迁移测试(`caa313a`)+ session_id 读写访问器(`2918425`) |
-| 4 | `setup()` 写 `reconcile()`:重启后从账本恢复在途任务 | ☐ 未动;`scheduler.rs` 有 `resume_all`、`git sweep_orphan_worktrees`(`75ee6c5`)可用,基线已干净可直接做 |
+| 4 | `setup()` 写 `reconcile()`:重启后从账本恢复在途任务 | ✅ `scheduler::reconcile` + store requeue/列项目 + setup 异步调用(`6fd1da4`);**剩** 重跑时真正接 `--resume`(依赖 #2) |
 | 5 | fake-claude kill -9 混沌测试,确认杀进程组不留孤儿 | ◐ `tests/cancel.rs` 已提交 + 过(`75ee6c5`),用 kill **-TERM** 单 PID。任务要 kill **-9** + 进程组无孤儿——属精炼 |
 
 > ※ P0 阶段约束:经理用 Rust 策略(不上 AI 经理);合并保持手动(`run.rs` 里
@@ -188,6 +222,11 @@
 ---
 
 ## 📜 历轮记录
+
+### 第 4 轮(2026-06-09)
+- P0 #4 reconcile 崩溃恢复:store requeue/列待办项目 + scheduler::reconcile
+  (重新入队 + sweep 孤儿 + 重启 dispatcher)+ setup 异步调用(`6fd1da4`)。
+- 验证:`cargo check --workspace` + quiver-store(30)/quiver-app(19+1)测试全过。
 
 ### 第 3 轮(2026-06-09)
 - 后端整波在途 WIP(取消/PID、verify 输出、预算闸、stats/IPC、孤儿清扫、cancel 测试)
