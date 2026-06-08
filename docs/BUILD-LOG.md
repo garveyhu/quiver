@@ -6,6 +6,47 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 3 轮
+
+**落了什么**
+- `75ee6c5` feat(backend): 落定在途后端 WIP（**大 checkpoint**:取消/PID、verify
+  输出、预算闸、stats/IPC —— 一整波跨 crate 交织的既有未提交改动）
+- `cdc12cf` feat(run): WorkerStarted 时把 session_id 落库（**P0 #1 端到端贯通**)
+
+**这轮做了什么**
+- 后端那一整波在途 WIP(取消/PID 捕获 + verify 输出 + settings.verify_command 接线
+  + 预算闸 + stats IPC + 孤儿 worktree 清扫 + cancel.rs 测试)在 supervisor.rs /
+  lib.rs 内多特性逐行交织、跨 crate(core↔src-tauri)耦合,**无法拆 hunk**。按
+  "提交全部 dirty Rust → HEAD Rust==工作树 → cargo check 即验证 HEAD 可编译"的
+  办法,合成一个能编译的诚实 checkpoint,**解锁整个后端基线**。
+- P0 #1 收尾:run.rs 事件回调在 WorkerStarted 时落库 session_id,链路端到端贯通。
+
+**验证过的**
+- `cargo check --workspace` ✅(exit 0,提交后 HEAD Rust==工作树,确认 HEAD 可编译)
+- `cargo test --workspace` ✅ 全绿:quiver_core 41 / quiver_store 29 / quiver_app 19 /
+  cancel 1 / merge 3 / parallel 2 / run_task 9 / spawn_fake 1 / streaming 1 /
+  scheduler_concurrency 1 / fake-claude 8,0 失败。
+
+**各阶段进度**
+- 后端 P0:#1 ✅(session_id 端到端:parse→adapter→run.rs 落库→store;**剩**
+  reconcile 读回接 --resume = P0 #4)、#2 ◐(trait 已有 spawn/kind+SpawnedAgent)、
+  #3 ✅、#4 未动(但 `git sweep_orphan_worktrees` 已就绪可用)、#5 ◐(cancel.rs
+  已提交 + 过;kill -9 进程组无孤儿的精炼版待做)。
+- **后端 Rust 现已全部干净提交**;工作树只剩前端(game→shell 大重构)+ 配置
+  (tauri.conf.json、assets)未提交——见 ⚠。
+
+**今天该接哪**(优先级从上到下)
+1. P0 #4 reconcile():在 `src-tauri` setup()/scheduler 写重启对账——启动先
+   `guard.sweep_orphan_worktrees()` 清孤儿,再扫 task 表 running 行,据
+   `task_session_id` 决定 --resume / 重跑 / 标失败。基线已干净,可直接做。
+2. P0 #2:扩 `AgentRunner` trait 补 resume/cancel/set_permission(§4/§21),
+   或按蓝图拆 `crates/quiver-agent`。runner/mod.rs 已干净。
+3. P0 #5 精炼:cancel.rs 升级为 kill **-9** 杀**进程组** + 断言无孤儿子进程
+   (需 runner spawn 设进程组 setsid/process_group)。
+4. 前端纵向切片:开始把 redesign-iso 原型搬进 React/TS(纯 CSS/canvas 像素)。
+
+---
+
 ### 2026-06-09 · 第 2 轮
 
 **落了什么**
@@ -78,7 +119,19 @@
 
 ## ⚠️ 需要你拍板（无人值守不敢擅动）
 
+0. **bisect 注意:`a8502fd` 单独 checkout 不可编译。** 它在第 1 轮提交了
+   adapter.rs/event.rs 的 tokens/duration_ms 消费端,但配对的 parse.rs 解析端当时
+   仍 dirty、直到第 3 轮 `75ee6c5` 才一起落定。中间这几个提交单独 checkout 会因
+   `RawLine::ResultOk` 字段不齐而编译失败;**HEAD 顶端正常**。无法安全 rebase 改
+   历史(红线禁破坏性操作),故留注。早上若在意逐提交可编译性,可把
+   `a8502fd`→`75ee6c5` 之间 squash。
+
 1. **工作树有一大坨未提交的在途重构,不是本 loop 建的,我没动它。**
+   - **更新(第 3 轮):后端 Rust 已全部由我落成 checkpoint 提交(见各 feat(store)/
+     feat(backend) commit,body 均标注"落定既有未提交改动,归属请 review")。** 现在
+     工作树**只剩前端**(`frontend/src/game/*` 整组删除、新增 `shell/`+`hooks/`+
+     `office/`+`assets/`)**+ 配置**(`tauri.conf.json`、`assets/branding/assets.json`、
+     若干 png 删除)未提交。这些我一律没碰、没删。
    - 内容:前端从 Phaser game 架构迁到 `shell/` + `office/`(`frontend/src/game/*`
      整组删除、新增 `frontend/src/shell/`、`frontend/src/hooks/*`、`office/*`);
      `assets/` 下若干 png 删除;`docs/` 多个设计稿(autonomous-org.md / ui-design.md /
@@ -106,11 +159,11 @@
 
 | # | 任务 | 现状 |
 |---|------|------|
-| 1 | adapter.rs `RawLine::Init` 丢 `session_id` 的 bug | ◐ 事件层已修(`a8502fd`)+ store 持久化闭环(`caa313a`/`2918425`);**剩** run.rs 接线写库 + reconcile 读回接 `--resume` |
-| 2 | 抽 `AgentRunner` trait(spawn/resume/cancel/set_permission) | ◐ trait 已存在(`runner/mod.rs`),仅有 `spawn`+`kind`;缺 resume/cancel/set_permission;仍在 quiver-core 内,未拆 `crates/quiver-agent` |
-| 3 | quiver-store schema 加 saga_step + 完成标记 + fence(幂等 migrate) | ✅ 已加 session_id/saga_step/fence/done_at + 迁移测试(`caa313a`),session_id 读写访问器(`2918425`) |
-| 4 | `setup()` 写 `reconcile()`:重启后从账本恢复在途任务 | ☐ 未动;`scheduler.rs` 已有 `resume_all`,需对照 |
-| 5 | fake-claude kill -9 混沌测试,确认杀进程组不留孤儿 | ◐ `tests/cancel.rs` 已存在(**未追踪**),用 kill **-TERM** 单 PID;通过。任务要 kill **-9** + 进程组无孤儿——属精炼 |
+| 1 | adapter.rs `RawLine::Init` 丢 `session_id` 的 bug | ✅ 端到端贯通:事件层(`a8502fd`)+ store 持久化(`caa313a`/`2918425`)+ run.rs 落库(`cdc12cf`);**剩** reconcile 读回接 `--resume`(并入 #4) |
+| 2 | 抽 `AgentRunner` trait(spawn/resume/cancel/set_permission) | ◐ trait 已有 `spawn`+`kind`,返回 `SpawnedAgent{events,pid}`(`75ee6c5`);缺 resume/cancel/set_permission;仍在 quiver-core 内,未拆 `crates/quiver-agent` |
+| 3 | quiver-store schema 加 saga_step + 完成标记 + fence(幂等 migrate) | ✅ session_id/saga_step/fence/done_at + 迁移测试(`caa313a`)+ session_id 读写访问器(`2918425`) |
+| 4 | `setup()` 写 `reconcile()`:重启后从账本恢复在途任务 | ☐ 未动;`scheduler.rs` 有 `resume_all`、`git sweep_orphan_worktrees`(`75ee6c5`)可用,基线已干净可直接做 |
+| 5 | fake-claude kill -9 混沌测试,确认杀进程组不留孤儿 | ◐ `tests/cancel.rs` 已提交 + 过(`75ee6c5`),用 kill **-TERM** 单 PID。任务要 kill **-9** + 进程组无孤儿——属精炼 |
 
 > ※ P0 阶段约束:经理用 Rust 策略(不上 AI 经理);合并保持手动(`run.rs` 里
 > `keep_branch:true` 的安全缝不动)。
@@ -135,6 +188,13 @@
 ---
 
 ## 📜 历轮记录
+
+### 第 3 轮(2026-06-09)
+- 后端整波在途 WIP(取消/PID、verify 输出、预算闸、stats/IPC、孤儿清扫、cancel 测试)
+  合成一个能编译的诚实 checkpoint(`75ee6c5`),解锁全后端基线。
+- P0 #1 端到端贯通:run.rs WorkerStarted 落库 session_id(`cdc12cf`)。
+- 验证:`cargo check --workspace` + `cargo test --workspace` 全绿。
+- 记录 `a8502fd` 不可独立编译的 bisect 注意(见 ⚠ 0)。
 
 ### 第 2 轮(2026-06-09)
 - 落定 store 两组在途 WIP 为 checkpoint(`e9e42c6` verify_command、`5397292` 预算统计)。
