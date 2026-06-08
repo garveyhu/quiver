@@ -278,6 +278,33 @@ impl Store {
         Ok(got)
     }
 
+    /// Crash recovery (DESIGN §23 P0): flip every task left `running` by a
+    /// previous session back to `queued`, stamping `updated_at`. After a restart
+    /// no live worker owns these rows, so requeuing lets the dispatcher pick them
+    /// up again (the persisted `session_id` is preserved for a future `--resume`).
+    /// Returns how many rows were requeued.
+    pub fn requeue_running_tasks(&self, updated_at: i64) -> anyhow::Result<usize> {
+        let conn = self.conn.lock().expect("store lock");
+        let n = conn.execute(
+            "UPDATE task SET status = 'queued', updated_at = ?1 WHERE status = 'running'",
+            params![updated_at],
+        )?;
+        Ok(n)
+    }
+
+    /// Distinct project paths that still have `queued` work — the set whose
+    /// dispatchers reconcile must (re)start on launch. Ordered for determinism.
+    pub fn projects_with_pending_tasks(&self) -> anyhow::Result<Vec<String>> {
+        let conn = self.conn.lock().expect("store lock");
+        let mut stmt = conn.prepare(
+            "SELECT DISTINCT project FROM task WHERE status = 'queued' ORDER BY project",
+        )?;
+        let rows = stmt
+            .query_map([], |row| row.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
     /// Set a task's board `position` (drag-to-reorder). Lower = nearer the top.
     pub fn reorder_task(&self, id: &str, position: i64, updated_at: i64) -> anyhow::Result<()> {
         let conn = self.conn.lock().expect("store lock");
@@ -584,5 +611,29 @@ mod tests {
         assert_eq!(store.task_session_id("t").unwrap(), Some("sess-abc".to_string()));
         // A missing task reads None, not an error.
         assert_eq!(store.task_session_id("nope").unwrap(), None);
+    }
+
+    #[test]
+    fn reconcile_requeues_running_and_lists_pending_projects() {
+        let store = Store::open_in_memory().unwrap();
+        // A queued task, an interrupted running task, and a finished one.
+        store.enqueue_task(&new_task("q", "/alpha", "p", "queued", 1)).unwrap();
+        store.enqueue_task(&new_task("r", "/beta", "p", "running", 2)).unwrap();
+        store.enqueue_task(&new_task("d", "/beta", "p", "done", 3)).unwrap();
+
+        // Requeue flips only the `running` row → queued; the done row is untouched.
+        assert_eq!(store.requeue_running_tasks(10).unwrap(), 1);
+        assert_eq!(store.get_task("r").unwrap().unwrap().status, "queued");
+        assert_eq!(store.get_task("d").unwrap().unwrap().status, "done");
+
+        // Both projects now have queued work; the finished-only project would not
+        // appear. Distinct + ordered.
+        assert_eq!(
+            store.projects_with_pending_tasks().unwrap(),
+            vec!["/alpha".to_string(), "/beta".to_string()]
+        );
+
+        // Idempotent: a second requeue with nothing running affects 0 rows.
+        assert_eq!(store.requeue_running_tasks(11).unwrap(), 0);
     }
 }

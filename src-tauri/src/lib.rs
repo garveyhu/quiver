@@ -459,6 +459,28 @@ pub fn run() {
             })?;
             let state = app.state::<AppState>();
             let _ = state.store.set(Arc::new(store));
+
+            // Crash recovery (DESIGN §23 P0): a prior session may have died mid-run,
+            // leaving tasks stuck `running` and orphan worktrees behind. Requeue
+            // them, sweep the orphans, and restart their projects' dispatchers.
+            // Spawned async so startup never blocks on git/db work.
+            if let Some(store) = state.store.get().cloned() {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let max_workers = store
+                        .get_settings()
+                        .map(|s| s.max_workers as usize)
+                        .unwrap_or(1);
+                    let n = handle
+                        .state::<AppState>()
+                        .scheduler
+                        .reconcile(handle.clone(), store, max_workers)
+                        .await;
+                    if n > 0 {
+                        eprintln!("reconcile: requeued {n} interrupted task(s) from a prior session");
+                    }
+                });
+            }
             Ok(())
         });
 

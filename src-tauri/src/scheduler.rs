@@ -143,6 +143,27 @@ impl Scheduler {
             Self::spawn_dispatcher_if_idle(app.clone(), store.clone(), queue).await;
         }
     }
+
+    /// Crash recovery on launch (DESIGN §23 P0). A previous session may have died
+    /// mid-run, leaving tasks stuck `running` (no live worker owns them) and orphan
+    /// worktree dirs a killed agent held. This:
+    ///   1. requeues every `running` task → `queued` (its `session_id` is kept for
+    ///      a future `--resume`),
+    ///   2. for each project with pending work, sweeps orphan worktrees (safe now
+    ///      that those processes are long dead) and (re)starts its dispatcher.
+    /// Returns how many tasks were requeued. Best-effort: a per-project error never
+    /// aborts recovery of the others.
+    pub async fn reconcile(&self, app: AppHandle, store: Arc<Store>, max_workers: usize) -> usize {
+        let requeued = store.requeue_running_tasks(crate::now_ms()).unwrap_or(0);
+        let projects = store.projects_with_pending_tasks().unwrap_or_default();
+        for project in projects {
+            let path = PathBuf::from(&project);
+            let _ = GitGuard::new(path.clone()).sweep_orphan_worktrees().await;
+            self.ensure_running(app.clone(), store.clone(), path, max_workers)
+                .await;
+        }
+        requeued
+    }
 }
 
 /// Drain `queue` until it is empty: acquire a permit (blocks while all
