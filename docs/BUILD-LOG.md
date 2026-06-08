@@ -6,6 +6,42 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 2 轮
+
+**落了什么**
+- `e9e42c6` feat(store): 持久化 settings.verify_command（**checkpoint**:落定工作树既有 WIP）
+- `5397292` feat(store): task 表预算/统计聚合查询（**checkpoint**:同上）
+- `caa313a` feat(store): task 表加 P0 崩溃恢复列（session_id/saga_step/fence/done_at）
+- `2918425` feat(store): task session_id 读写访问器（P0 续接闭环）
+
+**这轮做了什么**
+- 先把 `quiver-store` 里两组**已验证健全的在途 WIP** 按文件拆成两个诚实标注的
+  checkpoint 提交（verify_command 持久化 / 预算统计查询),解锁干净基线。
+- P0 #3 ✅:对照 §20 给 `task` 表幂等加 4 列 + 迁移测试。
+- P0 #1 store 侧闭环 ✅:`set_task_session_id` / `task_session_id` + 往返/重开测试,
+  第 1 轮透到事件层的 session_id 现可持久化并读回。
+
+**验证过的**
+- `cargo test -p quiver-store` ✅(29 过,新增 schema 迁移测试 + session_id 往返测试)
+- `cargo check --workspace` ✅（见本轮末尾确认）
+
+**各阶段进度**
+- 后端 P0:#1 store 侧 ✅(事件→持久化已通;**剩** run.rs 把 WorkerStarted.session_id
+  写进 store 行 + reconcile 用 task_session_id 读回 --resume)、#2 部分已有、
+  #3 ✅、#4 未动、#5 已有未追踪。
+
+**今天该接哪**(优先级从上到下)
+1. P0 #1 接线:在 `src-tauri/src/run.rs` 收到 `WorkerStarted` 时调 `set_task_session_id`
+   把 session_id 落库。⚠ run.rs 是 dirty 的大 WIP 一部分,先评估其 diff 是否可拆;
+   不可拆则按 checkpoint 策略先落定 src-tauri 在途 WIP 再叠加。
+2. P0 #4:`setup()`/scheduler 写 reconcile(),重启后从账本恢复在途任务(读 task 表
+   running 行 + task_session_id,决定 --resume / 重跑 / 标失败)。
+3. P0 #2:扩 `AgentRunner` trait 补 resume/cancel/set_permission(§4/§21,trait 在
+   `runner/mod.rs` 已有 spawn+kind)。
+4. 前端纵向切片:开始把 redesign-iso 原型搬进 React/TS(纯 CSS/canvas 像素)。
+
+---
+
 ### 2026-06-09 · 第 1 轮
 
 **落了什么**
@@ -70,9 +106,9 @@
 
 | # | 任务 | 现状 |
 |---|------|------|
-| 1 | adapter.rs `RawLine::Init` 丢 `session_id` 的 bug | ✅ 已修(`a8502fd`);**待**持久化 + 接 `--resume` |
+| 1 | adapter.rs `RawLine::Init` 丢 `session_id` 的 bug | ◐ 事件层已修(`a8502fd`)+ store 持久化闭环(`caa313a`/`2918425`);**剩** run.rs 接线写库 + reconcile 读回接 `--resume` |
 | 2 | 抽 `AgentRunner` trait(spawn/resume/cancel/set_permission) | ◐ trait 已存在(`runner/mod.rs`),仅有 `spawn`+`kind`;缺 resume/cancel/set_permission;仍在 quiver-core 内,未拆 `crates/quiver-agent` |
-| 3 | quiver-store schema 加 saga_step + 完成标记 + fence(幂等 migrate) | ☐ 未动;`add_column_if_absent` 幂等助手已就绪,直接加列即可 |
+| 3 | quiver-store schema 加 saga_step + 完成标记 + fence(幂等 migrate) | ✅ 已加 session_id/saga_step/fence/done_at + 迁移测试(`caa313a`),session_id 读写访问器(`2918425`) |
 | 4 | `setup()` 写 `reconcile()`:重启后从账本恢复在途任务 | ☐ 未动;`scheduler.rs` 已有 `resume_all`,需对照 |
 | 5 | fake-claude kill -9 混沌测试,确认杀进程组不留孤儿 | ◐ `tests/cancel.rs` 已存在(**未追踪**),用 kill **-TERM** 单 PID;通过。任务要 kill **-9** + 进程组无孤儿——属精炼 |
 
@@ -99,6 +135,12 @@
 ---
 
 ## 📜 历轮记录
+
+### 第 2 轮(2026-06-09)
+- 落定 store 两组在途 WIP 为 checkpoint(`e9e42c6` verify_command、`5397292` 预算统计)。
+- P0 #3:task 表加 4 个崩溃恢复列 + 迁移测试(`caa313a`)。
+- P0 #1 store 侧闭环:session_id 读写访问器 + 往返/重开测试(`2918425`)。
+- 验证:`cargo test -p quiver-store`(29 过)、`cargo check --workspace` 全过。
 
 ### 第 1 轮(2026-06-09)
 - 建本 BUILD-LOG;评估现状、定计划。
