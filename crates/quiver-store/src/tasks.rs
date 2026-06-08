@@ -155,6 +155,63 @@ impl Store {
         Ok(rows)
     }
 
+    /// Aggregate progression stats over the whole `task` table (all projects):
+    /// `(total, verified, failed, total_cost_usd)`. Read-only — used by the
+    /// `get_stats` IPC to drive the XP / level HUD. Verified counts `verified`
+    /// + `done`; failed counts `failed` + `verify_failed`.
+    pub fn task_stats(&self) -> anyhow::Result<(i64, i64, i64, f64)> {
+        let conn = self.conn.lock().expect("store lock");
+        let row = conn.query_row(
+            "SELECT
+                COUNT(*),
+                COALESCE(SUM(CASE WHEN status IN ('verified','done') THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN status IN ('failed','verify_failed') THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(cost_usd), 0.0)
+             FROM task",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )?;
+        Ok(row)
+    }
+
+    /// Total dollars spent on a single project (sum of `cost_usd` over its tasks).
+    pub fn project_cost(&self, project: &str) -> anyhow::Result<f64> {
+        let conn = self.conn.lock().expect("store lock");
+        let total: f64 = conn.query_row(
+            "SELECT COALESCE(SUM(cost_usd), 0.0) FROM task WHERE project = ?1",
+            params![project],
+            |row| row.get(0),
+        )?;
+        Ok(total)
+    }
+
+    /// Total dollars spent across ALL projects. Drives the §10 budget gate: the
+    /// `monthly_credit_cap_usd` / `nightly_budget_usd` settings are global caps,
+    /// so the gate must compare against global spend (not one project's).
+    pub fn total_cost(&self) -> anyhow::Result<f64> {
+        let conn = self.conn.lock().expect("store lock");
+        let total: f64 = conn.query_row(
+            "SELECT COALESCE(SUM(cost_usd), 0.0) FROM task",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(total)
+    }
+
+    /// Dollars spent across all projects on tasks created at/after `since_ms`.
+    /// Drives the §10 budget gate with a ROLLING window (nightly = last 24h,
+    /// monthly ≈ last 30d) — far more correct than an all-time sum, which would
+    /// pause forever once lifetime spend ever exceeded a periodic cap.
+    pub fn cost_since(&self, since_ms: i64) -> anyhow::Result<f64> {
+        let conn = self.conn.lock().expect("store lock");
+        let total: f64 = conn.query_row(
+            "SELECT COALESCE(SUM(cost_usd), 0.0) FROM task WHERE created_at >= ?1",
+            params![since_ms],
+            |row| row.get(0),
+        )?;
+        Ok(total)
+    }
+
     /// Move a task to a new lifecycle `status`, stamping `updated_at`.
     pub fn update_task_status(
         &self,
@@ -443,5 +500,37 @@ mod tests {
         let tasks = reopened.list_tasks(None, None).unwrap();
         assert_eq!(tasks.len(), 1);
         assert_eq!(tasks[0].cost_usd, Some(1.5));
+    }
+
+    #[test]
+    fn project_cost_sums_per_project() {
+        let store = Store::open_in_memory().unwrap();
+        store.enqueue_task(&new_task("a", "/alpha", "p", "done", 1)).unwrap();
+        store.enqueue_task(&new_task("b", "/alpha", "p", "done", 2)).unwrap();
+        store.enqueue_task(&new_task("c", "/beta", "p", "done", 3)).unwrap();
+        // No costs yet → 0.
+        assert_eq!(store.project_cost("/alpha").unwrap(), 0.0);
+        store.set_task_cost_branch("a", Some(0.4), None, 4).unwrap();
+        store.set_task_cost_branch("b", Some(0.6), None, 5).unwrap();
+        store.set_task_cost_branch("c", Some(9.0), None, 6).unwrap();
+        // Sums only the queried project; /beta's $9 must not leak into /alpha.
+        assert!((store.project_cost("/alpha").unwrap() - 1.0).abs() < 1e-9);
+        assert!((store.project_cost("/beta").unwrap() - 9.0).abs() < 1e-9);
+        assert_eq!(store.project_cost("/nonexistent").unwrap(), 0.0);
+        // total_cost spans all projects.
+        assert!((store.total_cost().unwrap() - 10.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn cost_since_windows_by_created_at() {
+        let store = Store::open_in_memory().unwrap();
+        store.enqueue_task(&new_task("old", "/r", "p", "done", 1_000)).unwrap();
+        store.enqueue_task(&new_task("new", "/r", "p", "done", 9_000)).unwrap();
+        store.set_task_cost_branch("old", Some(2.0), None, 1_001).unwrap();
+        store.set_task_cost_branch("new", Some(3.0), None, 9_001).unwrap();
+        // Window start after "old" but before "new" → only "new" counts.
+        assert!((store.cost_since(5_000).unwrap() - 3.0).abs() < 1e-9);
+        // Window covering both.
+        assert!((store.cost_since(0).unwrap() - 5.0).abs() < 1e-9);
     }
 }
