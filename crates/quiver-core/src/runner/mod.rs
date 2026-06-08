@@ -34,6 +34,19 @@ pub trait AgentRunner: Send + Sync {
         bin: &Path,
     ) -> Result<SpawnedAgent>;
 
+    /// Resume a previous agent session by its backend handle (Claude
+    /// `--resume <session_id>`), feeding `prompt` as the next turn. Same
+    /// normalized stream + PID contract as [`spawn`](Self::spawn). The reconcile
+    /// path (DESIGN §23 P0) uses this to continue an interrupted task's context
+    /// instead of re-running it from scratch.
+    async fn resume(
+        &self,
+        session_id: &str,
+        prompt: &str,
+        cwd: &Path,
+        bin: &Path,
+    ) -> Result<SpawnedAgent>;
+
     /// Which kind, for provenance/logging and the `RunnerKind` stamp on events.
     fn kind(&self) -> RunnerKind;
 }

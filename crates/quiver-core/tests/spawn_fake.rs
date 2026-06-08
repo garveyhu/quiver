@@ -88,3 +88,32 @@ async fn streams_ordered_events_from_fake_claude() {
     }
     assert_eq!(events.len(), 4, "exactly four mapped events expected");
 }
+
+#[tokio::test]
+async fn resume_threads_session_id_through_to_worker_started() {
+    let bin = fake_claude_bin();
+    let cwd = std::env::temp_dir();
+
+    let runner = ClaudeRunner::new("task-resume");
+    let mut rx = runner
+        .resume("sess-resumed-42", "continue the thing", &cwd, &bin)
+        .await
+        .expect("resume fake-claude")
+        .events;
+
+    let mut events = Vec::new();
+    while let Some(ev) = rx.recv().await {
+        events.push(ev);
+    }
+
+    // resume passed `--resume sess-resumed-42` → fake-claude echoes that id in its
+    // init line → the first WorkerStarted carries it. Proves the handle is threaded
+    // end-to-end (the whole point of persisting session_id for crash recovery).
+    assert!(!events.is_empty(), "expected a non-empty event stream");
+    match &events[0].payload {
+        AgentEventPayload::WorkerStarted { session_id, .. } => {
+            assert_eq!(session_id.as_deref(), Some("sess-resumed-42"));
+        }
+        other => panic!("first event should be WorkerStarted, got {other:?}"),
+    }
+}

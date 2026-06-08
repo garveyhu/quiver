@@ -57,11 +57,10 @@ impl ClaudeRunner {
         self.extra_args = args.into_iter().map(Into::into).collect();
         self
     }
-}
 
-#[async_trait]
-impl AgentRunner for ClaudeRunner {
-    async fn spawn(&self, prompt: &str, cwd: &Path, bin: &Path) -> Result<SpawnedAgent> {
+    /// Build the base `claude` invocation (flags + env allowlist + piped stdout)
+    /// shared by [`spawn`](AgentRunner::spawn) and [`resume`](AgentRunner::resume).
+    fn base_command(&self, prompt: &str, cwd: &Path, bin: &Path) -> Command {
         let mut command = Command::new(bin);
         command
             .arg("-p")
@@ -74,9 +73,14 @@ impl AgentRunner for ClaudeRunner {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::null());
-
         apply_env_allowlist(&mut command);
+        command
+    }
 
+    /// Spawn an already-built `command` and drain its `stream-json` stdout into a
+    /// normalized [`AgentEvent`] channel. `bin` is only used for the error message.
+    /// Returns the event stream + the child PID for cancellation.
+    fn drive(&self, mut command: Command, bin: &Path) -> Result<SpawnedAgent> {
         let mut child = command
             .spawn()
             .with_context(|| format!("failed to spawn agent binary {}", bin.display()))?;
@@ -111,6 +115,25 @@ impl AgentRunner for ClaudeRunner {
         });
 
         Ok(SpawnedAgent { events: rx, pid })
+    }
+}
+
+#[async_trait]
+impl AgentRunner for ClaudeRunner {
+    async fn spawn(&self, prompt: &str, cwd: &Path, bin: &Path) -> Result<SpawnedAgent> {
+        self.drive(self.base_command(prompt, cwd, bin), bin)
+    }
+
+    async fn resume(
+        &self,
+        session_id: &str,
+        prompt: &str,
+        cwd: &Path,
+        bin: &Path,
+    ) -> Result<SpawnedAgent> {
+        let mut command = self.base_command(prompt, cwd, bin);
+        command.arg("--resume").arg(session_id);
+        self.drive(command, bin)
     }
 
     fn kind(&self) -> RunnerKind {

@@ -35,6 +35,10 @@ fn main() -> ExitCode {
     // demo visibly reflects what the user typed instead of replaying a fixed
     // script that ignores input.
     let prompt = parse_prompt(args.iter().cloned());
+    // When the runner passes `--resume <id>`, echo THAT session id throughout the
+    // stream (a resumed run continues an existing session) so a test can assert the
+    // handle was threaded through. Absent → the default fresh session.
+    let session = parse_resume(args.iter().cloned()).unwrap_or_else(|| SESSION_ID.to_string());
     let delay = resolve_delay(std::env::var("QUIVER_FAKE_DELAY_MS").ok());
 
     match scenario.as_str() {
@@ -42,13 +46,13 @@ fn main() -> ExitCode {
         // appears, then die non-zero with NO clean `result` line. Exercises the
         // deterministic crash-cleanup path in the supervisor.
         "crash" => {
-            emit_init(delay);
+            emit_init(&session, delay);
             return ExitCode::FAILURE;
         }
         // Reserved for later phases (DESIGN §13.1). Fall back to happy for now.
-        "verify_fail" | "credit_exhausted" => emit_happy(&prompt, delay),
+        "verify_fail" | "credit_exhausted" => emit_happy(&session, &prompt, delay),
         // Default scripted success path.
-        _ => emit_happy(&prompt, delay),
+        _ => emit_happy(&session, &prompt, delay),
     }
 
     ExitCode::SUCCESS
@@ -110,6 +114,22 @@ fn parse_prompt(args: impl Iterator<Item = String>) -> String {
     "(no prompt provided)".to_string()
 }
 
+/// Extract the value of `--resume <session_id>` (or `--resume=<id>`) the runner
+/// passes to continue a prior session. `None` when absent (a fresh spawn). All
+/// other args are accepted and ignored.
+fn parse_resume(args: impl Iterator<Item = String>) -> Option<String> {
+    let mut args = args.peekable();
+    while let Some(arg) = args.next() {
+        if let Some(value) = arg.strip_prefix("--resume=") {
+            return Some(value.to_string());
+        }
+        if arg == "--resume" {
+            return args.next();
+        }
+    }
+    None
+}
+
 /// JSON-escape a string for safe interpolation into the hand-written `stream-json`
 /// lines below (the prompt is user input — it may contain quotes, backslashes,
 /// newlines, or control chars that would otherwise produce invalid NDJSON).
@@ -134,10 +154,10 @@ const MODEL: &str = "claude-sonnet-4-5";
 
 /// Print the `system / init` line — carries session_id + model. Shared by the
 /// happy and crash scripts so both produce a `WorkerStarted` event.
-fn emit_init(delay: Duration) {
+fn emit_init(session: &str, delay: Duration) {
     emit_line(
         &format!(
-            r#"{{"type":"system","subtype":"init","session_id":"{SESSION_ID}","model":"{MODEL}","cwd":"/tmp/fake-worktree","tools":["Edit","Read","Bash"],"permissionMode":"acceptEdits","apiKeySource":"none"}}"#
+            r#"{{"type":"system","subtype":"init","session_id":"{session}","model":"{MODEL}","cwd":"/tmp/fake-worktree","tools":["Edit","Read","Bash"],"permissionMode":"acceptEdits","apiKeySource":"none"}}"#
         ),
         delay,
     );
@@ -149,19 +169,19 @@ fn emit_init(delay: Duration) {
 /// `prompt` is the user's task text; it is echoed back in the assistant text and
 /// the final `result` so the free demo visibly reflects what the user typed.
 /// Each line is paced by `delay` so the office animates live.
-fn emit_happy(prompt: &str, delay: Duration) {
+fn emit_happy(session: &str, prompt: &str, delay: Duration) {
     const TOOL_USE_ID: &str = "toolu_fake_0001";
     let echo = json_escape(prompt);
     // The text the agent "says" back — quotes the user's prompt verbatim.
     let reply = format!("Simulated run for your task: \\\"{echo}\\\". (No real agent ran.)");
 
     // 1. system / init line — carries session_id + model.
-    emit_init(delay);
+    emit_init(session, delay);
 
     // 2. assistant line containing a tool_use (Edit).
     emit_line(
         &format!(
-            r#"{{"type":"assistant","session_id":"{SESSION_ID}","message":{{"id":"msg_fake_0001","role":"assistant","model":"{MODEL}","content":[{{"type":"tool_use","id":"{TOOL_USE_ID}","name":"Edit","input":{{"file_path":"src/main.rs","old_string":"foo","new_string":"bar"}}}}]}}}}"#
+            r#"{{"type":"assistant","session_id":"{session}","message":{{"id":"msg_fake_0001","role":"assistant","model":"{MODEL}","content":[{{"type":"tool_use","id":"{TOOL_USE_ID}","name":"Edit","input":{{"file_path":"src/main.rs","old_string":"foo","new_string":"bar"}}}}]}}}}"#
         ),
         delay,
     );
@@ -169,7 +189,7 @@ fn emit_happy(prompt: &str, delay: Duration) {
     // 3. user line containing the matching tool_result.
     emit_line(
         &format!(
-            r#"{{"type":"user","session_id":"{SESSION_ID}","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"{TOOL_USE_ID}","is_error":false,"content":"The file src/main.rs has been edited."}}]}}}}"#
+            r#"{{"type":"user","session_id":"{session}","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"{TOOL_USE_ID}","is_error":false,"content":"The file src/main.rs has been edited."}}]}}}}"#
         ),
         delay,
     );
@@ -177,7 +197,7 @@ fn emit_happy(prompt: &str, delay: Duration) {
     // 4. assistant line with text — echoes the user's prompt.
     emit_line(
         &format!(
-            r#"{{"type":"assistant","session_id":"{SESSION_ID}","message":{{"id":"msg_fake_0002","role":"assistant","model":"{MODEL}","content":[{{"type":"text","text":"{reply}"}}]}}}}"#
+            r#"{{"type":"assistant","session_id":"{session}","message":{{"id":"msg_fake_0002","role":"assistant","model":"{MODEL}","content":[{{"type":"text","text":"{reply}"}}]}}}}"#
         ),
         delay,
     );
@@ -186,7 +206,7 @@ fn emit_happy(prompt: &str, delay: Duration) {
     // text also echoes the prompt.
     emit_line(
         &format!(
-            r#"{{"type":"result","subtype":"success","is_error":false,"session_id":"{SESSION_ID}","total_cost_usd":0.01,"num_turns":2,"duration_ms":1234,"duration_api_ms":1000,"result":"{reply}","usage":{{"input_tokens":120,"output_tokens":45,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}}"#
+            r#"{{"type":"result","subtype":"success","is_error":false,"session_id":"{session}","total_cost_usd":0.01,"num_turns":2,"duration_ms":1234,"duration_api_ms":1000,"result":"{reply}","usage":{{"input_tokens":120,"output_tokens":45,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}}"#
         ),
         delay,
     );
@@ -212,6 +232,20 @@ mod tests {
     fn parse_prompt_defaults_when_absent() {
         let args = ["--verbose"].map(String::from);
         assert_eq!(parse_prompt(args.into_iter()), "(no prompt provided)");
+    }
+
+    #[test]
+    fn parse_resume_reads_value_and_eq_form() {
+        let spaced = ["-p", "x", "--resume", "sess-9"].map(String::from);
+        assert_eq!(parse_resume(spaced.into_iter()), Some("sess-9".to_string()));
+        let eq = ["--resume=sess-eq", "--verbose"].map(String::from);
+        assert_eq!(parse_resume(eq.into_iter()), Some("sess-eq".to_string()));
+    }
+
+    #[test]
+    fn parse_resume_none_when_absent() {
+        let args = ["-p", "x", "--verbose"].map(String::from);
+        assert_eq!(parse_resume(args.into_iter()), None);
     }
 
     #[test]
