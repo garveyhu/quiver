@@ -111,6 +111,19 @@ pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
     // so existing DBs gain it idempotently (default '' = no real gate / always-pass).
     add_column_if_absent(conn, "settings", "verify_command", "TEXT NOT NULL DEFAULT ''")?;
 
+    // P0 crash-recovery columns on `task` (DESIGN §20 / §23 P0). The supervisor's
+    // reconcile keys off these; all NULLABLE so existing rows and the current
+    // INSERT/SELECT paths stay valid until orchestration wires them.
+    //   session_id — backend session handle (Claude --resume token), persisted so
+    //                the manager can durably resume a worker's context (DESIGN §4/§6).
+    //   saga_step  — the orchestration step the task is at; the §5 single commit point.
+    //   fence      — fencing token (§20 run_token) for reconcile anti-split-brain.
+    //   done_at    — completion marker (ms epoch); NULL = not finalized.
+    add_column_if_absent(conn, "task", "session_id", "TEXT")?;
+    add_column_if_absent(conn, "task", "saga_step", "TEXT")?;
+    add_column_if_absent(conn, "task", "fence", "INTEGER")?;
+    add_column_if_absent(conn, "task", "done_at", "INTEGER")?;
+
     // Seed the single settings row with defaults if absent, so `get_settings`
     // always returns a complete config. `INSERT OR IGNORE` keeps it idempotent
     // and never clobbers a user's saved settings on a later open.
@@ -140,4 +153,39 @@ fn seed_default_settings(conn: &Connection) -> anyhow::Result<()> {
         ],
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Column names of `table`, via PRAGMA table_info (col 1 = name).
+    fn columns(conn: &Connection, table: &str) -> Vec<String> {
+        let mut stmt = conn
+            .prepare(&format!("PRAGMA table_info({table})"))
+            .expect("prepare table_info");
+        stmt.query_map([], |row| row.get::<_, String>(1))
+            .expect("query table_info")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("collect column names")
+    }
+
+    #[test]
+    fn migrate_adds_p0_task_columns_and_is_idempotent() {
+        let conn = Connection::open_in_memory().expect("open in-memory");
+        migrate(&conn).expect("first migrate");
+        // Re-running migrate must not error (idempotent) and must not duplicate columns.
+        migrate(&conn).expect("second migrate");
+
+        let cols = columns(&conn, "task");
+        for col in ["session_id", "saga_step", "fence", "done_at"] {
+            assert!(cols.contains(&col.to_string()), "task missing column `{col}`");
+        }
+        // The idempotent re-run added no duplicate.
+        assert_eq!(
+            cols.iter().filter(|n| n.as_str() == "fence").count(),
+            1,
+            "fence column duplicated by re-migrate"
+        );
+    }
 }
