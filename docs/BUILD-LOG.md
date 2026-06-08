@@ -6,6 +6,40 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 9 轮
+
+**落了什么**
+- `6044fc3` feat(cancel): killpg 杀进程组不留孤儿（**P0 #5 ✅ → 后端 P0 全部完成**)
+
+**这轮做了什么**
+- 完成 P0 #5 killpg 混沌测试(DESIGN §23 P3 真急停):
+  - ClaudeRunner `process_group(0)`:每个 agent 子进程成自己进程组组长(pgid==pid)。
+  - lib.rs `kill_pid` 改 `libc::kill(-pid, SIGKILL)`(杀整组而非单 pid)。
+  - fake-claude `spawn_child` 场景派生长寿子孙(`--child-pidfile` arg 传路径,无 env
+    竞态);加通用 parse_flag。
+  - cancel.rs `killpg_reaps_grandchild_no_orphan`:起子孙→kill -9 整组→断言子孙被收割。
+
+**验证过的**
+- `cargo check --workspace` ✅、`cargo test --workspace` ✅ 全绿 0 失败
+  (quiver-core 42 / cancel 2 含 killpg / quiver-store 30 / quiver-app 19+1 /
+  fake-claude / merge·parallel·run_task·spawn_fake·streaming 全过)。
+
+**各阶段进度**
+- 🎉 **后端 P0 全部完成**:#1 ✅ #2 ✅ #3 ✅ #4 ✅ #5 ✅。
+- **前端:✅ 落定 + 运行时验证通过**(app 跑、IPC 通、像素办公室渲染、零图片)。
+
+**今天该接哪**(P0 已收官,下面是 P0 后的方向)
+1. **前端↔后端 IPC 完整性审计 + 补缺**(独立、不需截图):比对 `frontend/src/hooks/*`
+   调的 `invoke('xxx')` 命令名 vs `src-tauri/src/lib.rs` 实际注册的 invoke_handler
+   命令,找出没接通的 UI/命令补成纵向切片。这是不依赖截图也能推进的前端活。
+2. **前端视觉对照**(需先解决截图:让窗口可见 + 终端 Screen Recording 权限):
+   `shot`+Read 对照 redesign-iso 原型逐项核对交互。
+3. **P1 记忆地基启动**(DESIGN §23 P1 / §6 / §20):scaffold `crates/quiver-memory`
+   + memory.db schema(episode / memory_fact,先只追加,作废留 P2)。**大新阶段,
+   建议你早上确认要不要现在就开 P1**(P0 刚收官,也可先把前端打磨到位再开)。
+
+---
+
 ### 2026-06-09 · 第 8 轮
 
 **落了什么**
@@ -363,7 +397,7 @@
 | 2 | 抽 `AgentRunner` trait(spawn/resume/cancel/set_permission) | ✅ 能力齐:spawn/resume(`10eb1f8`)+ kind;cancel=外部杀 pid(`75ee6c5` running_pids/cancel_task_cmd)、set_permission=extra_args(--permission-mode)。**未做**:拆独立 `crates/quiver-agent`(纯搬家,低优先);reconcile 实际改走 resume(见晨报 #1) |
 | 3 | quiver-store schema 加 saga_step + 完成标记 + fence(幂等 migrate) | ✅ session_id/saga_step/fence/done_at + 迁移测试(`caa313a`)+ session_id 读写访问器(`2918425`) |
 | 4 | `setup()` 写 `reconcile()`:重启后从账本恢复在途任务 | ✅ `scheduler::reconcile` + store requeue/列项目 + setup 异步调用(`6fd1da4`);重跑真正走 `--resume` 续接(`2c879de`)。端到端闭环完成 |
-| 5 | fake-claude kill -9 混沌测试,确认杀进程组不留孤儿 | ◐ `tests/cancel.rs` 已提交 + 过(`75ee6c5`),用 kill **-TERM** 单 PID。任务要 kill **-9** + 进程组无孤儿——属精炼 |
+| 5 | fake-claude kill -9 混沌测试,确认杀进程组不留孤儿 | ✅ `process_group(0)` + lib.rs killpg(`libc::kill(-pid,SIGKILL)`)+ fake-claude spawn_child 派生子孙 + cancel.rs `killpg_reaps_grandchild_no_orphan` 断言无孤儿(`6044fc3`) |
 
 > ※ P0 阶段约束:经理用 Rust 策略(不上 AI 经理);合并保持手动(`run.rs` 里
 > `keep_branch:true` 的安全缝不动)。
@@ -388,6 +422,11 @@
 ---
 
 ## 📜 历轮记录
+
+### 第 9 轮(2026-06-09)
+- P0 #5 killpg 混沌测试:process_group(0) + lib.rs killpg + fake-claude spawn_child
+  + cancel.rs 无孤儿断言(`6044fc3`)。**后端 P0 全部完成(#1–#5)。**
+- 验证:`cargo test --workspace` 全绿(cancel 2 含 killpg)。
 
 ### 第 8 轮(2026-06-09)
 - 前端运行时验证(真窗口,bridge eval):app 跑、渲染 QuiverShell、HUD 显示真实后端
