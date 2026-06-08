@@ -169,7 +169,7 @@ pub async fn run_streaming(
         VerifyCommand::shell(settings.verify_command.clone())
     };
 
-    let (agent_bin, options) = match mode {
+    let (agent_bin, mut options) = match mode {
         RunMode::Simulate => {
             // Make `fakeDelayMs` take effect: the runner forwards
             // QUIVER_FAKE_DELAY_MS to the `fake-claude` child via its env
@@ -195,6 +195,7 @@ pub async fn run_streaming(
                         "--model".to_string(),
                         settings.model.clone(),
                     ],
+                    ..Default::default()
                 },
             )
         }
@@ -204,6 +205,16 @@ pub async fn run_streaming(
         id: task_id,
         prompt,
     };
+
+    // If this task already has a persisted backend session (reconcile requeued an
+    // interrupted run), resume it instead of starting fresh — the agent continues
+    // its prior context via `--resume` (DESIGN §4/§23 P0). A brand-new task has no
+    // session_id yet, so this is None and the run spawns normally.
+    if let Some(store) = store {
+        if let Ok(Some(sid)) = store.task_session_id(&task.id) {
+            options.resume_session = Some(sid);
+        }
+    }
 
     let mut last_cost: Option<f64> = None;
     let tid = task.id.clone();

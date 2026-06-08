@@ -46,6 +46,11 @@ pub struct RunOptions {
     /// `--permission-mode acceptEdits --model sonnet` for a real run). Ignored by
     /// the `fake-claude` test double.
     pub extra_args: Vec<String>,
+    /// When set, resume this backend session (`claude --resume <id>`) instead of
+    /// starting fresh — the crash-recovery path (DESIGN §23 P0) passes the task's
+    /// persisted `session_id` so a reconciled run continues its prior context.
+    /// `None` (the default) → a normal fresh spawn.
+    pub resume_session: Option<String>,
 }
 
 /// Terminal lifecycle status of a run (DESIGN §5.2, §7 `FinishStatus`).
@@ -185,10 +190,17 @@ pub async fn run_task_streaming(
     // (2) Spawn the agent in the worktree. A spawn failure here must still GC
     // the worktree we just created (§8.4) — never leak it.
     let runner = ClaudeRunner::new(task.id.clone()).with_extra_args(options.extra_args.iter());
-    let SpawnedAgent { events: mut rx, pid } = match runner
-        .spawn(&task.prompt, worktree.as_path(), runner_bin)
-        .await
-    {
+    // Resume the prior backend session if one was persisted (reconcile passes it);
+    // otherwise a fresh spawn. Both yield the same normalized stream + PID.
+    let spawn_result = match &options.resume_session {
+        Some(sid) => {
+            runner
+                .resume(sid, &task.prompt, worktree.as_path(), runner_bin)
+                .await
+        }
+        None => runner.spawn(&task.prompt, worktree.as_path(), runner_bin).await,
+    };
+    let SpawnedAgent { events: mut rx, pid } = match spawn_result {
         Ok(spawned) => spawned,
         Err(_spawn_err) => {
             guard.force_remove(&worktree).await?;
@@ -504,6 +516,7 @@ mod tests {
             RunOptions {
                 keep_branch: true,
                 extra_args: Vec::new(),
+                ..Default::default()
             },
         )
         .await
@@ -517,6 +530,45 @@ mod tests {
             "keep_branch must preserve the attempt branch, got: {:?}",
             quiver_branches(repo.path())
         );
+    }
+
+    /// With `RunOptions.resume_session` set, the supervisor takes the resume path
+    /// (`claude --resume <id>`) instead of a fresh spawn. fake-claude echoes the id
+    /// into its init line, so the run's first event is a WorkerStarted carrying it —
+    /// proving crash recovery actually continues a prior session, not re-runs it.
+    #[tokio::test]
+    async fn resume_session_routes_through_resume_path() {
+        let repo = temp_repo();
+        let wt_root = TempDir::new().expect("wt root");
+        let guard = GitGuard::new(repo.path()).with_worktrees_root(wt_root.path());
+        let bin = fake_claude_bin();
+        let verify = VerifyCommand::shell("exit 0");
+        let task = TaskSpec {
+            id: "resume-1".to_string(),
+            prompt: "continue".to_string(),
+        };
+
+        let out = run_task_streaming(
+            &guard,
+            &task,
+            &bin,
+            &verify,
+            RunOptions {
+                resume_session: Some("sess-supervisor-7".to_string()),
+                ..Default::default()
+            },
+            |_ev| {},
+            |_pid| {},
+        )
+        .await
+        .expect("resumed run ok");
+
+        match out.events.first().map(|e| &e.payload) {
+            Some(AgentEventPayload::WorkerStarted { session_id, .. }) => {
+                assert_eq!(session_id.as_deref(), Some("sess-supervisor-7"));
+            }
+            other => panic!("first event should be WorkerStarted with resumed id, got {other:?}"),
+        }
     }
 
     /// The streaming variant fires `on_event` for EACH event AS it arrives —
@@ -606,6 +658,7 @@ mod tests {
             RunOptions {
                 keep_branch: false,
                 extra_args: vec!["--scenario".to_string(), "crash".to_string()],
+                ..Default::default()
             },
         )
         .await
