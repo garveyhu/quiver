@@ -6,6 +6,41 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 7 轮
+
+**落了什么**
+- `8b165fd` feat(frontend): 落定 Phaser→React/CSS 像素办公室迁移（**前端大 checkpoint**)
+
+**重大发现 + 这轮做了什么**
+- 评估前端时发现:工作树里**已有一整套 tsc 通过、结构完整的 React/TS 像素办公室
+  应用**(全未提交),不是草图——`assets/`(代码生成像素美术:characters/props/
+  scenes/ui/primitives + palette + pixel.css)、`shell/`(QuiverShell/CommandPalette/
+  ProjectDialog/SettingsView/TaskCard/Transcript/ArchiveView)、`hooks/`(接 IPC 的
+  useSupervisor/useTaskBoard/useStats…)、`office/`(poseMachine/useWorkers)。
+- 按第 6 轮立的标准(tsc 通过 + 结构合理 → 诚实落定),把整个 `frontend/` WIP
+  (86 文件:61 新增 / 18 删 game+styles / 7 改)落成一个 checkpoint,给前端干净基线。
+
+**验证过的**
+- `yarn --cwd frontend tsc --noEmit` ✅(提交前后均通过;提交后 frontend 工作树==HEAD)
+- git scope:86 文件全在 `frontend/` 内,无越界(repo 根 asset 删除/tauri.conf 未碰)。
+- ⚠ **只做了 tsc 验证,尚未运行真窗口看一眼**(committed ≠ 运行验证)——见"今天该接哪 #1"。
+
+**各阶段进度**
+- 后端 P0:#1–#4 ✅、#5 ◐。
+- **前端:已落定为干净基线(tsc 通过)**。完整 UI 已在记录上;待运行时验证 + 对照
+  原型查缺补漏 + 接后端 IPC 做纵向切片。
+
+**今天该接哪**(优先级从上到下)
+1. **运行时验证前端**(loop 纪律:别只 tsc 就说好):`scripts/agent-debug.sh up`
+   起真窗口 → `shot` 截图 + Read 看画面,对照 `docs/redesign-iso-directions.html`
+   原型。确认能跑起来、像素办公室渲染正常。若起不来/有运行时报错,记进 ⚠ 并修。
+2. 对照原型查缺补漏 + 接后端 IPC:看 `hooks/useSupervisor`/`useTaskBoard`/`useStats`
+   等是否都接到了已落的 IPC 命令(get_stats/list_tasks/cancel_task_cmd/
+   suggest_verify_command…),哪个 UI 没接通就补成纵向切片。
+3. 后端 P0 #5 精炼:cancel.rs kill -9 杀进程组 + 断言无孤儿。
+
+---
+
 ### 2026-06-09 · 第 6 轮
 
 **落了什么**
@@ -244,11 +279,13 @@
    `a8502fd`→`75ee6c5` 之间 squash。
 
 1. **工作树有一大坨未提交的在途重构,不是本 loop 建的,我没动它。**
-   - **更新(第 3 轮):后端 Rust 已全部由我落成 checkpoint 提交(见各 feat(store)/
-     feat(backend) commit,body 均标注"落定既有未提交改动,归属请 review")。** 现在
-     工作树**只剩前端**(`frontend/src/game/*` 整组删除、新增 `shell/`+`hooks/`+
-     `office/`+`assets/`)**+ 配置**(`tauri.conf.json`、`assets/branding/assets.json`、
-     若干 png 删除)未提交。这些我一律没碰、没删。
+   - **更新(第 3 轮):后端 Rust 已全部由我落成 checkpoint。**
+   - **更新(第 7 轮):前端整套(`frontend/` 86 文件)也已落成 checkpoint
+     (`8b165fd`)。** 现在工作树**只剩 repo 根的非前端项**未提交:`assets/*.png`
+     若干删除(旧图片资源,因美术改代码生成)、`assets/branding/assets.json` 修改、
+     `tauri.conf.json` 修改、`docs/` 下若干 art-* html / 设计稿 untracked。这些我
+     一律没碰、没删——**删图片文件 + 改 tauri 配置更需你拍板**:要我也诚实落定成
+     checkpoint 吗?(它们前后端编译都不依赖,故一直没动)
    - 内容:前端从 Phaser game 架构迁到 `shell/` + `office/`(`frontend/src/game/*`
      整组删除、新增 `frontend/src/shell/`、`frontend/src/hooks/*`、`office/*`);
      `assets/` 下若干 png 删除;`docs/` 多个设计稿(autonomous-org.md / ui-design.md /
@@ -305,6 +342,12 @@
 ---
 
 ## 📜 历轮记录
+
+### 第 7 轮(2026-06-09)
+- 发现前端已有整套 tsc 通过的 React/CSS 像素办公室实现(未提交),按既定标准
+  落成一个 checkpoint(`8b165fd`,86 文件:assets/shell/hooks/office,删 game/styles)。
+- 验证:`tsc --noEmit` 通过。⚠ 仅 tsc,未运行真窗口(下一轮做)。
+- 前端从此有干净基线;repo 根 asset 删除/tauri.conf 仍未提交(待你拍板)。
 
 ### 第 6 轮(2026-06-09)
 - 后端 P0 崩溃恢复端到端闭环:RunOptions.resume_session + run_task_streaming
