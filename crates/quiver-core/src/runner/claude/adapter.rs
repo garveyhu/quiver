@@ -38,7 +38,8 @@ impl ClaudeAdapter {
     /// clock-free and deterministic in tests).
     pub fn adapt(&mut self, raw: RawLine, ts_ms: i64) -> AgentEvent {
         let payload = match raw {
-            RawLine::Init { model, .. } => AgentEventPayload::WorkerStarted {
+            RawLine::Init { session_id, model } => AgentEventPayload::WorkerStarted {
+                session_id,
                 model,
                 auth_mode: AuthMode::Subscription,
             },
@@ -56,10 +57,14 @@ impl ClaudeAdapter {
             RawLine::ResultOk {
                 total_cost_usd,
                 num_turns,
+                tokens,
+                duration_ms,
             } => AgentEventPayload::Result {
                 ok: true,
                 cost_usd: total_cost_usd,
                 num_turns,
+                tokens,
+                duration_ms,
             },
             RawLine::ResultErr { message } => AgentEventPayload::Error {
                 code: "agent_error".to_string(),
@@ -135,7 +140,12 @@ mod tests {
         assert_eq!(ev.seq, 0);
         assert!(matches!(ev.runner, RunnerKind::ClaudeCli));
         match ev.payload {
-            AgentEventPayload::WorkerStarted { model, auth_mode } => {
+            AgentEventPayload::WorkerStarted {
+                session_id,
+                model,
+                auth_mode,
+            } => {
+                assert_eq!(session_id.as_deref(), Some("fake-session-0001"));
                 assert_eq!(model.as_deref(), Some("claude-sonnet-4-5"));
                 assert!(matches!(auth_mode, AuthMode::Subscription));
             }
@@ -177,10 +187,14 @@ mod tests {
                 ok,
                 cost_usd,
                 num_turns,
+                tokens,
+                duration_ms,
             } => {
                 assert!(ok);
                 assert_eq!(cost_usd, Some(0.01));
                 assert_eq!(num_turns, 2);
+                assert_eq!(tokens, Some(165));
+                assert_eq!(duration_ms, Some(1234));
             }
             other => panic!("expected Result, got {other:?}"),
         }

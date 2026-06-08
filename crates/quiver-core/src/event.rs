@@ -30,10 +30,22 @@ pub enum AuthMode {
 #[derive(Clone, Debug, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", rename_all_fields = "camelCase")]
 pub enum AgentEventPayload {
-    WorkerStarted { model: Option<String>, auth_mode: AuthMode },
+    WorkerStarted {
+        /// Backend session handle (Claude `--resume` token). Threaded out so the
+        /// manager can durably resume this worker's context (DESIGN §4/§6).
+        session_id: Option<String>,
+        model: Option<String>,
+        auth_mode: AuthMode,
+    },
     ToolUse { tool: String, summary: String },
     OutputChunk { text: String },
-    Result { ok: bool, cost_usd: Option<f64>, num_turns: u32 },
+    Result {
+        ok: bool,
+        cost_usd: Option<f64>,
+        num_turns: u32,
+        tokens: Option<u64>,
+        duration_ms: Option<u64>,
+    },
     Error { code: String, message: String },
 }
 
@@ -48,6 +60,7 @@ mod tests {
             ts_ms: 1,
             runner: RunnerKind::ClaudeCli,
             payload: AgentEventPayload::WorkerStarted {
+                session_id: Some("sess-1".into()),
                 model: Some("sonnet".into()),
                 auth_mode: AuthMode::Subscription,
             },
@@ -56,5 +69,6 @@ mod tests {
         assert_eq!(v["kind"], "worker_started");
         assert_eq!(v["taskId"], "t1");
         assert_eq!(v["authMode"], "subscription");
+        assert_eq!(v["sessionId"], "sess-1");
     }
 }
