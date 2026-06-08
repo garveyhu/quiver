@@ -6,6 +6,48 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 6 轮
+
+**落了什么**
+- `2c879de` feat(supervisor): reconcile 重跑走 --resume 续接（**后端 P0 崩溃恢复闭环**)
+
+**这轮做了什么**
+- 把 #2 的 resume 能力接进崩溃恢复实际路径,完成端到端闭环:
+  - `RunOptions` 加 `resume_session: Option<String>`(默认 None,放进已存在的
+    options 里 → 用 `::default()`/`..Default::default()` 的调用点零改动)。
+  - `run_task_streaming`:resume_session 为 Some 走 `runner.resume(--resume)`、
+    否则 spawn。
+  - run.rs:跑前读 `store.task_session_id(task.id)`,有则设 resume_session。
+- 至此:session_id 透出(#1)→ 落库(#1)→ reconcile 把 running 翻回 queued 且保留
+  session_id(#4)→ dispatcher 重跑时续接其上下文(#2+本轮),崩溃恢复真正"续接"
+  而非从头重跑。
+
+**验证过的**
+- `cargo check --workspace` ✅(exit 0)
+- `cargo test --workspace` ✅ 全绿 0 失败:quiver-core 42(新增 supervisor resume 路由
+  用例)/ quiver-store 30 / quiver-app 19+1 / fake-claude 10 / cancel·merge·parallel·
+  run_task·spawn_fake·streaming 全过。
+
+**各阶段进度**
+- **后端 P0 主体完成**:#1 ✅ #2 ✅ #3 ✅ #4 ✅(且真正续接)。仅剩 #5 精炼
+  (kill -9 杀进程组无孤儿)。crates/quiver-agent 独立 crate 拆分=纯搬家,低优先。
+- 前端:**未开始**,该并进了(工作树前端大重构仍未提交,我没碰)。
+
+**今天该接哪**(优先级从上到下)
+1. **转前端纵向切片**(后端 P0 主体已完成,强烈建议并进前端):
+   - 先评估 frontend 工作树:`yarn --cwd frontend tsc --noEmit` 是否过、`shell/`+
+     `office/` 重构是否是可用基线。
+   - ⚠ 决策点:前端是一大坨**未提交**的 game→shell 重构(我历轮没碰)。要在它上面
+     建切片,得先决定是否像后端那样把前端 WIP 落成 checkpoint(它很大、是架构迁移,
+     比后端更需慎重——**建议**先评估其是否 tsc 通过+结构合理,通过则同样"诚实标注
+     落定"成 checkpoint 再叠加;不通过则记进 ⚠ 等你定)。
+   - 切片目标:等距像素办公室地板 + 一个 worker sprite,纯 CSS/canvas,对照
+     redesign-iso 原型。**绝不用图片资源**。
+2. P0 #5 精炼:cancel.rs kill **-9** 杀**进程组** + 断言无孤儿(需 ClaudeRunner
+   spawn 给子进程设独立进程组:tokio Command 的 `process_group(0)` / pre_exec setsid)。
+
+---
+
 ### 2026-06-09 · 第 5 轮
 
 **落了什么**
@@ -237,7 +279,7 @@
 | 1 | adapter.rs `RawLine::Init` 丢 `session_id` 的 bug | ✅ 端到端贯通:事件层(`a8502fd`)+ store 持久化(`caa313a`/`2918425`)+ run.rs 落库(`cdc12cf`);**剩** reconcile 读回接 `--resume`(并入 #4) |
 | 2 | 抽 `AgentRunner` trait(spawn/resume/cancel/set_permission) | ✅ 能力齐:spawn/resume(`10eb1f8`)+ kind;cancel=外部杀 pid(`75ee6c5` running_pids/cancel_task_cmd)、set_permission=extra_args(--permission-mode)。**未做**:拆独立 `crates/quiver-agent`(纯搬家,低优先);reconcile 实际改走 resume(见晨报 #1) |
 | 3 | quiver-store schema 加 saga_step + 完成标记 + fence(幂等 migrate) | ✅ session_id/saga_step/fence/done_at + 迁移测试(`caa313a`)+ session_id 读写访问器(`2918425`) |
-| 4 | `setup()` 写 `reconcile()`:重启后从账本恢复在途任务 | ✅ `scheduler::reconcile` + store requeue/列项目 + setup 异步调用(`6fd1da4`);**剩** 重跑时真正接 `--resume`(依赖 #2) |
+| 4 | `setup()` 写 `reconcile()`:重启后从账本恢复在途任务 | ✅ `scheduler::reconcile` + store requeue/列项目 + setup 异步调用(`6fd1da4`);重跑真正走 `--resume` 续接(`2c879de`)。端到端闭环完成 |
 | 5 | fake-claude kill -9 混沌测试,确认杀进程组不留孤儿 | ◐ `tests/cancel.rs` 已提交 + 过(`75ee6c5`),用 kill **-TERM** 单 PID。任务要 kill **-9** + 进程组无孤儿——属精炼 |
 
 > ※ P0 阶段约束:经理用 Rust 策略(不上 AI 经理);合并保持手动(`run.rs` 里
@@ -263,6 +305,11 @@
 ---
 
 ## 📜 历轮记录
+
+### 第 6 轮(2026-06-09)
+- 后端 P0 崩溃恢复端到端闭环:RunOptions.resume_session + run_task_streaming
+  spawn/resume 分支 + run.rs 读 task_session_id 设 resume(`2c879de`)。
+- 验证:`cargo test --workspace` 全绿(quiver-core 42,新增 supervisor resume 路由测试)。
 
 ### 第 5 轮(2026-06-09)
 - P0 #2:AgentRunner 加 resume(--resume),ClaudeRunner base_command+drive 复用,
