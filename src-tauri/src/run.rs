@@ -11,7 +11,7 @@
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 use quiver_core::event::{AgentEvent, AgentEventPayload};
 use quiver_core::git::GitGuard;
@@ -87,6 +87,9 @@ struct FinishedEvent {
     status: String,
     cost_usd: Option<f64>,
     branch: Option<String>,
+    /// The verify-gate output (tail) when a run was `VerifyFailed` — lets the UI
+    /// show *why* it failed. `None` for passed/other outcomes.
+    verify_output: Option<String>,
 }
 
 /// Run one already-enqueued task to completion against a SHARED git guard,
@@ -155,7 +158,18 @@ pub async fn run_streaming(
         .transpose()?
         .unwrap_or_default();
 
-    let (agent_bin, options, verify) = match mode {
+    // The verify-gate command (DESIGN §7), shared by both modes: run the user's
+    // configured command in the worktree before the merge decision. Empty (the
+    // default) → always-pass (`exit 0`), preserving the original behavior until a
+    // gate command is set. Simulate honors it too, so the gate can be rehearsed
+    // for free (and a red verify shows as VerifyFailed without spending credits).
+    let verify = if settings.verify_command.trim().is_empty() {
+        VerifyCommand::shell("exit 0")
+    } else {
+        VerifyCommand::shell(settings.verify_command.clone())
+    };
+
+    let (agent_bin, options) = match mode {
         RunMode::Simulate => {
             // Make `fakeDelayMs` take effect: the runner forwards
             // QUIVER_FAKE_DELAY_MS to the `fake-claude` child via its env
@@ -164,11 +178,7 @@ pub async fn run_streaming(
             // simulate workers all want the SAME saved pacing, so a benign race
             // on this write only ever (re)writes the same value.
             std::env::set_var("QUIVER_FAKE_DELAY_MS", settings.fake_delay_ms.to_string());
-            (
-                resolve_agent_bin(&settings, mode)?,
-                RunOptions::default(),
-                VerifyCommand::shell("exit 0"),
-            )
+            (resolve_agent_bin(&settings, mode)?, RunOptions::default())
         }
         RunMode::Real => {
             let bin = resolve_agent_bin(&settings, mode)?;
@@ -186,7 +196,6 @@ pub async fn run_streaming(
                         settings.model.clone(),
                     ],
                 },
-                VerifyCommand::shell("exit 0"),
             )
         }
     };
@@ -197,7 +206,8 @@ pub async fn run_streaming(
     };
 
     let mut last_cost: Option<f64> = None;
-    let outcome: RunOutcome = run_task_streaming(
+    let tid = task.id.clone();
+    let result = run_task_streaming(
         guard,
         &task,
         &agent_bin,
@@ -212,14 +222,38 @@ pub async fn run_streaming(
             }
             let _ = app.emit(AGENT_EVENT_CHANNEL, event);
         },
+        // on_started(pid): register the running task's child PID so `cancel_task_cmd`
+        // can stop it (kill → stdout EOF → the normal cleanup path runs).
+        |pid: u32| {
+            if let Some(st) = app.try_state::<crate::AppState>() {
+                if let Ok(mut m) = st.running_pids.lock() {
+                    m.insert(tid.clone(), pid);
+                }
+            }
+        },
     )
-    .await?;
+    .await;
+    // Task ended (ok or err): drop it from the running registry so a later cancel
+    // can't kill an unrelated reused PID.
+    if let Some(st) = app.try_state::<crate::AppState>() {
+        if let Ok(mut m) = st.running_pids.lock() {
+            m.remove(&task.id);
+        }
+    }
+    let outcome: RunOutcome = result?;
 
     let branch = match outcome.cleanup {
         Cleanup::PreservedBranch => Some(outcome.branch.clone()),
         _ => None,
     };
     let status_label = finish_status_label(outcome.status).to_string();
+    // Only surface the verify output when the gate is what failed (so the UI can
+    // show why); for passed/other outcomes it's noise.
+    let verify_output = if matches!(outcome.status, FinishStatus::VerifyFailed) {
+        outcome.verify_output.clone()
+    } else {
+        None
+    };
     let finished_task_id = outcome.task_id.clone();
     let finished_seq = outcome.events.len() as u64;
     let finished_ts = crate::now_ms();
@@ -232,6 +266,7 @@ pub async fn run_streaming(
         status: status_label.clone(),
         cost_usd: last_cost,
         branch: branch.clone(),
+        verify_output,
     };
     if let Some(store) = store {
         if let Ok(payload) = serde_json::to_string(&finished) {

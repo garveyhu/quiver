@@ -59,25 +59,54 @@ impl VerifyCommand {
     /// not executable) is returned as an `Err` — that is a misconfigured gate,
     /// distinct from a red test.
     pub async fn run(&self, dir: &Path) -> Result<VerifyResult> {
+        Ok(self.run_capturing(dir).await?.0)
+    }
+
+    /// Like [`run`](Self::run) but also returns the command's captured output
+    /// (combined stdout+stderr, tail-truncated). The pre-merge gate uses this so a
+    /// red verify can show the user *why* it failed, not just that it did.
+    pub async fn run_capturing(&self, dir: &Path) -> Result<(VerifyResult, String)> {
         let (program, args) = self
             .argv
             .split_first()
             .expect("argv is non-empty by construction");
 
-        let status = tokio::process::Command::new(program)
+        let output = tokio::process::Command::new(program)
             .args(args)
             .current_dir(dir)
             .stdin(std::process::Stdio::null())
-            .status()
+            .output()
             .await
             .with_context(|| format!("failed to spawn verify command {program:?}"))?;
 
-        Ok(if status.success() {
+        let result = if output.status.success() {
             VerifyResult::Passed
         } else {
             VerifyResult::Failed
-        })
+        };
+        let mut combined = String::from_utf8_lossy(&output.stdout).into_owned();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if !stderr.trim().is_empty() {
+            if !combined.is_empty() {
+                combined.push('\n');
+            }
+            combined.push_str(&stderr);
+        }
+        Ok((result, tail(&combined, 2000)))
     }
+}
+
+/// Keep the last `max` chars of `s` (the failure summary is usually at the end),
+/// prefixing an ellipsis when truncated.
+fn tail(s: &str, max: usize) -> String {
+    let s = s.trim_end();
+    if s.len() <= max {
+        return s.to_string();
+    }
+    let start = s.len() - max;
+    // Snap to a char boundary so we never split a multibyte char.
+    let start = (start..s.len()).find(|i| s.is_char_boundary(*i)).unwrap_or(s.len());
+    format!("…\n{}", &s[start..])
 }
 
 /// Outcome of running the verify-gate (DESIGN §7): green (exit 0) or red.
@@ -156,5 +185,15 @@ mod tests {
     fn empty_argv_is_rejected() {
         let empty: Vec<String> = Vec::new();
         assert!(VerifyCommand::new(empty).is_err());
+    }
+
+    #[tokio::test]
+    async fn run_capturing_returns_combined_output() {
+        let dir = TempDir::new().expect("tempdir");
+        let cmd = VerifyCommand::shell("echo out-line; echo err-line >&2; exit 1");
+        let (res, out) = cmd.run_capturing(dir.path()).await.expect("run");
+        assert_eq!(res, VerifyResult::Failed);
+        assert!(out.contains("out-line"), "stdout should be captured: {out:?}");
+        assert!(out.contains("err-line"), "stderr should be captured: {out:?}");
     }
 }

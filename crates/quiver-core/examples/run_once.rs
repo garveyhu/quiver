@@ -25,7 +25,7 @@ async fn main() -> anyhow::Result<()> {
     let cwd = std::env::current_dir()?;
 
     let runner = ClaudeRunner::new("run-once");
-    let mut rx = runner.spawn(&prompt, &cwd, &bin).await?;
+    let mut rx = runner.spawn(&prompt, &cwd, &bin).await?.events;
 
     while let Some(event) = rx.recv().await {
         println!("{}", serde_json::to_string(&event)?);

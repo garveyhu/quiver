@@ -8,10 +8,10 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
-use tokio::sync::mpsc::{self, Receiver};
+use tokio::sync::mpsc;
 
 use crate::event::{AgentEvent, RunnerKind};
-use crate::runner::AgentRunner;
+use crate::runner::{AgentRunner, SpawnedAgent};
 use crate::runner::claude::adapter::ClaudeAdapter;
 use crate::runner::claude::parse::parse_line;
 
@@ -61,7 +61,7 @@ impl ClaudeRunner {
 
 #[async_trait]
 impl AgentRunner for ClaudeRunner {
-    async fn spawn(&self, prompt: &str, cwd: &Path, bin: &Path) -> Result<Receiver<AgentEvent>> {
+    async fn spawn(&self, prompt: &str, cwd: &Path, bin: &Path) -> Result<SpawnedAgent> {
         let mut command = Command::new(bin);
         command
             .arg("-p")
@@ -85,6 +85,9 @@ impl AgentRunner for ClaudeRunner {
             .stdout
             .take()
             .context("child stdout was not captured")?;
+        // Capture the PID before the child moves into the reader task — the app
+        // kills this to cancel a running task (stdout EOF then ends the stream).
+        let pid = child.id();
 
         let (tx, rx) = mpsc::channel::<AgentEvent>(EVENT_CHANNEL_CAP);
         let task_id = self.task_id.clone();
@@ -107,7 +110,7 @@ impl AgentRunner for ClaudeRunner {
             let _ = child.wait().await;
         });
 
-        Ok(rx)
+        Ok(SpawnedAgent { events: rx, pid })
     }
 
     fn kind(&self) -> RunnerKind {

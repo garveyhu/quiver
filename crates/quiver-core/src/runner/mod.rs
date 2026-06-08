@@ -8,6 +8,14 @@ use tokio::sync::mpsc::Receiver;
 
 use crate::event::{AgentEvent, RunnerKind};
 
+/// A spawned agent: the normalized event stream + the child PID (for cancellation
+/// — the supervisor/app can kill this PID to stop a running task; stdout EOF then
+/// ends the stream through the normal path). `pid` is `None` if unavailable.
+pub struct SpawnedAgent {
+    pub events: Receiver<AgentEvent>,
+    pub pid: Option<u32>,
+}
+
 /// The ONLY backend-specific surface (DESIGN §4.1). One impl per backend.
 ///
 /// An implementor spawns the agent CLI as a child process and normalizes its
@@ -18,13 +26,13 @@ use crate::event::{AgentEvent, RunnerKind};
 pub trait AgentRunner: Send + Sync {
     /// Spawn the agent for `prompt` in working directory `cwd`, executing the
     /// binary at `bin` (configurable so tests can point it at `fake-claude`).
-    /// Returns the receiving end of the normalized event stream.
+    /// Returns the normalized event stream + the child PID for cancellation.
     async fn spawn(
         &self,
         prompt: &str,
         cwd: &Path,
         bin: &Path,
-    ) -> Result<Receiver<AgentEvent>>;
+    ) -> Result<SpawnedAgent>;
 
     /// Which kind, for provenance/logging and the `RunnerKind` stamp on events.
     fn kind(&self) -> RunnerKind;

@@ -17,7 +17,7 @@ use std::path::Path;
 
 use crate::event::{AgentEvent, AgentEventPayload};
 use crate::git::{attempt_branch, GitGuard, RemoveOutcome};
-use crate::runner::AgentRunner;
+use crate::runner::{AgentRunner, SpawnedAgent};
 use crate::runner::claude::ClaudeRunner;
 use crate::verify::{VerifyCommand, VerifyResult};
 
@@ -113,6 +113,10 @@ pub struct RunOutcome {
     /// Always populated; load-bearing when `cleanup == PreservedBranch` so the UI
     /// can point the user at the un-merged work.
     pub branch: String,
+    /// The verify-gate command's captured output (tail), when it ran. Lets the UI
+    /// show *why* a `VerifyFailed` run failed. `None` if the gate never ran (spawn
+    /// failure, permanent agent failure).
+    pub verify_output: Option<String>,
 }
 
 /// Run one task to completion in an isolated worktree (DESIGN Phase 1 Tasks
@@ -167,6 +171,7 @@ pub async fn run_task_streaming(
     verify: &VerifyCommand,
     options: RunOptions,
     mut on_event: impl FnMut(&AgentEvent) + Send,
+    mut on_started: impl FnMut(u32) + Send,
 ) -> anyhow::Result<RunOutcome> {
     const ATTEMPT: u32 = 1;
     let branch = attempt_branch(&task.id, ATTEMPT);
@@ -180,11 +185,11 @@ pub async fn run_task_streaming(
     // (2) Spawn the agent in the worktree. A spawn failure here must still GC
     // the worktree we just created (§8.4) — never leak it.
     let runner = ClaudeRunner::new(task.id.clone()).with_extra_args(options.extra_args.iter());
-    let mut rx = match runner
+    let SpawnedAgent { events: mut rx, pid } = match runner
         .spawn(&task.prompt, worktree.as_path(), runner_bin)
         .await
     {
-        Ok(rx) => rx,
+        Ok(spawned) => spawned,
         Err(_spawn_err) => {
             guard.force_remove(&worktree).await?;
             // A non-kept failed attempt leaves no orphan branch either (§8.4).
@@ -196,9 +201,16 @@ pub async fn run_task_streaming(
                 cleanup: Cleanup::ForcedRemoved,
                 failure: Some(FailureReason::SpawnFailed),
                 branch,
+                verify_output: None,
             });
         }
     };
+
+    // Report the child PID so the app can cancel a running task (kill → stdout
+    // EOF → the drain loop below ends through the normal path).
+    if let Some(p) = pid {
+        on_started(p);
+    }
 
     // (3) Drain the normalized event stream — firing `on_event` LIVE for each
     // event as it arrives, before collecting it for the outcome.
@@ -221,8 +233,8 @@ pub async fn run_task_streaming(
         // distinct from a red test) — but still a task outcome, not a supervisor
         // crash. Route it through the §8.4 GC like the spawn-fail path so the
         // worktree is never leaked, and record it as a classified failure.
-        let verify_result = match verify.run(worktree.as_path()).await {
-            Ok(result) => result,
+        let (verify_result, verify_output) = match verify.run_capturing(worktree.as_path()).await {
+            Ok(pair) => pair,
             Err(_verify_err) => {
                 guard.force_remove(&worktree).await?;
                 guard.delete_branch(&branch).await?;
@@ -233,6 +245,7 @@ pub async fn run_task_streaming(
                     cleanup: Cleanup::ForcedRemoved,
                     failure: Some(FailureReason::VerifyError),
                     branch,
+                    verify_output: None,
                 });
             }
         };
@@ -261,6 +274,7 @@ pub async fn run_task_streaming(
             cleanup,
             failure: None,
             branch,
+            verify_output: Some(verify_output),
         });
     }
 
@@ -280,6 +294,7 @@ pub async fn run_task_streaming(
         cleanup: Cleanup::ForcedRemoved,
         failure: Some(failure),
         branch,
+        verify_output: None,
     })
 }
 
@@ -302,7 +317,7 @@ pub async fn run_task_with_options(
     // Delegate to the streaming variant with a no-op callback: non-streaming
     // callers still get the full collected event log in the outcome, with
     // identical lifecycle/cleanup behavior.
-    run_task_streaming(guard, task, runner_bin, verify, options, |_event| {}).await
+    run_task_streaming(guard, task, runner_bin, verify, options, |_event| {}, |_pid| {}).await
 }
 
 #[cfg(test)]
@@ -538,6 +553,7 @@ mod tests {
                     .expect("seen lock")
                     .push((ev.seq, std::time::Instant::now()));
             },
+            |_pid| {},
         )
         .await
         .expect("streaming run ok");

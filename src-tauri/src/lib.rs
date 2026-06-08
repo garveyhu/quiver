@@ -1,7 +1,7 @@
 //! Quiver Tauri app crate (DESIGN §3 three-layer architecture).
 //!
 //! This is the Rust "core" half of the Tauri app. It owns the Tauri runtime,
-//! the IPC surface the React/Phaser UI talks to, the picked-project app state,
+//! the IPC surface the React UI talks to, the picked-project app state,
 //! and the durable store. The actual supervisor logic — worktrees, the
 //! verify-gate, merge — lives in `quiver-core`; the per-task run plumbing
 //! (binary resolution, live streaming, persistence) lives in [`run`]; and the
@@ -47,6 +47,10 @@ struct AppState {
     project_path: Mutex<Option<PathBuf>>,
     store: std::sync::OnceLock<Arc<Store>>,
     scheduler: Scheduler,
+    /// task_id → child PID of currently-running tasks. Populated when a task's
+    /// agent spawns, removed when it ends. Read by `cancel_task_cmd` to stop a
+    /// running task (kill the PID → stdout EOF → normal cleanup path).
+    running_pids: Mutex<std::collections::HashMap<String, u32>>,
 }
 
 impl AppState {
@@ -122,10 +126,20 @@ fn get_settings(state: State<'_, AppState>) -> Result<Settings, String> {
 }
 
 /// Apply a partial settings update and return the resulting full [`Settings`].
+///
+/// After persisting, re-kick the scheduler: a settings change may raise the §10
+/// budget cap, which should un-pause any queue the gate stopped — `resume_all`
+/// re-checks the gate for each known project (no-op for queues already running).
 #[tauri::command]
-fn update_settings(state: State<'_, AppState>, patch: SettingsPatch) -> Result<Settings, String> {
+async fn update_settings(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    patch: SettingsPatch,
+) -> Result<Settings, String> {
     let store = state.store()?;
-    store.update_settings(&patch).map_err(|e| format!("{e:#}"))
+    let settings = store.update_settings(&patch).map_err(|e| format!("{e:#}"))?;
+    state.scheduler.resume_all(app, store.clone()).await;
+    Ok(settings)
 }
 
 /// All persisted tasks for the bulletin-board UI (DESIGN §11, v1.0 module 5),
@@ -140,6 +154,74 @@ fn list_tasks(
     store
         .list_tasks(project.as_deref(), status.as_deref())
         .map_err(|e| format!("{e:#}"))
+}
+
+/// Aggregate progression stats for the XP / level HUD (read-only, all projects).
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Stats {
+    total: i64,
+    verified: i64,
+    failed: i64,
+    cost_usd: f64,
+    xp: i64,
+    level: i64,
+    /// Rolling-window spend (all projects), mirroring the §10 budget gate so the
+    /// HUD「今夜花费」and the budget banner agree with what actually pauses the queue.
+    spent_day: f64,
+    spent_month: f64,
+}
+
+/// Compute XP + level from the task table. Pure read-only aggregate — does not
+/// touch the run / merge / verify path. XP = verified·100 + failed·20; level
+/// grows on a sqrt curve so early wins level fast, later ones taper.
+#[tauri::command]
+fn get_stats(state: State<'_, AppState>) -> Result<Stats, String> {
+    let store = state.store()?;
+    let (total, verified, failed, cost_usd) = store.task_stats().map_err(|e| format!("{e:#}"))?;
+    let xp = verified * 100 + failed * 20;
+    let level = 1 + ((xp as f64) / 100.0).sqrt().floor() as i64;
+    const DAY_MS: i64 = 86_400_000;
+    let now = now_ms();
+    let spent_day = store.cost_since(now - DAY_MS).map_err(|e| format!("{e:#}"))?;
+    let spent_month = store.cost_since(now - 30 * DAY_MS).map_err(|e| format!("{e:#}"))?;
+    Ok(Stats {
+        total,
+        verified,
+        failed,
+        cost_usd,
+        xp,
+        level,
+        spent_day,
+        spent_month,
+    })
+}
+
+/// Suggest a verify-gate command (DESIGN §7) by sniffing the current project for
+/// well-known build/test markers. Read-only; returns "" when nothing is
+/// recognized or no project is selected, so the UI just shows no hint. Purely a
+/// convenience nudge to help the user enable the gate.
+#[tauri::command]
+fn suggest_verify_command(state: State<'_, AppState>) -> Result<String, String> {
+    let project = match current_project(&state) {
+        Ok(p) => p,
+        Err(_) => return Ok(String::new()),
+    };
+    let has = |f: &str| project.join(f).exists();
+    let cmd = if has("Cargo.toml") {
+        "cargo test"
+    } else if has("package.json") {
+        "npm test"
+    } else if has("pyproject.toml") || has("setup.py") {
+        "pytest"
+    } else if has("go.mod") {
+        "go test ./..."
+    } else if has("Makefile") || has("makefile") {
+        "make test"
+    } else {
+        ""
+    };
+    Ok(cmd.to_string())
 }
 
 /// Move a task to a new board `position` (drag-to-reorder).
@@ -159,9 +241,18 @@ fn reorder_task(
     Ok(())
 }
 
-/// Cancel a QUEUED task (remove its commission from the board). Refuses to cancel
-/// a task that is already running/verifying/finished — those are owned by a live
-/// worker and must not be yanked out from under it.
+/// Send SIGTERM to a child PID. The agent exits → its stdout closes → the run's
+/// drain loop ends through the normal path, which GCs the worktree (§8.4).
+fn kill_pid(pid: u32) {
+    let _ = std::process::Command::new("kill")
+        .arg("-TERM")
+        .arg(pid.to_string())
+        .status();
+}
+
+/// Cancel a task. QUEUED → remove its commission from the board. RUNNING /
+/// VERIFYING → kill its agent process (it stops + cleans up via the normal path).
+/// Already-finished tasks can't be cancelled.
 #[tauri::command]
 fn cancel_task_cmd(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<(), String> {
     let store = state.store()?;
@@ -169,10 +260,28 @@ fn cancel_task_cmd(app: AppHandle, state: State<'_, AppState>, id: String) -> Re
         .get_task(&id)
         .map_err(|e| format!("{e:#}"))?
         .ok_or_else(|| "任务不存在或已被移除".to_string())?;
-    if task.status != "queued" {
-        return Err("只能取消尚未开工（待接）的委托".to_string());
+    match task.status.as_str() {
+        "queued" => {
+            store.delete_task(&id).map_err(|e| format!("{e:#}"))?;
+        }
+        "running" | "verifying" => {
+            let pid = state
+                .running_pids
+                .lock()
+                .ok()
+                .and_then(|m| m.get(&id).copied());
+            match pid {
+                Some(pid) => {
+                    kill_pid(pid);
+                    if let Ok(mut m) = state.running_pids.lock() {
+                        m.remove(&id);
+                    }
+                }
+                None => return Err("找不到运行中的进程（可能刚结束）".to_string()),
+            }
+        }
+        _ => return Err("该委托已结束，无法取消".to_string()),
     }
-    store.delete_task(&id).map_err(|e| format!("{e:#}"))?;
     let _ = app.emit_task_update();
     Ok(())
 }
@@ -368,6 +477,8 @@ pub fn run() {
         get_settings,
         update_settings,
         list_tasks,
+        get_stats,
+        suggest_verify_command,
         reorder_task,
         cancel_task_cmd,
         get_task_events,
@@ -386,6 +497,8 @@ pub fn run() {
         get_settings,
         update_settings,
         list_tasks,
+        get_stats,
+        suggest_verify_command,
         reorder_task,
         cancel_task_cmd,
         get_task_events,

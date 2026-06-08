@@ -30,6 +30,8 @@ pub enum RawLine {
     ResultOk {
         total_cost_usd: Option<f64>,
         num_turns: u32,
+        tokens: Option<u64>,
+        duration_ms: Option<u64>,
     },
     ResultErr {
         message: String,
@@ -96,12 +98,22 @@ fn parse_result(v: &Value) -> RawLine {
             .unwrap_or_else(|| "agent error".to_string());
         RawLine::ResultErr { message }
     } else {
+        let tokens = v.get("usage").and_then(|u| {
+            let input = u.get("input_tokens").and_then(Value::as_u64);
+            let output = u.get("output_tokens").and_then(Value::as_u64);
+            match (input, output) {
+                (None, None) => None,
+                (a, b) => Some(a.unwrap_or(0) + b.unwrap_or(0)),
+            }
+        });
         RawLine::ResultOk {
             total_cost_usd: v.get("total_cost_usd").and_then(Value::as_f64),
             num_turns: v
                 .get("num_turns")
                 .and_then(Value::as_u64)
                 .unwrap_or(0) as u32,
+            tokens,
+            duration_ms: v.get("duration_ms").and_then(Value::as_u64),
         }
     }
 }
@@ -173,6 +185,8 @@ mod tests {
             Some(RawLine::ResultOk {
                 total_cost_usd: Some(0.01),
                 num_turns: 2,
+                tokens: Some(165),
+                duration_ms: Some(1234),
             })
         );
     }

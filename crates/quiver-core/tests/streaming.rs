@@ -88,6 +88,7 @@ async fn events_arrive_incrementally_not_all_at_end() {
                 .expect("timeline lock")
                 .push(start.elapsed().as_millis());
         },
+        |_pid| {},
     )
     .await
     .expect("streaming run ok");

@@ -257,7 +257,44 @@ impl GitGuard {
         self.run_meta(&["worktree", "prune"]).await?;
         self.run_meta(&["worktree", "remove", "--force", dir_str])
             .await?;
+        // Best-effort sweep: if the agent was killed mid-run (cancel) it may still
+        // hold files when `git worktree remove` runs, so git unregisters the
+        // worktree but leaves the directory on disk. Remove it so a cancel/crash
+        // never leaks an orphan dir.
+        let _ = std::fs::remove_dir_all(path.as_path());
         Ok(())
+    }
+
+    /// Sweep orphan worktree directories: any dir under `worktrees_root` that git
+    /// no longer tracks as a worktree (left behind by a cancel/crash where the
+    /// dying agent held files). Safe to run at startup — by then those processes
+    /// are long dead, so the dirs delete cleanly. Returns how many were removed.
+    /// Registered worktrees (incl. kept real-mode ones) are never touched.
+    pub async fn sweep_orphan_worktrees(&self) -> anyhow::Result<usize> {
+        let _lock = self.meta_lock.lock().await;
+        let _ = self.run_meta(&["worktree", "prune"]).await;
+        let listed = self.run_meta(&["worktree", "list", "--porcelain"]).await?;
+        let text = String::from_utf8_lossy(&listed.stdout);
+        let registered: Vec<PathBuf> = text
+            .lines()
+            .filter_map(|l| l.strip_prefix("worktree "))
+            .filter_map(|p| std::fs::canonicalize(p).ok())
+            .collect();
+        let mut removed = 0usize;
+        let Ok(entries) = std::fs::read_dir(&self.worktrees_root) else {
+            return Ok(0);
+        };
+        for entry in entries.filter_map(Result::ok) {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let canon = std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
+            if !registered.iter().any(|r| *r == canon) && std::fs::remove_dir_all(&path).is_ok() {
+                removed += 1;
+            }
+        }
+        Ok(removed)
     }
 
     /// Force-delete an attempt branch (`git branch -D <branch>`) behind the

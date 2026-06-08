@@ -46,7 +46,8 @@ async fn streams_ordered_events_from_fake_claude() {
     let mut rx = runner
         .spawn("do the thing", &cwd, &bin)
         .await
-        .expect("spawn fake-claude");
+        .expect("spawn fake-claude")
+        .events;
 
     let mut events = Vec::new();
     while let Some(ev) = rx.recv().await {

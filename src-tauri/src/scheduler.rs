@@ -38,9 +38,20 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::{Mutex, Semaphore};
 
 use quiver_core::git::GitGuard;
-use quiver_store::Store;
+use quiver_store::{Settings, Store};
 
 use crate::run::{run_one_task, RunMode};
+
+/// Whether the §10 budget gate should pause the queue, given ROLLING-window
+/// spends: `spent_day` = last 24h (vs the nightly budget), `spent_month` ≈ last
+/// 30d (vs the monthly credit cap). A cap that is `None` or ≤ 0 is "unset" and
+/// never trips — so with no caps configured the gate is inert (queue unchanged).
+/// Rolling windows are deliberately used over an all-time sum so a periodic cap
+/// resets as old spend ages out, instead of pausing forever once exceeded.
+fn over_budget(settings: &Settings, spent_day: f64, spent_month: f64) -> bool {
+    let hit = |cap: Option<f64>, spent: f64| cap.map_or(false, |c| c > 0.0 && spent >= c);
+    hit(settings.nightly_budget_usd, spent_day) || hit(settings.monthly_credit_cap_usd, spent_month)
+}
 
 /// The Tauri event channel the board subscribes to: emitted on every task
 /// lifecycle transition (enqueue / claim / finish / cancel) so the UI re-reads
@@ -117,6 +128,21 @@ impl Scheduler {
             *queue_for_task.dispatcher_running.lock().await = false;
         });
     }
+
+    /// Re-kick every known project's dispatcher (no-op for ones already running).
+    /// Called after a settings change so a queue the §10 budget gate paused
+    /// resumes when the cap is raised — without needing a fresh enqueue. Each
+    /// restarted dispatcher re-evaluates the gate, so if still over budget it
+    /// simply exits again. Idempotent + cheap.
+    pub async fn resume_all(&self, app: AppHandle, store: Arc<Store>) {
+        let queues: Vec<Arc<ProjectQueue>> = {
+            let projects = self.projects.lock().await;
+            projects.values().cloned().collect()
+        };
+        for queue in queues {
+            Self::spawn_dispatcher_if_idle(app.clone(), store.clone(), queue).await;
+        }
+    }
 }
 
 /// Drain `queue` until it is empty: acquire a permit (blocks while all
@@ -133,6 +159,23 @@ async fn dispatch_loop(app: AppHandle, store: Arc<Store>, queue: Arc<ProjectQueu
             Ok(p) => p,
             Err(_) => return, // semaphore closed — shutting down.
         };
+
+        // §10 budget gate: if the project has spent up to a configured cap, pause
+        // — stop claiming rather than overspend. cap=None (the default) → inert,
+        // the queue behaves exactly as before. Conservative failure mode: a read
+        // error errs toward NOT pausing (keeps work flowing), but an over-cap
+        // reading pauses. A future enqueue (or raising the cap then re-pinning)
+        // restarts the dispatcher, which re-checks here.
+        if let Ok(settings) = store.get_settings() {
+            const DAY_MS: i64 = 86_400_000;
+            let now = crate::now_ms();
+            let spent_day = store.cost_since(now - DAY_MS).unwrap_or(0.0);
+            let spent_month = store.cost_since(now - 30 * DAY_MS).unwrap_or(0.0);
+            if over_budget(&settings, spent_day, spent_month) {
+                drop(permit);
+                return;
+            }
+        }
 
         // Atomically claim the next queued task (flips it to `running`). If the
         // queue is empty, drop the permit and stop draining.
@@ -168,5 +211,39 @@ async fn dispatch_loop(app: AppHandle, store: Arc<Store>, queue: Arc<ProjectQueu
             // the board so the finished card + freed slot are reflected live.
             let _ = app_worker.emit(TASK_EVENT_CHANNEL, &project_for_worker);
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn caps(monthly: Option<f64>, nightly: Option<f64>) -> Settings {
+        Settings {
+            monthly_credit_cap_usd: monthly,
+            nightly_budget_usd: nightly,
+            ..Settings::default()
+        }
+    }
+
+    #[test]
+    fn over_budget_inert_when_no_caps() {
+        assert!(!over_budget(&caps(None, None), 9999.0, 9999.0));
+        // 0 / negative caps are treated as "unset" — the gate stays inert.
+        assert!(!over_budget(&caps(Some(0.0), Some(0.0)), 9999.0, 9999.0));
+    }
+
+    #[test]
+    fn over_budget_trips_nightly_on_day_window() {
+        let s = caps(None, Some(5.0));
+        assert!(over_budget(&s, 5.0, 0.0)); // 24h spend reached the nightly cap
+        assert!(!over_budget(&s, 4.99, 9999.0)); // under nightly; the month window is irrelevant
+    }
+
+    #[test]
+    fn over_budget_trips_monthly_on_month_window() {
+        let s = caps(Some(100.0), None);
+        assert!(over_budget(&s, 0.0, 100.0)); // 30d spend reached the monthly cap
+        assert!(!over_budget(&s, 9999.0, 99.0)); // under monthly; the day window is irrelevant
     }
 }
