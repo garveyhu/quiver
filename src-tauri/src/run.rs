@@ -217,6 +217,19 @@ pub async fn run_streaming(
             if let AgentEventPayload::Result { cost_usd, .. } = &event.payload {
                 last_cost = *cost_usd;
             }
+            // Persist the backend session handle the instant the worker reports it
+            // (the §5.3 init line), so a crash/restart can resume this task with
+            // --resume instead of re-running from scratch (DESIGN §4/§6/§23 P0).
+            if let (
+                Some(store),
+                AgentEventPayload::WorkerStarted {
+                    session_id: Some(sid),
+                    ..
+                },
+            ) = (store, &event.payload)
+            {
+                let _ = store.set_task_session_id(&tid, sid, crate::now_ms());
+            }
             if let Some(store) = store {
                 persist_event(store, event);
             }
