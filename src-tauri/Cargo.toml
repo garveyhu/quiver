@@ -42,6 +42,8 @@ quiver-core = { path = "../crates/quiver-core" }
 quiver-store = { path = "../crates/quiver-store" }
 # Durable agent memory (episodes + bi-temporal facts, DESIGN §6/§20).
 quiver-memory = { path = "../crates/quiver-memory" }
+# AI 经理编排(决策模型/流控/价值闸,DESIGN §5/§21)。
+quiver-orchestrator = { path = "../crates/quiver-orchestrator" }
 tauri-plugin-dialog = "2.7.1"
 # The async runtime the queue scheduler uses to run up to `maxWorkers` tasks
 # concurrently (one `tokio::spawn` per worker) with a `Semaphore` concurrency
