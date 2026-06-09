@@ -188,7 +188,14 @@ body {
 .caption .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 9px var(--ok); flex: none; animation: blink 1.6s var(--ease) infinite; }
 @keyframes blink { 50% { opacity: .35; } }
 
-/* ===== 画面后期 ===== */
+/* ===== 氛围粒子 + 画面后期 ===== */
+.dust { position: absolute; width: 3px; height: 3px; background: #fff; border-radius: 50%; opacity: .35; pointer-events: none; }
+@keyframes floaty { from{ transform: translateY(0); opacity: .45; } to{ transform: translateY(-24px); opacity: 0; } }
+#sky { position: fixed; inset: 0; pointer-events: none; z-index: 100; background: rgba(8,14,34,.1); transition: background 1.2s linear; }
+#budgetTint { position: fixed; inset: 0; pointer-events: none; z-index: 120; opacity: 0; mix-blend-mode: multiply; background: radial-gradient(120% 100% at 50% 40%,rgba(120,150,200,.0),rgba(40,60,110,.9)); transition: opacity 1.6s linear; }
+#rededge { position: fixed; inset: 0; pointer-events: none; z-index: 8520; opacity: 0; background: radial-gradient(120% 100% at 50% 50%,rgba(226,60,50,0) 62%,rgba(226,60,50,.42) 100%); transition: opacity 1.2s linear; }
+#rededge.pulse { animation: redpulse 2.4s ease-in-out infinite; }
+@keyframes redpulse { 0%,100%{ opacity: var(--re,.3); } 50%{ opacity: calc(var(--re,.3) * 1.7); } }
 #vignette { position: fixed; inset: 0; pointer-events: none; z-index: 8500; background: radial-gradient(130% 110% at 50% 42%,rgba(0,0,0,0) 52%,rgba(0,0,0,.28) 84%,rgba(0,0,0,.6) 100%); }
 #grain { position: fixed; inset: -50%; width: 200%; height: 200%; pointer-events: none; z-index: 8530; opacity: .05; mix-blend-mode: overlay;
   background-image: repeating-radial-gradient(rgba(255,255,255,.6) 0 1px,transparent 1px 2px),repeating-radial-gradient(rgba(0,0,0,.5) 0 1px,transparent 1px 3px);

@@ -1,8 +1,12 @@
-import { useHud } from '@/hooks/useHud';
+import type { HudData } from '@/hooks/useHud';
 
-/** 顶部 HUD：品牌 + 实时统计 + 预算条。数据经 useHud 接 get_stats / list_tasks，随 task-updated 刷新。 */
-export function Hud() {
-  const { managers, running, verified, spentUsd, budgetCapUsd } = useHud();
+interface HudProps {
+  data: HudData;
+}
+
+/** 顶部 HUD：品牌 + 实时统计 + 预算条。纯展示，数据由 App 经 useHud 注入。 */
+export function Hud({ data }: HudProps) {
+  const { managers, running, verified, spentUsd, budgetCapUsd } = data;
   const barPct = Math.min(100, (spentUsd / budgetCapUsd) * 100);
 
   return (

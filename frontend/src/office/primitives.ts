@@ -167,4 +167,20 @@ export class SceneBuilder {
     const p = this.pt(c, r);
     this.add({ className: 'cat', style: { left: p.x - 8, top: p.y - 10, zIndex: zidx(c, r) + 3 }, composite: 'cat' });
   }
+
+  /** 一粒漂浮的尘埃(暖灯附近偏暖、余处冷白),循环上浮淡出。 */
+  dust(c: number, r: number, h: number, opacity: number, sizePx: number, warm: boolean, durSec: number, delaySec: number): void {
+    const p = this.pt(c, r, h);
+    const style: CSSProperties = {
+      left: p.x,
+      top: p.y,
+      zIndex: 8000,
+      opacity,
+      width: sizePx,
+      height: sizePx,
+      animation: `floaty ${durSec}s linear ${delaySec}s infinite`,
+    };
+    if (warm) style.background = '#ffe2b0';
+    this.add({ className: 'dust', style });
+  }
 }

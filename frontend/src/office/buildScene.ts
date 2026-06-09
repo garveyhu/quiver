@@ -76,8 +76,24 @@ export function buildScene(): Scene {
   furnishWorkArea(b);
   furnishRightColumn(b);
   ceilingLights(b);
+  ambientDust(b);
 
   return { layout, nodes: b.nodes };
+}
+
+/** 全场浮尘:26 粒随机散布在网格上空，暖白错落，慢速上浮淡出(移植原型 build() 尾段)。 */
+function ambientDust(b: SceneBuilder): void {
+  for (let i = 0; i < 26; i++) {
+    const c = Math.random() * C;
+    const r = Math.random() * R;
+    const h = 20 + Math.random() * 34;
+    const opacity = Number((0.18 + Math.random() * 0.3).toFixed(2));
+    const size = Number((2 + Math.random() * 2.5).toFixed(1));
+    const warm = Math.random() < 0.3;
+    const dur = 4 + Math.random() * 5;
+    const delay = Math.random() * 5;
+    b.dust(c, r, h, opacity, size, warm, dur, delay);
+  }
 }
 
 /** 右列四间:质检台 / 领导区(看板+记忆书) / 运维·预算(机架+保险柜) / 发货口(卷帘门+货箱)。 */
