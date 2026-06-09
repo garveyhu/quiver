@@ -1,3 +1,3 @@
 [workspace]
 resolver = "2"
-members = ["crates/quiver-core", "crates/quiver-store", "crates/quiver-memory", "crates/fake-claude", "src-tauri"]
+members = ["crates/quiver-core", "crates/quiver-store", "crates/quiver-memory", "crates/quiver-orchestrator", "crates/fake-claude", "src-tauri"]
