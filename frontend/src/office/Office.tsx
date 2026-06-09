@@ -3,6 +3,8 @@ import { useMemo, type CSSProperties, type ReactNode } from 'react';
 import { buildScene } from '@/office/buildScene';
 import type { SceneNode } from '@/office/primitives';
 import { useFitScale } from '@/office/useFitScale';
+import { Worker } from '@/office/Worker';
+import { initialWorkers } from '@/office/workers';
 
 /** 节点内部内容:复合结构(猫) > 可扩展"＋" > 标签文字 > 空。 */
 function nodeChildren(node: SceneNode): ReactNode {
@@ -21,9 +23,10 @@ function nodeChildren(node: SceneNode): ReactNode {
   return node.text;
 }
 
-/** 等距像素办公室。构建一次静态场景，按窗口尺寸整体缩放居中。 */
+/** 等距像素办公室。构建一次静态场景 + 初始工人，按窗口尺寸整体缩放居中。 */
 export function Office() {
   const scene = useMemo(() => buildScene(), []);
+  const workers = useMemo(() => initialWorkers(scene.layout), [scene.layout]);
   const scale = useFitScale(scene.layout.worldW, scene.layout.worldH);
 
   const worldStyle: CSSProperties = { width: scene.layout.worldW, height: scene.layout.worldH };
@@ -36,6 +39,9 @@ export function Office() {
           <div key={node.key} className={node.className} style={node.style}>
             {nodeChildren(node)}
           </div>
+        ))}
+        {workers.map(w => (
+          <Worker key={w.id} worker={w} />
         ))}
       </div>
     </div>

@@ -71,6 +71,81 @@ body {
 .cat .t { position: absolute; width: 8px; height: 3px; background: #cbb89a; border-radius: 2px; right: -6px; bottom: 4px; }
 @keyframes bob { from{ transform: translateY(0); } to{ transform: translateY(-2px); } }
 
+/* ===== 工人精灵 ===== */
+.worker { position: absolute; width: 24px; height: 40px; margin-left: -12px; margin-top: -34px; transition: left var(--walk,.6s) linear, top var(--walk,.6s) linear; cursor: pointer; image-rendering: pixelated; }
+.worker .shadow { position: absolute; left: 50%; bottom: -2px; width: 18px; height: 6px; margin-left: -9px; background: rgba(0,0,0,.4); border-radius: 50%; filter: blur(1.5px); transition: width .2s, opacity .2s; }
+.worker.moving .shadow { width: 22px; opacity: .55; animation: shadowpace .42s steps(2) infinite; }
+.worker .body { position: absolute; left: 0; bottom: 6px; width: 24px; height: 34px; transform-origin: 50% 100%; filter: drop-shadow(0 1px 0 rgba(0,0,0,.55)); }
+.worker .stack { position: absolute; inset: 0; animation: sway 3.4s ease-in-out infinite; transform-origin: 50% 100%; }
+.worker.working .stack { animation: typebob .46s steps(2) infinite; }
+.worker.moving  .stack { animation: walkbob .42s steps(2) infinite; }
+.worker.awaiting .stack { animation: none; }
+.worker .legs  { position: absolute; left: 5px; bottom: 0; width: 14px; height: 7px; background: linear-gradient(90deg,#343c4c 0 50%,#262c38 50% 100%); border-radius: 0 0 1px 1px; }
+.worker .torso { position: absolute; left: 2px; top: 14px; width: 20px; height: 15px; border-radius: 1px;
+  background: linear-gradient(90deg, var(--torsoL, #4a6a9a) 0 5px, var(--torso,#3f5f8f) 5px 15px, var(--torsoD,#2f4a72) 15px 20px); }
+.worker.lean .torso { left: 3px; }
+.worker .arms  { position: absolute; left: 2px; top: 21px; width: 20px; height: 5px; opacity: 0; }
+.worker.lean .arms { opacity: 1; left: 3px; }
+.worker .arms::before, .worker .arms::after { content: ""; position: absolute; top: 0; width: 5px; height: 5px; background: var(--torsoD,#2f4a72); border-radius: 1px; }
+.worker .arms::before { left: 0; } .worker .arms::after { right: 0; }
+.worker .hair  { position: absolute; left: 5px; top: 2px; width: 14px; height: 7px; background: linear-gradient(90deg,#473630 0 50%,#33251f 50% 100%); border-radius: 2px 2px 0 0; }
+.worker .hood  { position: absolute; left: 3px; top: 3px; width: 18px; height: 12px; border-radius: 3px 3px 1px 1px;
+  background: linear-gradient(90deg, var(--hoodL,#6a96d0) 0 4px, var(--hood,#5a86c0) 4px 14px, var(--hoodD,#456ba0) 14px 18px); }
+.worker .face  { position: absolute; left: 7px; top: 9px; width: 10px; height: 7px; border-radius: 1px;
+  background: linear-gradient(90deg,#ffceb0 0 6px,#e9b193 6px 10px); }
+.worker .eye   { position: absolute; left: 12px; top: 11px; width: 2px; height: 2px; background: #2a2330; border-radius: 1px; animation: blinkeye 4.2s steps(1) infinite; }
+.worker .phones { position: absolute; left: 2px; top: 4px; width: 20px; height: 10px; opacity: 0; }
+.worker.emp .phones { opacity: 1; }
+.worker .phones::before, .worker .phones::after { content: ""; position: absolute; top: 4px; width: 3px; height: 6px; background: #20242e; border-radius: 1px; }
+.worker .phones::before { left: 0; } .worker .phones::after { right: 0; }
+.worker .phones i { position: absolute; left: 3px; top: 0; width: 14px; height: 4px; border: 2px solid #20242e; border-bottom: 0; border-radius: 7px 7px 0 0; }
+.worker.mgr { margin-top: -40px; }
+.worker.mgr .hood { top: 1px; background: linear-gradient(90deg,#f2c468 0 4px,#e0a050 4px 14px,#b07a30 14px 18px); }
+.worker.mgr .hair { top: 0; }
+.worker.mgr .torso { background: linear-gradient(90deg,#e8b45a 0 5px,#d49a40 5px 15px,#a8742c 15px 20px); }
+.worker.mgr .crown { position: absolute; left: 8px; top: -1px; width: 8px; height: 4px; background: linear-gradient(90deg,#ffe6ad,#e0a050); border-radius: 3px 3px 0 0; }
+.worker.mgr .mantle{ position: absolute; left: 1px; top: 13px; width: 22px; height: 4px; background: #8a5e26; border-radius: 2px; box-shadow: inset 0 1px 0 rgba(255,224,150,.45); }
+.worker.mgr .robe  { position: absolute; left: 2px; top: 25px; width: 20px; height: 15px; border-radius: 2px 2px 3px 3px;
+  background: linear-gradient(90deg,#d49a40 0 5px,#b07a30 5px 15px,#8a5e26 15px 20px); }
+.worker.mgr .robe::after{ content: ""; position: absolute; left: 9px; top: 1px; width: 2px; height: 13px; background: #7a5020; }
+.worker.mgr .legs { display: none; }
+.worker .book  { position: absolute; left: -2px; top: 22px; width: 7px; height: 9px; opacity: 0;
+  background: linear-gradient(90deg,#caa24a 0 2px,#e8c45e 2px 7px); border: 1px solid #8a6a28; border-radius: 1px 2px 2px 1px; }
+.worker.mgr .book { opacity: 1; z-index: 6; box-shadow: 0 0 6px 2px rgba(255,200,90,.6); }
+.worker .visor { position: absolute; left: 5px; top: 9px; width: 14px; height: 3px; background: #1e3a3a; opacity: 0; border-radius: 1px; }
+.worker.aud .visor { opacity: 1; }
+.worker .clip  { position: absolute; right: -3px; top: 19px; width: 8px; height: 10px; opacity: 0;
+  background: linear-gradient(180deg,#d9dde4 0 70%,#b7bcc6 70% 100%); border: 1px solid #6a7078; border-radius: 1px; }
+.worker .clip::before { content: ""; position: absolute; left: 2px; top: -2px; width: 4px; height: 2px; background: #8a9098; border-radius: 1px; }
+.worker.aud .clip { opacity: 1; }
+.worker.aud .arms { opacity: 1; left: 2px; top: 20px; }
+.worker.sip .stack    { animation: sip 1.3s ease-in-out; }
+.worker.stretch .stack{ animation: stretch 1.5s ease-in-out; }
+.worker .bubble { position: absolute; left: 50%; bottom: 100%; margin-bottom: 5px; transform: translateX(-50%) translateY(3px) scale(.92);
+  font-size: 10px; line-height: 1.3; font-weight: 500; background: #f4f6fb; color: #232838; padding: 2px 7px; border-radius: 7px;
+  white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis; opacity: 0; pointer-events: none;
+  box-shadow: 0 2px 5px rgba(0,0,0,.35); transition: opacity .18s ease, transform .18s ease; }
+.worker .bubble::after { content: ""; position: absolute; left: 50%; bottom: -3px; margin-left: -3px; width: 0; height: 0;
+  border: 3px solid transparent; border-top-color: #f4f6fb; }
+.worker.talk .bubble { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+.worker .pop { position: absolute; left: 50%; bottom: 100%; margin-bottom: 14px; transform: translateX(-50%); font-size: 12px; font-weight: 700; color: #ffe6ad; opacity: 0; white-space: nowrap; text-shadow: 0 1px 0 rgba(0,0,0,.5); }
+.worker.cel .pop { animation: rise 1.1s ease-out; }
+.worker .think { position: absolute; left: 50%; bottom: 100%; margin-bottom: 3px; margin-left: -1px; width: 3px; height: 3px; border-radius: 50%; background: #ffd27a; opacity: 0; box-shadow: 0 -5px 0 -.5px #ffd27a, 0 -9px 0 -1px #ffd27a; }
+.worker.awaiting .think { opacity: 1; animation: thinkpulse 1.4s ease-in-out infinite; }
+.worker .puff { position: absolute; left: 50%; bottom: -1px; width: 4px; height: 4px; margin-left: -2px; background: rgba(210,220,235,.5); border-radius: 50%; opacity: 0; pointer-events: none; }
+.worker.step .puff { animation: puff .42s ease-out; }
+
+@keyframes typebob   { 0%{ transform: translateY(0); } 100%{ transform: translateY(-1.5px); } }
+@keyframes walkbob   { 0%{ transform: translateY(0) rotate(-1.2deg); } 100%{ transform: translateY(-2px) rotate(1.2deg); } }
+@keyframes sway      { 0%,100%{ transform: rotate(-1deg); } 50%{ transform: rotate(1deg); } }
+@keyframes shadowpace{ 0%{ transform: scaleX(.92); } 100%{ transform: scaleX(1.06); } }
+@keyframes blinkeye  { 0%,95%,100%{ transform: scaleY(1); } 97%{ transform: scaleY(.1); } }
+@keyframes thinkpulse{ 0%,100%{ opacity: .45; transform: translateY(1px); } 50%{ opacity: 1; transform: translateY(0); } }
+@keyframes puff      { 0%{ opacity: .5; transform: translate(0,0) scale(.6); } 100%{ opacity: 0; transform: translate(-3px,-5px) scale(1.5); } }
+@keyframes sip       { 0%,100%{ transform: translateY(0) rotate(0); } 40%,60%{ transform: translateY(-1px) rotate(-3deg); } }
+@keyframes stretch   { 0%,100%{ transform: translateY(0) scaleY(1); } 45%{ transform: translateY(-2px) scaleY(1.06); } }
+@keyframes rise { 0%{ opacity: 0; transform: translate(-50%,4px); } 20%{ opacity: 1; } 100%{ opacity: 0; transform: translate(-50%,-22px); } }
+
 /* ===== 窗外体积光束 ===== */
 .godray { position: absolute; pointer-events: none; mix-blend-mode: screen; opacity: .5;
   background: linear-gradient(180deg, rgba(173,214,255,.5) 0%, rgba(160,200,255,.18) 42%, rgba(160,200,255,0) 92%);
