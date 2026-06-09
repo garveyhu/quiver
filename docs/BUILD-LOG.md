@@ -6,6 +6,19 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 🎨 前端重写 · 第 3 刀:休息室静态家具
+- `029a001` feat(office): 休息室静态家具。
+  - `office/furniture` 加休息室件:patternRug(三层花纹+中心菱形)、sofa ×2(底座/靠背/扶手/坐垫)、
+    coffeeBar(咖啡机+升腾热气)、bookcase(三层高矮错落书脊)、bigPlant(四层叶冠)、wallClock(转动时分针)、
+    waterCooler、cableRun。
+  - `office/primitives` 补 `steam`/`cat` 原语;cat 是带内部结构的复合节点(SceneNode.composite='cat'),
+    Office 用 `nodeChildren` 专门渲染尾/身/双耳。buildScene 按原型顺序先铺休息室再工位区。
+- **验证**:`tsc --noEmit` 过;真窗口截图对照原型 —— 休息室书柜/双沙发/地毯/咖啡吧/大小绿植/猫/
+  饮水机/挂钟齐(741 polys / cat 1 / steam 1 / clock 2),console 无 error/warn。
+- **▶ 下一刀**:① 右列房间家具(质检台 qaBench、领导区 board+memoryBook、运维 serverRack+safeBox、
+  发货口 shipBay+crateStack);② 氛围粒子(dust/stars/shootstar);然后 §8.3 接 get_initial_state/
+  get_stats/list_tasks 出真值(wire 类型以 lib.rs 为准核对)。收尾已拆实例、腾空 :1420。**绝不 push/合 main**。
+
 ### 2026-06-09 · 🎨 前端重写 · 第 2 刀:体素原语 + 工位区静态家具
 - `d3f2fb1` feat(office): 工位区静态家具 + 体素原语 + 顶光。
   - `office/primitives` SceneBuilder 补低层体素原语:isoBox/chip/southPanel/rug/led/
