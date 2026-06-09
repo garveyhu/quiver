@@ -69,7 +69,7 @@ function shortLabel(prompt: string): string {
  * 员工 id 稳定(emp0..),React 复用同一 DOM → 位置变化由 .worker 的 left/top 过渡平滑滑行。
  * 走廊寻路 / agent-event 细粒度姿态(逐工具气泡)留后续刀;本刀用真实在途任务驱动落位。
  */
-export function placeWorkers(layout: Layout, active: TaskRecord[]): PlacedWorker[] {
+export function placeWorkers(layout: Layout, active: TaskRecord[], bubbles: Record<string, string> = {}): PlacedWorker[] {
   const cells = loungeCells();
   const workers: PlacedWorker[] = [];
   const busy = Math.min(active.length, EMP_COUNT, DESKS.length);
@@ -77,9 +77,12 @@ export function placeWorkers(layout: Layout, active: TaskRecord[]): PlacedWorker
   for (let i = 0; i < EMP_COUNT; i++) {
     const hood = HOODS[i % HOODS.length];
     if (i < busy) {
+      const task = active[i];
       const [dc, dr] = DESKS[i];
       const p = iso(layout, dc, dr);
-      workers.push({ id: `emp${i}`, role: 'emp', x: p.x, y: p.y, z: zidx(dc, dr) + 5, hood, working: true, lean: true, label: shortLabel(active[i].prompt) });
+      // 气泡优先用 agent-event 的实时工具摘要,缺时退回任务目标。
+      const label = bubbles[task.id] ?? shortLabel(task.prompt);
+      workers.push({ id: `emp${i}`, role: 'emp', x: p.x, y: p.y, z: zidx(dc, dr) + 5, hood, working: true, lean: true, label });
     } else {
       const [c, r] = cells[(i * 5 + 2) % cells.length];
       const p = iso(layout, c, r);

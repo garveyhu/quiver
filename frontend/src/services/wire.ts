@@ -38,6 +38,25 @@ export interface InitialState {
   history: unknown[];
 }
 
+/**
+ * agent-event 实时事件(每个带 taskId,按 kind 标签的判别联合)。
+ * 以 quiver-core/src/event.rs 为准:顶层 taskId/seq/tsMs/runner + flatten 的 payload(kind 区分)。
+ * finished 由 run.rs 单独发,亦走同一通道(kind="finished")。
+ */
+interface AgentEventBase {
+  taskId: string;
+  seq: number;
+  tsMs: number;
+  runner: string;
+}
+export type AgentEvent =
+  | (AgentEventBase & { kind: 'worker_started'; sessionId: string | null; model: string | null; authMode: string })
+  | (AgentEventBase & { kind: 'tool_use'; tool: string; summary: string })
+  | (AgentEventBase & { kind: 'output_chunk'; text: string })
+  | (AgentEventBase & { kind: 'result'; ok: boolean; costUsd: number | null; numTurns: number; tokens: number | null; durationMs: number | null })
+  | (AgentEventBase & { kind: 'error'; code: string; message: string })
+  | (AgentEventBase & { kind: 'finished'; status: string; costUsd: number | null; branch: string | null; verifyOutput: string });
+
 /** 看板任务行(list_tasks)。 */
 export interface TaskRecord {
   id: string;
