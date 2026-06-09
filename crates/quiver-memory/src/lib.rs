@@ -22,6 +22,7 @@ mod brief;
 mod episodes;
 mod facts;
 mod schema;
+mod staging;
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -31,6 +32,7 @@ use rusqlite::Connection;
 pub use brief::Brief;
 pub use episodes::{EpisodeRecord, NewEpisode};
 pub use facts::{FactRecord, NewFact};
+pub use staging::{NewStaged, StagedRecord};
 
 /// A SQLite-backed durable memory store. Cheap to construct; one connection
 /// behind a `Mutex` (rusqlite is synchronous, calls are short — same contract as

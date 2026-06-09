@@ -69,7 +69,22 @@ pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
             USING fts5(text, content='memory_fact', content_rowid='id');
         CREATE TRIGGER IF NOT EXISTS memory_fact_ai AFTER INSERT ON memory_fact BEGIN
             INSERT INTO memory_fact_fts(rowid, text) VALUES (new.id, new.text);
-        END;",
+        END;
+
+        -- §20 memory_staging:员工/经理写入的事实先进待审区(默认不可信),由图书管理员
+        -- 审核后 promote 进 memory_fact(§6.4 待审/隔离)。promoted=0 待审 / 1 已晋升。
+        -- 绝不自动塞进当前真相——只追加,经理主动查才以\"未核实\"出现。
+        CREATE TABLE IF NOT EXISTS memory_staging (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            project        TEXT NOT NULL,
+            kind           TEXT NOT NULL,
+            text           TEXT NOT NULL,
+            entities       TEXT,
+            writer_node_id TEXT,
+            created_at     INTEGER NOT NULL,
+            promoted       INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_staging_pending ON memory_staging(project, promoted);",
     )?;
     Ok(())
 }
