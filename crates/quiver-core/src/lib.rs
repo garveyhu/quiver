@@ -1,3 +1,4 @@
+pub mod acceptance;
 pub mod audit;
 pub mod capability;
 pub mod circuit;
