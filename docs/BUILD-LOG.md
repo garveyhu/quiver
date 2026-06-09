@@ -6,6 +6,25 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 23 轮
+
+**落了什么**
+- `14f5a52` feat(memory): memory_staging 待审区 + promote(P2 §6.4 防投毒)
+
+**这轮**:续 P2 机制层——`memory_staging` 待审/隔离表 + `stage_fact`/`pending_staged`/
+`promote_staged`(一笔事务,promote 时由 reviewer 赋信任档,幂等不重插)。员工/经理提议
+先进待审、绝不自动进当前真相("你毒不了绿测试")。验证:cargo test -p quiver-memory(20 过)+ check。
+
+**P2 机制层进度**:✅ 作废 supersede、✅ 待审 staging+promote。**剩(可独立做)**:信任档
+升级的机械写(§6.2 已验证·印证:两次独立绿测试印证→Rust 升档)、状态唯一约束(§6.4)。
+**仍卡你**:向量召回(sqlite-vec 依赖 + 千问 key)、AI 判断触发(需 AI 经理)。
+
+**进度**:🎉 P0 ✅ · P1 ✅ · 前端核心+交互 ✅ · P2 机制层推进中。git 本地领先 origin 多个(未推)。
+**⚠ 等你**:推送/合 main、关 live 实例做 e2e、向量依赖拍板、loop 继续否。
+**今天该接哪**:P2 机制层续(信任档升级写 / 状态唯一约束),纯后端可测。
+
+---
+
 ### 2026-06-09 · 第 22 轮
 
 **落了什么**
@@ -844,6 +863,9 @@ stats=小后端切片 / 连续语义缩放增强=较复杂)。
 ---
 
 ## 📜 历轮记录
+
+### 第 23 轮(2026-06-09)
+- P2 续:memory_staging 待审区 + stage/pending/promote(§6.4 防投毒)(`14f5a52`);quiver-memory 20 过。
 
 ### 第 22 轮(2026-06-09)
 - P2 起步:supersede_fact 作废/顶替机制(一笔事务,§6.4)(`e0f95df`);quiver-memory 17 过。
