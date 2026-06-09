@@ -6,6 +6,17 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 集成阶段(用户在场)· 第 1 刀:get_metrics IPC
+- `6f1edda` feat(app): get_metrics IPC —— 把 quiver-core::metrics 接到真实任务数据 + IPC。
+  metrics_from_tasks 纯函数(任务→样本→聚合)+ 单测;get_metrics 命令两处 handler 登记。
+- 🎉 **第一块集成端到端真跑验证通过**:起真窗口经 __TAURI_INTERNALS__.invoke('get_metrics')
+  返回真实数据(runs 43 / verifyRate 0.977 / $1.49 / p50 879ms / p95 36480ms;tokens 暂 0)。
+  "后端机制→app" 的集成模式跑通了。验证:quiver-app 21 过 + workspace check + 真跑。
+- 注:tokens per-task 未单独入库(0);时长用 updated-created 墙钟代理。要更准需在 run.rs
+  记 result 的 tokens/duration 到 task 行(后续刀)。测试实例已拆、:1420 已腾空。
+- **▶ 下一块集成(用户在场挑)**:acceptance 接 IPC / Orchestrator 接 scheduler / 沙箱套 spawn /
+  审计动态半 / 前端接 get_metrics 显示。前端消费待前端重写(loop.md)。
+
 ### 2026-06-09 · 第 54 轮(后端收尾 · P5 人事/升级阶梯)
 - `9fe59a4` feat(orchestrator): WorkerRecord + tier_for —— 按跑量+验收率定信任档
   (试用/熟手/骨干),样本不足一律试用。验证:quiver-orchestrator 28 过 + 无警告。
