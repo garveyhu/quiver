@@ -1,3 +1,4 @@
+pub mod circuit;
 pub mod event;
 pub mod git;
 pub mod merge;
