@@ -4,6 +4,8 @@ import { shade, type PlacedWorker } from '@/office/workers';
 
 interface WorkerProps {
   worker: PlacedWorker;
+  /** 点小人 → 下钻聚焦 */
+  onDive: (worker: PlacedWorker) => void;
 }
 
 /**
@@ -11,7 +13,7 @@ interface WorkerProps {
  * 连帽衫/上衣三阶明暗由 CSS 变量驱动;角色(emp/mgr/aud)与状态(awaiting/lean/talk)走 class。
  * 本刀只渲染静态站姿;走位/敲键/庆祝等动画 class 已在 CSS 备好，待下一刀的事件驱动接上。
  */
-export function Worker({ worker }: WorkerProps) {
+export function Worker({ worker, onDive }: WorkerProps) {
   const { role, x, y, z, hood, awaiting, lean, working, label } = worker;
   const [hoodColor, torsoColor] = hood;
 
@@ -29,7 +31,7 @@ export function Worker({ worker }: WorkerProps) {
   vars['--torsoD'] = shade(torsoColor, -30);
 
   return (
-    <div className={className} style={style}>
+    <div className={className} style={style} onClick={() => onDive(worker)}>
       <div className="shadow" />
       <div className="puff" />
       <div className="body">

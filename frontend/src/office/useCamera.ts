@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 
 interface CamState {
   /** 缩放系数 */
@@ -15,7 +15,14 @@ export interface Camera {
   worldStyle: CSSProperties;
   /** 是否已放大(显示缩放提示) */
   zoomed: boolean;
+  /** 飞入聚焦到世界某点(点小人下钻用) */
+  diveTo: (x: number, y: number) => void;
+  /** 复位到 fit */
+  reset: () => void;
 }
+
+/** 下钻聚焦的放大倍率(相对 fit)。 */
+const DIVE = 6;
 
 /** 把整张办公室收进视口的基准缩放(留 0.4 下限)。 */
 function computeFit(worldW: number, worldH: number): number {
@@ -23,9 +30,9 @@ function computeFit(worldW: number, worldH: number): number {
 }
 
 /**
- * 连续缩放相机(移植原型 cam/applyCam/fit/wheel):
- * 滚轮朝光标缩放(clamp 到 [fit, fit*10]),Esc / 双击复位到 fit;窗口尺寸变化重算 fit。
- * 叠层(命令栏/面板)打开时不抢滚轮。语义层级(模糊→工作台 worksurf)、点小人 dive 留后续刀。
+ * 连续缩放相机(移植原型 cam/applyCam/fit/wheel/dive):
+ * 滚轮朝光标缩放(每帧一次,clamp [fit, fit*10]),点小人 diveTo 飞入聚焦(fit*6),
+ * Esc / 双击复位。叠层(命令栏/面板/worksurf)打开时不抢滚轮。
  */
 export function useCamera(worldW: number, worldH: number): Camera {
   const fitRef = useRef(computeFit(worldW, worldH));
@@ -33,21 +40,30 @@ export function useCamera(worldW: number, worldH: number): Camera {
   const [cam, setCam] = useState<CamState>(() => ({ s: fitRef.current, fx: worldW / 2, fy: worldH / 2 }));
   const [anim, setAnim] = useState<Anim>('none');
 
+  const reset = useCallback(() => {
+    setAnim('smooth');
+    setCam({ s: fitRef.current, fx: worldW / 2, fy: worldH / 2 });
+  }, [worldW, worldH]);
+
+  const diveTo = useCallback((x: number, y: number) => {
+    setAnim('smooth');
+    setCam({ s: fitRef.current * DIVE, fx: x, fy: y });
+  }, []);
+
   // 窗口尺寸变化:重算 fit 并复位。
   useEffect(() => {
     const onResize = () => {
       fitRef.current = computeFit(worldW, worldH);
-      setAnim('none');
-      setCam({ s: fitRef.current, fx: worldW / 2, fy: worldH / 2 });
+      reset();
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, [worldW, worldH]);
+  }, [worldW, worldH, reset]);
 
   // 滚轮朝光标缩放(每帧至多一次)。
   useEffect(() => {
     const onWheel = (e: WheelEvent) => {
-      if (document.querySelector('.panel.on, .cmdk.on')) return;
+      if (document.querySelector('.panel.on, .cmdk.on, .worksurf.on')) return;
       e.preventDefault();
       if (lockRef.current) return;
       lockRef.current = true;
@@ -71,10 +87,6 @@ export function useCamera(worldW: number, worldH: number): Camera {
 
   // Esc / 双击复位到 fit。
   useEffect(() => {
-    const reset = () => {
-      setAnim('smooth');
-      setCam({ s: fitRef.current, fx: worldW / 2, fy: worldH / 2 });
-    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') reset();
     };
@@ -84,7 +96,7 @@ export function useCamera(worldW: number, worldH: number): Camera {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('dblclick', reset);
     };
-  }, [worldW, worldH]);
+  }, [reset]);
 
   const tx = (-(cam.fx - worldW / 2) * cam.s).toFixed(1);
   const ty = (-(cam.fy - worldH / 2) * cam.s).toFixed(1);
@@ -99,5 +111,7 @@ export function useCamera(worldW: number, worldH: number): Camera {
       transformOrigin: 'center',
     },
     zoomed: cam.s > fitRef.current * 1.02,
+    diveTo,
+    reset,
   };
 }

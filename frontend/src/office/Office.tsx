@@ -1,10 +1,12 @@
-import { useMemo, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { useWorkers } from '@/hooks/useWorkers';
 import { buildScene } from '@/office/buildScene';
 import type { SceneNode } from '@/office/primitives';
 import { useCamera } from '@/office/useCamera';
 import { Worker } from '@/office/Worker';
+import { Worksurf } from '@/office/Worksurf';
+import type { PlacedWorker } from '@/office/workers';
 
 /** 节点内部内容:复合结构(猫) > 可扩展"＋" > 标签文字 > 空。 */
 function nodeChildren(node: SceneNode): ReactNode {
@@ -23,11 +25,34 @@ function nodeChildren(node: SceneNode): ReactNode {
   return node.text;
 }
 
-/** 等距像素办公室。构建一次静态场景 + 实时工人，滚轮连续缩放、按窗口 fit 居中。 */
+/** 等距像素办公室。静态场景 + 实时工人 + 滚轮缩放 + 点小人下钻聚焦。 */
 export function Office() {
   const scene = useMemo(() => buildScene(), []);
   const workers = useWorkers(scene.layout);
   const camera = useCamera(scene.layout.worldW, scene.layout.worldH);
+  const [focused, setFocused] = useState<PlacedWorker | null>(null);
+
+  const dive = useCallback(
+    (w: PlacedWorker) => {
+      setFocused(w);
+      camera.diveTo(w.x, w.y);
+    },
+    [camera],
+  );
+
+  const closeDive = useCallback(() => {
+    setFocused(null);
+    camera.reset();
+  }, [camera]);
+
+  // Esc 退出下钻(相机由 useCamera 自身的 Esc 复位,这里清掉 worksurf)。
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFocused(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   return (
     <>
@@ -39,11 +64,12 @@ export function Office() {
             </div>
           ))}
           {workers.map(w => (
-            <Worker key={w.id} worker={w} />
+            <Worker key={w.id} worker={w} onDive={dive} />
           ))}
         </div>
       </div>
-      <div className={`zoomhint${camera.zoomed ? ' on' : ''}`}>滚轮缩放 · Esc / 双击 复位</div>
+      <div className={`zoomhint${camera.zoomed || focused ? ' on' : ''}`}>滚轮缩放 · Esc / 双击 复位</div>
+      <Worksurf worker={focused} onClose={closeDive} />
     </>
   );
 }
