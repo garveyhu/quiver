@@ -22,6 +22,7 @@ mod brief;
 mod embed;
 mod episodes;
 mod facts;
+mod librarian;
 mod schema;
 mod staging;
 
@@ -36,6 +37,7 @@ pub use embed::{load_qwen_creds, parse_qwen_creds, Embedder, FakeEmbedder, QwenC
 pub use embed::QwenEmbedder;
 pub use episodes::{EpisodeRecord, NewEpisode};
 pub use facts::{FactRecord, NewFact};
+pub use librarian::{ContradictionJudge, FakeJudge, Verdict};
 pub use staging::{NewStaged, StagedRecord};
 
 /// A SQLite-backed durable memory store. Cheap to construct; one connection
