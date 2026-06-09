@@ -83,6 +83,54 @@ impl MemoryStore {
         Ok(conn.last_insert_rowid())
     }
 
+    /// Supersede a current fact with a new one in ONE transaction (DESIGN §6.4 —
+    /// the librarian's 作废/顶替 primitive, the start of P2). Inserts `new` as
+    /// current truth, then retires the old fact (`invalid_at` + `retired_at` =
+    /// `at_ms`, `superseded_by` = the new id) — only if it was still current
+    /// (`invalid_at IS NULL`, so a stale supersede is a no-op on the old row).
+    /// Atomic: a reader never sees two current versions or a dangling link.
+    /// Returns the new fact's id. (AI judging WHICH fact to supersede is the
+    /// librarian's job, layered on top later; this is the mechanical write.)
+    pub fn supersede_fact(
+        &self,
+        old_id: i64,
+        new: &NewFact,
+        at_ms: i64,
+    ) -> anyhow::Result<i64> {
+        let scope = new.scope.as_deref().unwrap_or(DEFAULT_SCOPE);
+        let importance = new.importance.unwrap_or(DEFAULT_IMPORTANCE);
+        let mut conn = self.conn.lock().expect("memory store lock");
+        let tx = conn.transaction()?;
+        tx.execute(
+            "INSERT INTO memory_fact
+                (project, scope, kind, text, entities, importance, valid_at,
+                 recorded_at, provenance, trust, source_commit, source_episode_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            params![
+                new.project,
+                scope,
+                new.kind,
+                new.text,
+                new.entities,
+                importance,
+                new.valid_at,
+                new.recorded_at,
+                new.provenance,
+                new.trust,
+                new.source_commit,
+                new.source_episode_id,
+            ],
+        )?;
+        let new_id = tx.last_insert_rowid();
+        tx.execute(
+            "UPDATE memory_fact SET invalid_at = ?2, retired_at = ?2, superseded_by = ?3
+             WHERE id = ?1 AND invalid_at IS NULL",
+            params![old_id, at_ms, new_id],
+        )?;
+        tx.commit()?;
+        Ok(new_id)
+    }
+
     /// Current-truth facts for `project` (`invalid_at IS NULL`), most important and
     /// most recent first (DESIGN §6.3 — current truth is the un-retired set). The
     /// §6.7 recall ranking (recency·importance·trust + FTS/vector) is a later slice;
@@ -383,5 +431,60 @@ mod tests {
             facts.is_empty(),
             "retired fact (invalid_at set) must drop out of current truth"
         );
+    }
+
+    #[test]
+    fn supersede_retires_old_makes_new_current_and_links() {
+        let store = MemoryStore::open_in_memory().unwrap();
+        let old = store.insert_fact(&fact("/r", "old approach foo", 5, 1)).unwrap();
+        let new = store
+            .supersede_fact(old, &fact("/r", "new approach bar", 5, 2), 100)
+            .unwrap();
+
+        // Only the new fact is current truth; FTS reflects the swap.
+        let texts: Vec<String> = store
+            .current_facts("/r")
+            .unwrap()
+            .into_iter()
+            .map(|f| f.text)
+            .collect();
+        assert_eq!(texts, vec!["new approach bar"]);
+        assert!(store.search_facts("/r", "foo").unwrap().is_empty(), "old text no longer current in FTS");
+        assert_eq!(store.search_facts("/r", "bar").unwrap().len(), 1);
+
+        // Old row retired + linked forward.
+        let conn = store.conn.lock().unwrap();
+        let (inv, retired, sup): (Option<i64>, Option<i64>, Option<i64>) = conn
+            .query_row(
+                "SELECT invalid_at, retired_at, superseded_by FROM memory_fact WHERE id = ?1",
+                params![old],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(inv, Some(100));
+        assert_eq!(retired, Some(100));
+        assert_eq!(sup, Some(new), "old fact links to its successor");
+    }
+
+    #[test]
+    fn supersede_is_noop_on_already_retired_old() {
+        let store = MemoryStore::open_in_memory().unwrap();
+        let old = store.insert_fact(&fact("/r", "v1", 5, 1)).unwrap();
+        let v2 = store.supersede_fact(old, &fact("/r", "v2", 5, 2), 10).unwrap();
+        // Superseding the ALREADY-retired old again must not re-touch it (WHERE
+        // invalid_at IS NULL); the new v3 still inserts as current.
+        let v3 = store.supersede_fact(old, &fact("/r", "v3", 5, 3), 20).unwrap();
+        let conn = store.conn.lock().unwrap();
+        let sup: Option<i64> = conn
+            .query_row("SELECT superseded_by FROM memory_fact WHERE id = ?1", params![old], |r| r.get(0))
+            .unwrap();
+        assert_eq!(sup, Some(v2), "old still points at v2, not re-linked to v3");
+        drop(conn);
+        // v2 is now stale (still current — supersede(old,...) didn't retire v2), v3 also current.
+        // Both v2 and v3 are current truth here (we only retired `old`); that's expected —
+        // higher-level librarian decides what to supersede. Assert v3 exists + is current.
+        let texts: Vec<String> = store.current_facts("/r").unwrap().into_iter().map(|f| f.text).collect();
+        assert!(texts.contains(&"v3".to_string()) && texts.contains(&"v2".to_string()));
+        let _ = v3;
     }
 }
