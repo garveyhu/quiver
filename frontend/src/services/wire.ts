@@ -81,6 +81,17 @@ export type AgentEvent =
   | (AgentEventBase & { kind: 'error'; code: string; message: string })
   | (AgentEventBase & { kind: 'finished'; status: string; costUsd: number | null; branch: string | null; verifyOutput: string });
 
+/** 一条持久化的 agent 事件(get_task_events,§11 日志)。payloadJson 是 payload 的 JSON 串。 */
+export interface StoredEvent {
+  taskId: string;
+  seq: number;
+  tsMs: number;
+  runner: string;
+  /** worker_started | tool_use | output_chunk | result | error | finished */
+  kind: string;
+  payloadJson: string;
+}
+
 /** 一条过夜交付记录(get_episodes,§6.2):机械绑 git 的 episode。 */
 export interface EpisodeRecord {
   id: number;

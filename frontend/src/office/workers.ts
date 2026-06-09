@@ -22,6 +22,8 @@ export interface PlacedWorker {
   working?: boolean;
   /** 头顶气泡文字 */
   label?: string;
+  /** 正在干的任务 id(working 时有),worksurf 下钻拉事件流用 */
+  taskId?: string;
 }
 
 /** 连帽衫配色池(移植原型 HOODS)。 */
@@ -82,7 +84,7 @@ export function placeWorkers(layout: Layout, active: TaskRecord[], bubbles: Reco
       const p = iso(layout, dc, dr);
       // 气泡优先用 agent-event 的实时工具摘要,缺时退回任务目标。
       const label = bubbles[task.id] ?? shortLabel(task.prompt);
-      workers.push({ id: `emp${i}`, role: 'emp', x: p.x, y: p.y, z: zidx(dc, dr) + 5, hood, working: true, lean: true, label });
+      workers.push({ id: `emp${i}`, role: 'emp', x: p.x, y: p.y, z: zidx(dc, dr) + 5, hood, working: true, lean: true, label, taskId: task.id });
     } else {
       const [c, r] = cells[(i * 5 + 2) % cells.length];
       const p = iso(layout, c, r);

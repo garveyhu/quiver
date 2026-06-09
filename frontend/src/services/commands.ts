@@ -8,6 +8,7 @@ import type {
   Settings,
   SettingsPatch,
   Stats,
+  StoredEvent,
   TaskRecord,
   TaskStatus,
 } from '@/services/wire';
@@ -39,6 +40,9 @@ export const getMetrics = (): Promise<MetricsDto> => call<MetricsDto>('get_metri
 
 /** 当前项目近期 episode(过夜交付记录,§6.2),时间线用。 */
 export const getEpisodes = (limit = 12): Promise<EpisodeRecord[]> => call<EpisodeRecord[]>('get_episodes', { limit });
+
+/** 某任务的持久化事件流(§11 日志),worksurf 下钻看真实轨迹用。 */
+export const getTaskEvents = (taskId: string): Promise<StoredEvent[]> => call<StoredEvent[]>('get_task_events', { taskId });
 
 /** 读应用设置(默认模式/模型/并发上限/预算/verify 命令…)。 */
 export const getSettings = (): Promise<Settings> => call<Settings>('get_settings');

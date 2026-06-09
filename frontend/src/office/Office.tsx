@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import { useTaskEvents } from '@/hooks/useTaskEvents';
 import { useWorkers } from '@/hooks/useWorkers';
 import { buildScene } from '@/office/buildScene';
 import type { SceneNode } from '@/office/primitives';
@@ -31,6 +32,7 @@ export function Office() {
   const workers = useWorkers(scene.layout);
   const camera = useCamera(scene.layout.worldW, scene.layout.worldH);
   const [focused, setFocused] = useState<PlacedWorker | null>(null);
+  const events = useTaskEvents(focused?.taskId ?? null);
 
   const dive = useCallback(
     (w: PlacedWorker) => {
@@ -69,7 +71,7 @@ export function Office() {
         </div>
       </div>
       <div className={`zoomhint${camera.zoomed || focused ? ' on' : ''}`}>滚轮缩放 · Esc / 双击 复位</div>
-      <Worksurf worker={focused} onClose={closeDive} />
+      <Worksurf worker={focused} events={events} onClose={closeDive} />
     </>
   );
 }
