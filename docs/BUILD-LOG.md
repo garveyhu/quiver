@@ -6,6 +6,23 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 🧍 前端重写 · 第 6 刀:工人精灵 + 初始静态人口
+- `9e16c43` feat(office): 工人精灵 + 初始静态人口。照原型 makeWorker 移植像素工人。
+  - `office/Worker`:精灵组件(shadow/body/stack/hair/hood/phones/visor/face/eye/torso/arms/
+    book/clip/legs + 经理 crown/mantle/robe + bubble/pop/think);连帽衫/上衣三阶明暗走 CSS 变量,
+    角色(emp/mgr/aud)+ 状态(awaiting/lean/talk)走 class。
+  - `office/workers`:HOODS 配色池 + shade 派生 + `initialWorkers(layout)` 初始人口(休息室 5 待命/
+    领导区经理/质检台审计),按 layout 算像素位。Office 在 .world 内静态摆出(useMemo)。
+  - `global.css` 移植工人结构 + 待机动画(sway/blinkeye/thinkpulse…);走位/敲键/庆祝 class 已备,
+    待事件驱动接上。
+  - 注:原型 5 员工散列公式会让两个落同格(靠 wander 错开),本刀无 wander 故改用不重叠格,语义仍是
+    "5 个散在休息室"。
+- **验证**:`tsc --noEmit` 过;真窗口 —— 7 工人(5 emp/1 mgr/1 aud,含 1 awaiting 头顶思考点),
+  经理金袍王冠+「经理」气泡、审计护目镜+「审计」气泡,贴原型初始画面,console 无报错。
+- **▶ 下一刀(动起来)**:① **派活走位 + listen('agent-event') 实时动画**(§8.4):接真实任务/事件,
+  员工 idle→走工位→敲键→交质检→发货,worker_started/tool_use/result/finished 驱动姿态与气泡
+  (simulate 跑 fake-claude 验);② 氛围粒子。收尾已拆实例、腾空 :1420。**绝不 push/合 main**。
+
 ### 2026-06-09 · 🔌 前端重写 · 第 5 刀:接真实数据 — HUD 接 get_stats/list_tasks
 - `50792f8` feat(hud): HUD 显示真实后端数据(§8.3 接数据第一刀,从静态美术转活)。
   - `services/wire`:**以 lib.rs/store 核对**的 camelCase wire 类型 —— Stats{total/verified/
