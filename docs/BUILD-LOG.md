@@ -6,6 +6,21 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 🛑 前端重写 · 第 19 刀:急停接真 — 批量取消在途 + 全公司冻结
+- `2e39bd4` feat(shell): 命令栏「急停」从占位接真。
+  - `services`:加 `cancelTask(id)` + `cancelActiveTasks()`(列在途/排队 → 逐个 cancel_task_cmd,allSettled 返成功数)。
+  - `App`:estop 处理器(冻结 frozen 2.2s + 批量取消 + 状态条);命令栏「急停」接 estop。
+  - `global.css`:`.stage.frozen` 灰化压暗(只罩办公室,HUD/状态条不受影响)。
+- **验证**:`tsc` 过;真窗口经 bridge ⌘K→急停 → 办公室灰化冻结 + 状态条「全公司冻结,已收回 N 个」;
+  另放慢 fake-claude(fakeDelayMs 900)派任务→逮 running→cancel_task_cmd → status=failed、runningNow=0
+  (**直接验证取消在途有效**),验毕复原 fakeDelayMs=30(净零配置)。console 无报错。**至此 cancel_task_cmd 接通。**
+- **后端 IPC 接通近乎全覆盖**:读(initial_state/stats/metrics/list_tasks/manager_preview/episodes/settings/
+  task_events)+ 写(enqueue_task_cmd/update_settings/cancel_task_cmd)+ 事件(agent-event/task-updated)。
+  **余**:get_brief(facts 为 0,记忆未接入,接了也空)· reorder_task(看板拖排)。
+- **▶ 下一刀(基本都是打磨)**:① 看板拖排(reorder_task,需 UI 看板列表)或验收灯效(qaBench 绿/红闪);
+  ② 走廊寻路;③ 设置写面板(update_settings,改预算/并发/verify 命令)。**功能面已基本完整,剩余为打磨/低边际。**
+  收尾已拆实例、腾空 :1420。**绝不 push/合 main**。
+
 ### 2026-06-09 · 🧵 前端重写 · 第 18 刀:worksurf 深挖接 get_task_events — 真实事件轨迹
 - `77a6988` feat(office): 下钻再往里一层看真实运行轨迹。
   - `services`:加 `getTaskEvents(taskId)` + wire `StoredEvent`(camelCase,payloadJson 串)。
