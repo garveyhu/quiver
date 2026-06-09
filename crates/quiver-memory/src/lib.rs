@@ -18,6 +18,7 @@
 //! Layout mirrors [`quiver_store`]: [`schema`] owns the idempotent migration;
 //! record/fact accessor modules hang off [`MemoryStore`] as they are added.
 
+mod brief;
 mod episodes;
 mod facts;
 mod schema;
@@ -27,6 +28,7 @@ use std::sync::Mutex;
 
 use rusqlite::Connection;
 
+pub use brief::Brief;
 pub use episodes::{EpisodeRecord, NewEpisode};
 pub use facts::{FactRecord, NewFact};
 
