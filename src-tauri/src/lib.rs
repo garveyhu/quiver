@@ -218,6 +218,61 @@ fn get_stats(state: State<'_, AppState>) -> Result<Stats, String> {
     })
 }
 
+/// 观测指标(DESIGN §10-12)的 wire 形:由 [`quiver_core::metrics::Metrics`] 投影成
+/// camelCase,额外带派生的 `verifyRate` / `avgCostUsd`,给验收台 / 自治度面板用。
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MetricsDto {
+    runs: u64,
+    verified: u64,
+    failed: u64,
+    total_cost_usd: f64,
+    total_tokens: u64,
+    p50_duration_ms: u64,
+    p95_duration_ms: u64,
+    /// 验收率(自治度核心指标)。
+    verify_rate: f64,
+    avg_cost_usd: f64,
+}
+
+/// 聚合所有项目里**已结束**任务(verified/done/failed)的运行指标(§10-12)。
+/// 每个任务一条样本:花费取 `cost_usd`,时长用 `updated_at - created_at` 墙钟代理
+/// (per-task tokens 暂未单独入库,记 0),验收 = 状态属 verified/done。纯读聚合,不碰调度。
+#[tauri::command]
+fn get_metrics(state: State<'_, AppState>) -> Result<MetricsDto, String> {
+    let store = state.store()?;
+    let tasks = store.list_tasks(None, None).map_err(|e| format!("{e:#}"))?;
+    Ok(metrics_from_tasks(&tasks))
+}
+
+/// 把任务记录映射成运行样本并聚合(§10-12)。抽成纯函数便于单测;tauri 命令只读 store 后调它。
+/// 只算已结束任务;时长用墙钟代理(updated-created),tokens 暂记 0。
+fn metrics_from_tasks(tasks: &[TaskRecord]) -> MetricsDto {
+    use quiver_core::metrics::{aggregate, RunSample};
+    let samples: Vec<RunSample> = tasks
+        .iter()
+        .filter(|t| matches!(t.status.as_str(), "verified" | "done" | "failed"))
+        .map(|t| RunSample {
+            cost_usd: t.cost_usd.unwrap_or(0.0),
+            tokens: 0,
+            duration_ms: (t.updated_at - t.created_at).max(0) as u64,
+            verified: matches!(t.status.as_str(), "verified" | "done"),
+        })
+        .collect();
+    let m = aggregate(&samples);
+    MetricsDto {
+        runs: m.runs,
+        verified: m.verified,
+        failed: m.failed,
+        total_cost_usd: m.total_cost_usd,
+        total_tokens: m.total_tokens,
+        p50_duration_ms: m.p50_duration_ms,
+        p95_duration_ms: m.p95_duration_ms,
+        verify_rate: m.verify_rate(),
+        avg_cost_usd: m.avg_cost_usd(),
+    }
+}
+
 /// How many facts / episodes a brief carries (DESIGN §6 简报). Bounded so the
 /// brief stays a compact context snapshot, not a memory dump.
 const BRIEF_FACT_LIMIT: usize = 20;
@@ -569,6 +624,7 @@ pub fn run() {
         update_settings,
         list_tasks,
         get_stats,
+        get_metrics,
         get_brief,
         suggest_verify_command,
         reorder_task,
@@ -590,6 +646,7 @@ pub fn run() {
         update_settings,
         list_tasks,
         get_stats,
+        get_metrics,
         get_brief,
         suggest_verify_command,
         reorder_task,
@@ -601,4 +658,50 @@ pub fn run() {
     builder
         .run(tauri::generate_context!())
         .expect("error while running Quiver");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn task(status: &str, cost: Option<f64>, created: i64, updated: i64) -> TaskRecord {
+        TaskRecord {
+            id: "t".into(),
+            project: "/r".into(),
+            prompt: "p".into(),
+            mode: "simulate".into(),
+            status: status.into(),
+            cost_usd: cost,
+            branch: None,
+            position: 0,
+            created_at: created,
+            updated_at: updated,
+        }
+    }
+
+    #[test]
+    fn metrics_counts_only_terminal_tasks() {
+        let tasks = vec![
+            task("verified", Some(0.10), 0, 1000),
+            task("done", Some(0.20), 0, 3000),
+            task("failed", Some(0.30), 0, 2000),
+            task("running", Some(0.99), 0, 9000), // 在跑,不计入指标
+            task("queued", None, 0, 0),           // 排队,不计入指标
+        ];
+        let m = metrics_from_tasks(&tasks);
+        assert_eq!(m.runs, 3, "只算 verified/done/failed");
+        assert_eq!(m.verified, 2);
+        assert_eq!(m.failed, 1);
+        assert!((m.total_cost_usd - 0.60).abs() < 1e-9);
+        assert!((m.verify_rate - 2.0 / 3.0).abs() < 1e-9);
+        // 墙钟时长 [1000,3000,2000] 排序后 p50 = 2000。
+        assert_eq!(m.p50_duration_ms, 2000);
+    }
+
+    #[test]
+    fn empty_tasks_zero_metrics() {
+        let m = metrics_from_tasks(&[]);
+        assert_eq!(m.runs, 0);
+        assert_eq!(m.verify_rate, 0.0);
+    }
 }
