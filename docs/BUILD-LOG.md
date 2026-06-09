@@ -6,6 +6,21 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 🤝 前端重写 · 第 13 刀:Brief 卡 — 派活握手接 manager_preview
+- `a657bde` feat(shell): 把「CEO 下目标」从直接入队改成原型的握手流程(没看到这个之前不花一分钱)。
+  - `services`:加 `managerPreview()` + wire `ManagerPreview`/`Decision`(**以 orchestrator/lib.rs 为准**:
+    action 标签 spawn/noop/escalate/…)。
+  - `shell/BriefCard`:step0 写一句目标 → step1 经理读公司现状(接 manager_preview:在途 N/上限、排队、
+    预算剩余、决策动作译中)→「看着对 → 开始」才入队。复用 .panel,加 .field/.kv CSS;预算哨兵
+    (未设夜预算→1e6)显示「充裕(未设夜预算上限)」。
+  - `App`:加 'brief' 叠层;CEO 下目标 + 命令栏「新任务」→ 开 Brief;命令栏「派活」保留快通道直接入队。
+- **验证**:`tsc` 过;真窗口经 bridge 全程 —— CEO 下目标 → step0(目标预填) → 交给经理 →
+  step1 显示 manager_preview 真值(在途 0/1 · 预算充裕 · 经理 noop) → 看着对开始 → 入队(51→52) +
+  关闭 + 状态条;截图对照原型;console 无报错。**至此 manager_preview IPC 接通。**
+- **▶ 下一刀**:① 语义缩放上层(高倍→模糊+工作台 worksurf / 点小人 dive 到轨迹);② 走廊寻路 +
+  交质检/发货走位 + 验收灯效;③ 信任卡 / 时间轴回放 / 看板拖排;④ 接 get_brief(记忆书)/get_episodes(时间轴)。
+  收尾已拆实例、腾空 :1420。**绝不 push/合 main**。
+
 ### 2026-06-09 · 🔍 前端重写 · 第 12 刀:连续缩放相机(滚轮朝光标缩放)
 - `94fa5f1` feat(office): §8.5 招牌交互·连续缩放的底座,移植原型 cam/applyCam/fit/wheel。
   - `office/useCamera`(替代 useFitScale):cam{s,fx,fy},滚轮朝光标缩放(每帧一次 rAF 节流,
