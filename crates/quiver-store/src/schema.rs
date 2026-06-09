@@ -123,6 +123,10 @@ pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
     add_column_if_absent(conn, "task", "saga_step", "TEXT")?;
     add_column_if_absent(conn, "task", "fence", "INTEGER")?;
     add_column_if_absent(conn, "task", "done_at", "INTEGER")?;
+    // §10-12 观测:agent result 报的 tokens / 真实耗时(ms),落到任务行供 get_metrics 精确聚合
+    // (无则 get_metrics 退回墙钟代理 / 0)。
+    add_column_if_absent(conn, "task", "tokens", "INTEGER")?;
+    add_column_if_absent(conn, "task", "duration_ms", "INTEGER")?;
 
     // Seed the single settings row with defaults if absent, so `get_settings`
     // always returns a complete config. `INSERT OR IGNORE` keeps it idempotent

@@ -33,7 +33,7 @@ use tauri_plugin_dialog::DialogExt;
 
 use quiver_memory::{Brief, MemoryStore};
 use quiver_store::{
-    InitialState, NewTask, Settings, SettingsPatch, Store, StoredEvent, TaskRecord,
+    InitialState, MetricSample, NewTask, Settings, SettingsPatch, Store, StoredEvent, TaskRecord,
 };
 
 use crate::environment::check_environment;
@@ -241,25 +241,28 @@ struct MetricsDto {
 #[tauri::command]
 fn get_metrics(state: State<'_, AppState>) -> Result<MetricsDto, String> {
     let store = state.store()?;
-    let tasks = store.list_tasks(None, None).map_err(|e| format!("{e:#}"))?;
-    Ok(metrics_from_tasks(&tasks))
+    let samples = store.metric_samples().map_err(|e| format!("{e:#}"))?;
+    Ok(metrics_from_samples(&samples))
 }
 
-/// 把任务记录映射成运行样本并聚合(§10-12)。抽成纯函数便于单测;tauri 命令只读 store 后调它。
-/// 只算已结束任务;时长用墙钟代理(updated-created),tokens 暂记 0。
-fn metrics_from_tasks(tasks: &[TaskRecord]) -> MetricsDto {
+/// 把任务样本映射成运行样本并聚合(§10-12)。抽成纯函数便于单测;tauri 命令只读 store 后调它。
+/// 只算已结束任务;tokens/时长优先用 agent 报的真值,缺则退回 0 / 墙钟代理(updated-created)。
+fn metrics_from_samples(samples: &[MetricSample]) -> MetricsDto {
     use quiver_core::metrics::{aggregate, RunSample};
-    let samples: Vec<RunSample> = tasks
+    let runs: Vec<RunSample> = samples
         .iter()
-        .filter(|t| matches!(t.status.as_str(), "verified" | "done" | "failed"))
-        .map(|t| RunSample {
-            cost_usd: t.cost_usd.unwrap_or(0.0),
-            tokens: 0,
-            duration_ms: (t.updated_at - t.created_at).max(0) as u64,
-            verified: matches!(t.status.as_str(), "verified" | "done"),
+        .filter(|s| matches!(s.status.as_str(), "verified" | "done" | "failed"))
+        .map(|s| RunSample {
+            cost_usd: s.cost_usd.unwrap_or(0.0),
+            tokens: s.tokens.unwrap_or(0).max(0) as u64,
+            duration_ms: s
+                .duration_ms
+                .unwrap_or((s.updated_at - s.created_at).max(0))
+                .max(0) as u64,
+            verified: matches!(s.status.as_str(), "verified" | "done"),
         })
         .collect();
-    let m = aggregate(&samples);
+    let m = aggregate(&runs);
     MetricsDto {
         runs: m.runs,
         verified: m.verified,
@@ -664,43 +667,47 @@ pub fn run() {
 mod tests {
     use super::*;
 
-    fn task(status: &str, cost: Option<f64>, created: i64, updated: i64) -> TaskRecord {
-        TaskRecord {
-            id: "t".into(),
-            project: "/r".into(),
-            prompt: "p".into(),
-            mode: "simulate".into(),
-            status: status.into(),
+    fn sample(
+        status: &str,
+        cost: Option<f64>,
+        tokens: Option<i64>,
+        duration: Option<i64>,
+        created: i64,
+        updated: i64,
+    ) -> MetricSample {
+        MetricSample {
             cost_usd: cost,
-            branch: None,
-            position: 0,
+            tokens,
+            duration_ms: duration,
             created_at: created,
             updated_at: updated,
+            status: status.into(),
         }
     }
 
     #[test]
-    fn metrics_counts_only_terminal_tasks() {
-        let tasks = vec![
-            task("verified", Some(0.10), 0, 1000),
-            task("done", Some(0.20), 0, 3000),
-            task("failed", Some(0.30), 0, 2000),
-            task("running", Some(0.99), 0, 9000), // 在跑,不计入指标
-            task("queued", None, 0, 0),           // 排队,不计入指标
+    fn metrics_counts_only_terminal_samples() {
+        let samples = vec![
+            sample("verified", Some(0.10), Some(100), Some(500), 0, 1000),
+            sample("done", Some(0.20), Some(200), None, 0, 3000), // 无真时长 → 墙钟代理 3000
+            sample("failed", Some(0.30), Some(300), Some(2000), 0, 2000),
+            sample("running", Some(0.99), Some(999), Some(9000), 0, 9000), // 在跑,不计
+            sample("queued", None, None, None, 0, 0),                      // 排队,不计
         ];
-        let m = metrics_from_tasks(&tasks);
+        let m = metrics_from_samples(&samples);
         assert_eq!(m.runs, 3, "只算 verified/done/failed");
         assert_eq!(m.verified, 2);
         assert_eq!(m.failed, 1);
         assert!((m.total_cost_usd - 0.60).abs() < 1e-9);
+        assert_eq!(m.total_tokens, 600, "tokens 用 agent 报的真值之和");
         assert!((m.verify_rate - 2.0 / 3.0).abs() < 1e-9);
-        // 墙钟时长 [1000,3000,2000] 排序后 p50 = 2000。
+        // 时长 [500, 2000, 3000(代理)] 排序后 p50 = 2000。
         assert_eq!(m.p50_duration_ms, 2000);
     }
 
     #[test]
-    fn empty_tasks_zero_metrics() {
-        let m = metrics_from_tasks(&[]);
+    fn empty_samples_zero_metrics() {
+        let m = metrics_from_samples(&[]);
         assert_eq!(m.runs, 0);
         assert_eq!(m.verify_rate, 0.0);
     }

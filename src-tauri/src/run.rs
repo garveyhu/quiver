@@ -70,6 +70,10 @@ impl RunMode {
 pub struct RunSummary {
     pub status: String,
     pub cost_usd: Option<f64>,
+    /// agent result 报的 tokens(§10-12 观测),无则 None。
+    pub tokens: Option<i64>,
+    /// agent result 报的真实耗时(ms),无则 None(get_metrics 退回墙钟代理)。
+    pub duration_ms: Option<i64>,
     pub branch: Option<String>,
     /// Worktree HEAD sha at run end (§6.2) — bound onto the episode.
     pub commit_sha: Option<String>,
@@ -122,6 +126,13 @@ pub async fn run_one_task(
                 &task_id,
                 summary.cost_usd,
                 summary.branch.as_deref(),
+                crate::now_ms(),
+            );
+            // §10-12 观测:落 agent 报的 tokens / 真实耗时,供 get_metrics 精确聚合。
+            let _ = store.set_task_metrics(
+                &task_id,
+                summary.tokens,
+                summary.duration_ms,
                 crate::now_ms(),
             );
             // Record a §6.2 episode (before `project`/`prompt`/`status` move into the
@@ -265,6 +276,8 @@ pub async fn run_streaming(
     }
 
     let mut last_cost: Option<f64> = None;
+    let mut last_tokens: Option<i64> = None;
+    let mut last_duration: Option<i64> = None;
     let tid = task.id.clone();
     let result = run_task_streaming(
         guard,
@@ -273,8 +286,16 @@ pub async fn run_streaming(
         &verify,
         options,
         |event: &AgentEvent| {
-            if let AgentEventPayload::Result { cost_usd, .. } = &event.payload {
+            if let AgentEventPayload::Result {
+                cost_usd,
+                tokens,
+                duration_ms,
+                ..
+            } = &event.payload
+            {
                 last_cost = *cost_usd;
+                last_tokens = tokens.map(|t| t as i64);
+                last_duration = duration_ms.map(|d| d as i64);
             }
             // Persist the backend session handle the instant the worker reports it
             // (the §5.3 init line), so a crash/restart can resume this task with
@@ -358,6 +379,8 @@ pub async fn run_streaming(
     Ok(RunSummary {
         status: status_label,
         cost_usd: last_cost,
+        tokens: last_tokens,
+        duration_ms: last_duration,
         branch,
         commit_sha: outcome.commit_sha,
         diff_stat: outcome.diff_stat,

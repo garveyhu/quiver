@@ -41,7 +41,7 @@ pub use events::{NewEvent, StoredEvent};
 pub use history::{NewRun, RunRecord};
 pub use projects::RecentProject;
 pub use settings::{Settings, SettingsPatch};
-pub use tasks::{NewTask, TaskRecord};
+pub use tasks::{MetricSample, NewTask, TaskRecord};
 
 /// A SQLite-backed durable store. Cheap to construct; holds one pooled connection
 /// behind a `Mutex`. New persistence concerns (memory, workflow state) get their
