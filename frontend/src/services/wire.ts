@@ -25,6 +25,19 @@ export interface Stats {
  */
 export type TaskStatus = 'queued' | 'running' | 'verifying' | 'verified' | 'done' | 'failed' | 'needs_rebase';
 
+/** 运行模式(§4.2):simulate=免费 fake-claude 默认,real=真 claude。Rust 侧小写序列化。 */
+export type RunMode = 'simulate' | 'real';
+
+/**
+ * 启动包(get_initial_state)。本刀只用 `lastProject`(调它的副作用是让后端设好当前项目,
+ * 派活才有目标仓库);recentProjects / history 的完整类型待项目选择器切片再补。
+ */
+export interface InitialState {
+  lastProject: string | null;
+  recentProjects: unknown[];
+  history: unknown[];
+}
+
 /** 看板任务行(list_tasks)。 */
 export interface TaskRecord {
   id: string;

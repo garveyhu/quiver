@@ -1,4 +1,6 @@
 import { iso, zidx, type Layout } from '@/office/iso';
+import { DESKS } from '@/office/rooms';
+import type { TaskRecord } from '@/services/wire';
 
 /** 工人角色:普通员工(戴耳机) / 经理(王冠袍子) / 独立审计(护目镜+夹板)。 */
 export type WorkerRole = 'emp' | 'mgr' | 'aud';
@@ -16,6 +18,8 @@ export interface PlacedWorker {
   awaiting?: boolean;
   /** 前倾姿态(审计/敲键) */
   lean?: boolean;
+  /** 在工位敲键(typebob 动画) */
+  working?: boolean;
   /** 头顶气泡文字 */
   label?: string;
 }
@@ -51,21 +55,36 @@ function loungeCells(): Array<[number, number]> {
   return cells;
 }
 
+const EMP_COUNT = 5;
+
+/** 员工气泡用的短标签(截断长 prompt)。 */
+function shortLabel(prompt: string): string {
+  return prompt.length > 10 ? prompt.slice(0, 10) + '…' : prompt;
+}
+
 /**
- * 办公室开场人口(移植原型 build() 的初始三类工人):
- * 休息室 5 个待命员工(末一个等待决策)+ 领导区 1 个经理 + 质检台 1 个独立审计。
- * 派活走位 / agent-event 实时动画留给下一刀;本刀只摆静态初始位。
- * 注:5 个员工用错开的格位(原型的散列公式会让两个落到同一格,靠 wander 循环错开,
- * 本刀无 wander 故改用不重叠的格,语义仍是"5 个散在休息室")。
+ * 按在途任务摆工人(移植原型 build() 的三类工人 + 派活落工位):
+ * 休息室 EMP_COUNT 个员工,有几件在途任务就把前几个移到工位敲键(其余在休息室待命,末一个待命时冒思考点);
+ * 领导区 1 个经理 + 质检台 1 个独立审计常驻。
+ * 员工 id 稳定(emp0..),React 复用同一 DOM → 位置变化由 .worker 的 left/top 过渡平滑滑行。
+ * 走廊寻路 / agent-event 细粒度姿态(逐工具气泡)留后续刀;本刀用真实在途任务驱动落位。
  */
-export function initialWorkers(layout: Layout): PlacedWorker[] {
+export function placeWorkers(layout: Layout, active: TaskRecord[]): PlacedWorker[] {
   const cells = loungeCells();
   const workers: PlacedWorker[] = [];
+  const busy = Math.min(active.length, EMP_COUNT, DESKS.length);
 
-  for (let i = 0; i < 5; i++) {
-    const [c, r] = cells[(i * 5 + 2) % cells.length];
-    const p = iso(layout, c, r);
-    workers.push({ id: `emp${i}`, role: 'emp', x: p.x, y: p.y, z: zidx(c, r) + 5, hood: HOODS[i % HOODS.length], awaiting: i === 4 });
+  for (let i = 0; i < EMP_COUNT; i++) {
+    const hood = HOODS[i % HOODS.length];
+    if (i < busy) {
+      const [dc, dr] = DESKS[i];
+      const p = iso(layout, dc, dr);
+      workers.push({ id: `emp${i}`, role: 'emp', x: p.x, y: p.y, z: zidx(dc, dr) + 5, hood, working: true, lean: true, label: shortLabel(active[i].prompt) });
+    } else {
+      const [c, r] = cells[(i * 5 + 2) % cells.length];
+      const p = iso(layout, c, r);
+      workers.push({ id: `emp${i}`, role: 'emp', x: p.x, y: p.y, z: zidx(c, r) + 5, hood, awaiting: i === EMP_COUNT - 1 && busy === 0 });
+    }
   }
 
   const mp = iso(layout, 11.5, 3.3);
