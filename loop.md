@@ -19,7 +19,8 @@
   发货口)、工人走位+动画、连续语义缩放(滚轮缩进→模糊→工作台详情)、整夜时间轴回放、
   信任卡、晨报/验收、命令栏(⌘K)、HUD、预算条、急停。
 - docs/ui-design.md —— UI 设计说明。
-- docs/BUILD-LOG.md —— 后端这几夜做了什么(P0/P1/P2 已完成)、踩过的坑。读"晨报"段。
+- docs/BUILD-LOG.md —— 后端这几夜做了什么(P0–P5 机制层 + 集成 IPC 全完成)、踩过的坑、
+  集成阶段已接哪些 IPC。读"晨报"段。
 - docs/autonomous-org.md —— 后端架构蓝图(§22 像素办公室控制台是前端北极星之一、
   §4 agent 运行层、§5 编排、§6 记忆、§20 schema、§23 分阶段)。
 - CLAUDE.md、~/.claude/rules/react-codebase.md —— 前端编码规约,**严格遵守**。
@@ -34,9 +35,11 @@
 - 做成能跑通的纵向切片:先静态等距场景 → 接真实数据(IPC)→ 实时事件 → 可写交互。
 
 ## 3. 后端:现有契约 + 【允许为适配前端而改后端】
-后端(Rust)P0/P1/P2 已完成且测试全绿——它是**已验证的资产**。但这次**前端主导**:
-**为了适配新前端,允许修改后端**(加新 IPC 命令、调整 wire 形状/字段、补返回数据、
-加事件)。护栏:
+后端(Rust)**P0–P5 机制层 + 一批集成 IPC 已完成、全工作区测试全绿、已推上
+origin/feat/game-first**——它是**已验证的资产**(向量记忆/AI 经理编排/沙箱·熔断·审计/
+监督成本/观测·验收·回滚 全有,新增 crate `quiver-orchestrator`、`quiver-llm`)。
+但这次**前端主导**:**为了适配新前端,允许修改后端**(加新 IPC 命令、调整 wire 形状/字段、
+补返回数据、加事件)。多数情况是**消费已有 IPC**,缺什么再加。护栏:
 - 改后端必须保持 `cargo check --workspace` + `cargo test --workspace` **全绿**才提交。
 - 别破坏 supervisor/scheduler/记忆 的核心逻辑(P0 崩溃恢复 / P1 记忆 / P2 作废·待审·
   印证);只在其上**加/调**接口面,不要推翻已验证的机制。
@@ -46,11 +49,13 @@
 - 改了 IPC/事件的 wire 形状,**前后端两边一起改、保持同步**(Rust 是 camelCase 序列化)。
 
 ### 现有后端可消费的东西(以 lib.rs / 各 crate 源码为准去核对签名)
-- IPC 命令(invoke_handler 已注册):pick_project · select_recent_project ·
-  remove_recent_project · set_project_alias · get_initial_state · enqueue_task_cmd ·
-  run_task_cmd(单发,旧) · list_tasks · reorder_task · cancel_task_cmd ·
-  get_task_events · get_settings · update_settings · get_stats · suggest_verify_command ·
-  check_environment · get_brief
+- IPC 命令(invoke_handler 已注册,**以 lib.rs 为准核对入参/返回**):
+  - 项目:pick_project · select_recent_project · remove_recent_project · set_project_alias · get_initial_state
+  - 任务/看板:enqueue_task_cmd · run_task_cmd(单发,旧) · list_tasks · reorder_task · cancel_task_cmd · get_task_events
+  - 设置/环境:get_settings · update_settings · suggest_verify_command · check_environment
+  - 观测/状态:get_stats(XP/level/今夜花费) · **get_metrics**(验收率/总花费/p50·p95 时延) ·
+    **manager_preview**(AI 经理在真实局面下的决策预览,§5) · **audit_task**(对某任务做 §8 独立审计:
+    干净克隆重跑 verify) · **get_episodes**(近期 episode,时间轴/档案) · get_brief(记忆简报书)
 - 前端调后端:`import { invoke } from '@tauri-apps/api/core'`(**没开 withGlobalTauri,
   window.__TAURI__ 不可用,必须用 invoke**);事件 `import { listen } from '@tauri-apps/api/event'`。
 - 事件通道:`agent-event`(每个 AgentEvent 带 taskId)、`task-updated`(任务变化刷看板)。
@@ -58,9 +63,12 @@
   tool_use{tool,summary} · output_chunk{text} ·
   result{ok,costUsd,numTurns,tokens,durationMs} · error{code,message} ·
   finished{status,costUsd,branch,verifyOutput}
-- 主要 wire 类型(Rust 侧 + 旧 frontend/src/types 可参考,重写要干净):TaskRecord、
-  Settings、Stats{total,verified,failed,costUsd,xp,level,spentDay,spentMonth,verifiedDay,
-  failedDay}、InitialState、StoredEvent、EnvironmentCheck、Brief{project,facts[],recentEpisodes[]}。
+- 主要 wire 类型(Rust 侧为准,重写要干净;均 camelCase):TaskRecord、Settings、
+  Stats{total,verified,failed,costUsd,xp,level,spentDay,spentMonth,verifiedDay,failedDay}、
+  InitialState、StoredEvent、EnvironmentCheck、Brief{project,facts[],recentEpisodes[]}、
+  MetricsDto{runs,verified,failed,totalCostUsd,totalTokens,p50DurationMs,p95DurationMs,verifyRate,avgCostUsd}、
+  ManagerPreviewDto{inflight,queued,maxInflight,budgetRemainingUsd,decision{action,...}}、
+  AuditResult{audited,passed,reason}、EpisodeRecord{id,project,taskId,commitSha,verifyResult,diffStat,summary,createdAt}。
 - simulate 模式跑的是 fake-claude 假数据(免费、确定性),开发时用它验证。
 - 千问 key 等密钥:**只在运行时从 ~/.agents/resources.json 读,绝不写进仓库或提交。**
 
