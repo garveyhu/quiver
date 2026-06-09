@@ -6,6 +6,44 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 11 轮
+
+**落了什么**
+- `aa7cb41` feat(memory): MemoryStore 记忆读写访问器(episode/fact,只追加)
+- `70af21e` feat(memory): FTS5 全文检索 facts（P1 §20）
+
+**这轮做了什么(P1 记忆地基成形)**
+- 访问器:`record_episode` / `episodes_for_project`(§6.2 机械记录)、`insert_fact` /
+  `current_facts`(§6.3 只追加 + 当前真相 invalid_at IS NULL,按 importance/recency 排序)。
+- FTS5:`memory_fact_fts` 外部内容虚拟表 + 只追加插入触发器;`search_facts(project,query)`
+  关键词检索(当前真相 + 项目隔离,rank 排序)——§6.7 混合召回的关键词腿。
+
+**验证过的**
+- `cargo test -p quiver-memory` ✅(10 过:迁移幂等/trust CHECK/episode 往返/fact 排序与
+  默认/retired 剔除/FTS5 命中+隔离+retired 剔除)
+- `cargo check --workspace` ✅
+- 经验:FTS5 在 rusqlite **bundled 默认可用**;FTS5 的 `MATCH`/`rank` 必须用**真表名**,
+  用别名会被当成列名报 "no such column"(踩过一次,已修)。
+
+**各阶段进度**
+- 🎉 后端 P0 全部完成(#1–#5)。
+- 前端:✅ 落定 + 运行时验证 + IPC 完整。
+- **P1 记忆地基:已成形**(schema episode/memory_fact/FTS5 + 读写 + 全文检索)。
+  剩:接进 app(开 memory.sqlite + 完成时记 episode)、经理简报、§6.7 混合召回排序。
+
+**今天该接哪**(优先级从上到下)
+1. **P1 记忆接进 app**(纵向切片,可经 dev bridge 运行时验证):
+   - src-tauri/Cargo.toml 加 `quiver-memory` 依赖;AppState 加 `memory: OnceCell<Arc<MemoryStore>>`;
+     setup() 用 `MemoryStore::default_db_path` 开库。
+   - run_one_task 完成时 `record_episode`(project/task_id/verify_result=status/summary=prompt/
+     created_at;commit_sha/diff_stat 这刀先留空,§6.2 git 细节下刀补)。
+2. **P1 经理简报 brief**:组装 current_facts(+ 可选 search_facts)成给经理的上下文面
+   (§6 简报);先做 Rust 侧函数 + 测试,再考虑 IPC/UI。
+3. **§6.7 混合召回排序**:current_facts/search 加 recency·importance·trust 加权。
+4. 前端视觉对照原型(仍需先解决截图)。
+
+---
+
 ### 2026-06-09 · 第 10 轮
 
 **落了什么**
@@ -455,6 +493,13 @@
 ---
 
 ## 📜 历轮记录
+
+### 第 11 轮(2026-06-09)
+- P1 记忆访问器:record_episode/episodes_for_project + insert_fact/current_facts
+  (只追加,当前真相)(`aa7cb41`)。
+- P1 FTS5:memory_fact_fts 外部内容 + 插入触发器 + search_facts(`70af21e`)。
+- 验证:cargo test -p quiver-memory(10 过)+ cargo check --workspace。
+- 坑:FTS5 MATCH/rank 须用真表名(别名会被当列名)。
 
 ### 第 10 轮(2026-06-09)
 - IPC 完整性审计:前端 15 个 invoke 命令全部对上 lib.rs 注册命令,无缺口
