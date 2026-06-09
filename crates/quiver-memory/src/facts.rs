@@ -3,6 +3,8 @@
 //! (`invalid_at IS NULL`); the supersede/invalidate machinery (§6.4) is P2 — so
 //! this slice exposes write + current-read only.
 
+use std::collections::HashMap;
+
 use rusqlite::{params, OptionalExtension};
 
 use crate::MemoryStore;
@@ -381,6 +383,66 @@ impl MemoryStore {
         scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
         scored.truncate(limit);
         Ok(scored.into_iter().map(|(_, r)| r).collect())
+    }
+
+    /// §6.7 混合检索:把三条腿用 Reciprocal Rank Fusion(RRF)融成一个排名 ——
+    /// (1) FTS 关键词腿 `search_facts`、(2) 向量腿 `vector_search`、(3) §6.7 内在分腿
+    /// (importance/trust/recency 排序的当前真相)。RRF 按**名次**融合,不受各腿分值
+    /// 量纲差异影响(经典 hybrid 做法)。空 `query_text`/`query_vec` 跳过对应腿;内在腿
+    /// 恒在(冷启动也有结果)。返回前 `limit`,best first。
+    ///
+    /// `query_vec` 由调用方用注入的 [`crate::Embedder`] 把查询文本向量化得到。
+    pub fn hybrid_recall(
+        &self,
+        project: &str,
+        query_text: &str,
+        query_vec: &[f32],
+        now_ms: i64,
+        limit: usize,
+    ) -> anyhow::Result<Vec<FactRecord>> {
+        const K: f64 = 60.0; // RRF 抑制常数(标准取 60)
+        const LEG_CAP: usize = 50; // 每条腿候选上限
+
+        let mut legs: Vec<Vec<FactRecord>> = Vec::new();
+        if !query_text.trim().is_empty() {
+            legs.push(self.search_facts(project, query_text)?);
+        }
+        if !query_vec.is_empty() {
+            legs.push(self.vector_search(project, query_vec, LEG_CAP)?);
+        }
+        // §6.7 内在分腿(恒在):当前真相按 importance/trust/recency 降序。
+        let mut intrinsic = self.current_facts(project)?;
+        intrinsic.sort_by(|a, b| {
+            score(b, now_ms)
+                .partial_cmp(&score(a, now_ms))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        legs.push(intrinsic);
+
+        let mut rrf: HashMap<i64, f64> = HashMap::new();
+        let mut by_id: HashMap<i64, FactRecord> = HashMap::new();
+        for leg in legs {
+            for (rank, f) in leg.into_iter().enumerate() {
+                *rrf.entry(f.id).or_insert(0.0) += 1.0 / (K + rank as f64 + 1.0);
+                by_id.entry(f.id).or_insert(f);
+            }
+        }
+
+        let mut ranked: Vec<FactRecord> = by_id.into_values().collect();
+        ranked.sort_by(|a, b| {
+            rrf[&b.id]
+                .partial_cmp(&rrf[&a.id])
+                .unwrap_or(std::cmp::Ordering::Equal)
+                // deterministic tie-break: intrinsic score, then id
+                .then_with(|| {
+                    score(b, now_ms)
+                        .partial_cmp(&score(a, now_ms))
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .then(a.id.cmp(&b.id))
+        });
+        ranked.truncate(limit);
+        Ok(ranked)
     }
 }
 
@@ -809,5 +871,23 @@ mod tests {
         assert_eq!(hits.len(), 2, "limit honored, un-embedded fact skipped");
         assert_eq!(hits[0].text, "alpha", "exact-match vector ranks first");
         assert_eq!(hits[1].text, "gamma", "near vector second, orthogonal beta drops");
+    }
+
+    #[test]
+    fn hybrid_recall_fuses_keyword_vector_intrinsic() {
+        let store = MemoryStore::open_in_memory().unwrap();
+        let a = store.insert_fact(&fact("/r", "tokio async runtime", 5, 1)).unwrap();
+        let b = store.insert_fact(&fact("/r", "database schema", 9, 1)).unwrap();
+        let c = store.insert_fact(&fact("/r", "tokio tasks scheduling", 5, 1)).unwrap();
+        store.set_fact_embedding(a, &[1.0, 0.0, 0.0], "fake").unwrap();
+        store.set_fact_embedding(b, &[0.0, 1.0, 0.0], "fake").unwrap();
+        store.set_fact_embedding(c, &[0.6, 0.4, 0.0], "fake").unwrap();
+
+        // Query "tokio" + vector near A → A wins all three legs (keyword + nearest vector + present).
+        let hits = store.hybrid_recall("/r", "tokio", &[1.0, 0.0, 0.0], 1000, 3).unwrap();
+        assert_eq!(hits.len(), 3, "intrinsic leg always includes every current fact");
+        assert_eq!(hits[0].text, "tokio async runtime", "wins keyword+vector+intrinsic fusion");
+        // B (no keyword/semantic match, high importance) still surfaces via the intrinsic leg.
+        assert!(hits.iter().any(|f| f.text == "database schema"));
     }
 }
