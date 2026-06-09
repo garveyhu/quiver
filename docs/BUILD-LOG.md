@@ -6,6 +6,32 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 30 轮 — 🔧 转向【后端按蓝图收尾到 P5】(loop-backend.md)
+
+**方向变更(用户拍板)**:先把后端按蓝图 §23 做到 P5,再回头**从零重写前端**(删
+frontend/src、忠实移植 redesign-iso-directions.html 等距办公室,见 loop.md)。本轮起
+loop 跑 **loop-backend.md**(cron d69583a4,每 10 分钟)。用户**已授权接真 LLM/千问
+并实跑(花钱)**;密钥运行时从 ~/.agents/resources.json 读、绝不提交。
+
+**落了什么**
+- `0056f3c` feat(memory): 向量召回存储+检索地基(P2 向量第一刀)
+  - memory_fact 加 embedding BLOB;set_fact_embedding + vector_search(Rust 余弦,小库够用)。
+  - 验证:quiver-memory 26 过 + cargo check --workspace。
+
+**▶ 下一步(P2 向量续)**
+1. 千问 v2 embedding 客户端(可注入 Embedder trait:测试 stub / 真跑读 key 调 API)。
+2. 给写入事实自动生成 embedding(insert/promote 时);批量回填存量事实。
+3. 混合检索:vector_search(向量腿) + search_facts(FTS 腿) + §6.7 加权融合成一个 recall。
+4. (规模化)sqlite-vec vec0 ANN 索引替换暴力余弦。
+之后:P2 图书管理员(AI 判矛盾作废)→ §5 AI 经理编排 → P3 安全 → P4 → P5。
+
+**⚠ 待你拍板(蓝图 §24)**:合并策略(自动合 vs 攒批)、sandbox profile、印证提示词/评测集
+需真实长会话调——先用默认推进,标这里。
+
+**进度**:P0 ✅ · P1 ✅ · P2 机制 ✅ · **P2 向量地基 ✅(续:千问/混合/ANN)** · P3/P4/P5 ❌。
+
+---
+
 ### 2026-06-09 · 第 28 轮(修"启动报错" + bridge 测试)
 
 **你的报障**:"甚至启动都报错"。**根因找到**:一个**孤儿 Quiver vite**(pid 80901,父 yarn
