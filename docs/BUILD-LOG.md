@@ -6,6 +6,25 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 22 轮
+
+**落了什么**
+- `e0f95df` feat(memory): 事实作废/顶替 supersede_fact(P2 图书管理员机制起步)
+
+**这轮**:你没拍板→按"顺序来"进 **P2**。落 P2 第一刀的**机械写**:`supersede_fact`(§6.4)
+——一笔事务插新事实为当前真相 + 标旧失效(invalid_at/retired_at/superseded_by),仅当旧
+仍当前(陈旧顶替 no-op),原子。建在 P1 双时间列上,纯 SQL、cargo 可测(quiver-memory 17 过)。
+
+**P2 拆解**:✅ 可独立做(纯 Rust/SQL 可测):作废 supersede(本轮)、memory_staging 待审表
++promote、信任档升级写、状态唯一约束 —— 下轮接着做。⚠ 卡你:向量召回(sqlite-vec 依赖 +
+千问 v2 embedding,key 运行时从 ~/.agents/resources.json 读)、AI 判断触发(需 AI 经理)。
+
+**进度**:🎉 P0 ✅ · P1 ✅ · 前端核心+交互 ✅ · **P2 起步(机制层)**。git 本地领先 origin 多个(未推)。
+**⚠ 仍等你**:推送/合 main、关 live 实例做 e2e、向量依赖拍板、loop 继续否。
+**今天该接哪**:P2 机制层续(memory_staging 待审+promote / 信任档升级写),纯后端可测。
+
+---
+
 ### 2026-06-09 · 第 21 轮
 
 **落了什么**
@@ -825,6 +844,9 @@ stats=小后端切片 / 连续语义缩放增强=较复杂)。
 ---
 
 ## 📜 历轮记录
+
+### 第 22 轮(2026-06-09)
+- P2 起步:supersede_fact 作废/顶替机制(一笔事务,§6.4)(`e0f95df`);quiver-memory 17 过。
 
 ### 第 21 轮(2026-06-09)
 - 晨报接真"昨晚"时间窗:store task_stats_since + get_stats verified_day/failed_day + 晨报标签(`9cd9ed3`)。
