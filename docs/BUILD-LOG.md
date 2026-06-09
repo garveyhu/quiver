@@ -6,6 +6,14 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 32 轮(后端收尾 · P2 向量续)
+- `cca6381` feat(memory): 混合检索 hybrid_recall(RRF 融合 FTS+向量+§6.7 内在三腿)。
+  验证:quiver-memory 29 过 + workspace check。
+- **▶ 下一步**:① 写入/promote 事实时用注入的 Embedder 生成 embedding(simulate 用
+  FakeEmbedder;真跑 qwen feature);② 把 MemoryStore 接受一个 Embedder(注入)或在 app
+  层组装;③ 用 --features qwen 真跑一次千问 + 一条事实端到端(花钱,标维度/耗时)。
+  之后:P2 图书管理员(AI 判矛盾作废)→ §5 AI 经理编排 → P3 安全 → P4 → P5。
+
 ### 2026-06-09 · 第 31 轮(后端收尾 · P2 向量续)
 - `0f4af49` feat(memory): 千问 embedding 客户端走可注入 Embedder trait
   - Embedder trait + FakeEmbedder(离线确定性)+ parse/load_qwen_creds(读 resources.json
