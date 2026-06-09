@@ -6,6 +6,16 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 集成阶段 · 第 5 刀:audit_task IPC(独立审计接进 app)
+- `6d354f2` feat(app): audit_task —— 用户可对任务触发 §8 独立审计(克隆成果分支到干净副本
+  重跑 verify);无分支/没配 verify 命令则短路。不碰 gate。验证:check+build;真窗口
+  invoke 命中真实留枝任务(有 branch)、正确短路"未配置 verify 命令"。
+- ⚠ 注:把审计/验收接进 supervisor 的 verify **gate 决策**有坑——fake-claude 不写文件→空 diff,
+  judge_acceptance 的"空交付拦"会误杀所有 fake 测试;接 gate 要用"只查篡改不拦空交付"版,
+  且属高风险核心路径,**留用户在场验**。
+- **▶ 下一块集成**:① 真接调度(manager tick→Effect→真起 worker,QwenBrain 可选档,大+花钱);
+  ② 把 get_metrics/manager_preview/audit_task 等接进重写后的前端显示。cron 06a96c93 在跑。
+
 ### 2026-06-09 · 集成阶段 · 第 4 刀:manager_preview(编排器接真实状态)
 - `deb2201` feat(app): manager_preview IPC —— 组装真实 ManagerContext(在途/排队/上限/预算)+
   免费 RuleBrain 跑一拍,返回经理此刻的决策。只看不动(不 spawn/不花钱)。src-tauri 加 quiver-
