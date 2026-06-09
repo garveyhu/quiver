@@ -38,6 +38,7 @@ import { CommandPalette } from './CommandPalette';
 import type { PaletteCommand } from './CommandPalette';
 import { TaskCard } from './TaskCard';
 import { BriefPanel } from './BriefPanel';
+import { MorningReport } from './MorningReport';
 
 type View = 'board' | 'archive' | 'settings';
 
@@ -58,6 +59,7 @@ export function QuiverShell() {
   const [sound, setSound] = usePersistedState('qv.sound', true);
   const [pendingReal, setPendingReal] = useState<string | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showReport, setShowReport] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
   const [railOpen, setRailOpen] = usePersistedState('qv.railOpen', true);
   const [achv, setAchv] = useState<{ title: string; sub: string } | null>(null);
@@ -249,6 +251,7 @@ export function QuiverShell() {
     { id: 'toggle-mode', label: `默认模式 → ${mode === 'real' ? '模拟' : '真实'}`, keywords: 'mode 模式 simulate real 模拟 真实', run: () => { setMode((m) => (m === 'real' ? 'simulate' : 'real')); setShowPalette(false); } },
     { id: 'recheck', label: '重新工坊体检', keywords: 'health check 体检 环境', run: () => { void health.refresh(); setShowPalette(false); } },
     { id: 'shortcuts', label: '查看快捷键', keywords: 'help keys 帮助 快捷键', run: () => { setShowShortcuts(true); setShowPalette(false); } },
+    { id: 'morning-report', label: '晨报 / 验收 · 看昨晚结果', keywords: 'morning report review 晨报 验收 昨晚 结果', run: () => { setShowReport(true); setShowPalette(false); } },
     ...(replay.active
       ? [{ id: 'stop-replay', label: '停止回放', keywords: 'replay stop 回放', run: () => { replay.stop(); setShowPalette(false); } } as PaletteCommand]
       : []),
@@ -327,6 +330,7 @@ export function QuiverShell() {
         items={[
           { label: '看板', active: view === 'board', onClick: () => setView('board') },
           { label: '档案', active: view === 'archive', onClick: () => setView('archive') },
+          { label: '晨报', onClick: () => setShowReport(true) },
           { label: '设置', active: view === 'settings', onClick: () => setView('settings') },
           { label: '项目', onClick: () => setProjOpen(true) },
         ]}
@@ -517,6 +521,14 @@ export function QuiverShell() {
           onToggleMode={() => setMode((m) => (m === 'real' ? 'simulate' : 'real'))}
           commands={paletteCommands}
         />
+      )}
+
+      {showReport && (
+        <div className="qv-backdrop" onClick={() => setShowReport(false)} style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 70 }}>
+          <div onClick={(e) => e.stopPropagation()}>
+            <MorningReport stats={stats} tasks={recentDone} onClose={() => setShowReport(false)} />
+          </div>
+        </div>
       )}
 
       {showShortcuts && (
