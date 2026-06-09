@@ -6,6 +6,26 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 🎨 前端从零重写 · 第 1 刀:骨架 + 静态等距地基
+**方向**:后端契约已稳(见上"暂停 loop"晨报),按 loop.md 转**前端从零重写** —— 删
+frontend/src 旧平视版,照 docs/redesign-iso-directions.html(唯一视觉真相)忠实移植
+等距像素办公室,全代码生成美术、不用图片。
+
+- `5cba736` feat(frontend): 骨架 + 静态等距办公室地基。**删整个 frontend/src 重建**:
+  - `office/iso.ts` iso 投影/层序/layout 纯数学(TW64/TH32/WALLH42,world 888×550)
+  - `office/rooms.ts` 7 房间布局数据(ROOMS/HALLS/DESKS,坐标色值原样移植)
+  - `office/primitives.ts` SceneBuilder(tile/poly/wallEdge/label/buildmark → SceneNode[])
+  - `office/buildScene.ts` 静态地基:地板网格(房间染色+走廊提亮+可扩展斜线位)+北西墙+标签
+  - `office/Office.tsx` + `useFitScale` 按窗口缩放居中(命令式 append → 声明式 SceneNode[] map)
+  - `shell/{Hud,Ctrls,Caption}.tsx` 叠层 chrome(本轮静态占位)+ `styles/global.css`(:root token+chrome+暗角/颗粒)
+  - `services/ipc.ts` IPC 封装(call/subscribe,走 invoke/listen,未开 withGlobalTauri)+ `theme/palette.ts` token
+- **验证**:`yarn --cwd frontend tsc --noEmit` 过;`agent-debug.sh up` 起真窗口截图对照原型 —— 7 房间/北西墙/标签/可扩展位/HUD/控件/状态条/暗角全齐,几何与配色贴原型,无 console 报错。
+- **▶ 下一刀(§8.2 续 → §8.3)**:① 静态家具(deskUnit/sofa/plant/serverRack/bookcase/board/
+  memoryBook/qaBench/shipBay/windowWall/ceilLamp 等,原型 ~30 个纯像素函数,逐组移到 SceneBuilder);
+  ② 然后接数据:get_initial_state/get_stats/list_tasks → HUD/看板真值。
+- **注**:wire 类型 + 具名命令封装故意留到接数据那刀(以 lib.rs 为准核对 camelCase,避免现在凭空写错)。
+  收尾已拆测试实例、腾空 :1420。**绝不 push/合 main**(红线)。本地仍领先 origin。
+
 ### 2026-06-09 · ⏸ 暂停 loop(集成边界,等用户在场)
 **为什么停**:安全、可独立真跑验证的集成也做完了(6 刀 IPC)。剩下的大件都需用户在场:
 真接调度(manager→真派活,花钱)、verify gate 接审计(高风险核心路径,且"真篡改→拦"
