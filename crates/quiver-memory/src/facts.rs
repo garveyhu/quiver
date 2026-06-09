@@ -114,6 +114,43 @@ impl MemoryStore {
             .collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
     }
+
+    /// Full-text search current-truth facts for `project` by `query` (FTS5 MATCH,
+    /// DESIGN §20), best relevance first. Retired facts (`invalid_at` set) and other
+    /// projects are excluded. `query` is an FTS5 query string — callers usually pass
+    /// plain keywords. The §6.7 hybrid recall (FTS + vector + recency/importance/
+    /// trust weighting) builds on this; for now it's the keyword leg.
+    pub fn search_facts(&self, project: &str, query: &str) -> anyhow::Result<Vec<FactRecord>> {
+        let conn = self.conn.lock().expect("memory store lock");
+        let mut stmt = conn.prepare(
+            "SELECT mf.id, mf.project, mf.scope, mf.kind, mf.text, mf.entities,
+                    mf.importance, mf.valid_at, mf.invalid_at, mf.recorded_at, mf.trust
+             FROM memory_fact_fts
+             JOIN memory_fact mf ON mf.id = memory_fact_fts.rowid
+             WHERE memory_fact_fts MATCH ?1
+               AND mf.project = ?2
+               AND mf.invalid_at IS NULL
+             ORDER BY memory_fact_fts.rank",
+        )?;
+        let rows = stmt
+            .query_map(params![query, project], |row| {
+                Ok(FactRecord {
+                    id: row.get(0)?,
+                    project: row.get(1)?,
+                    scope: row.get(2)?,
+                    kind: row.get(3)?,
+                    text: row.get(4)?,
+                    entities: row.get(5)?,
+                    importance: row.get(6)?,
+                    valid_at: row.get(7)?,
+                    invalid_at: row.get(8)?,
+                    recorded_at: row.get(9)?,
+                    trust: row.get(10)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
 }
 
 #[cfg(test)]
@@ -151,6 +188,51 @@ mod tests {
         // Defaults applied.
         assert_eq!(facts[0].scope, "本仓库");
         assert_eq!(facts[0].invalid_at, None, "fresh fact is current truth");
+    }
+
+    #[test]
+    fn search_facts_matches_keyword_filtered_by_project() {
+        let store = MemoryStore::open_in_memory().unwrap();
+        store
+            .insert_fact(&fact("/r", "use tokio for the async runtime", 5, 1))
+            .unwrap();
+        store
+            .insert_fact(&fact("/r", "prefer rusqlite bundled sqlite", 5, 2))
+            .unwrap();
+        store
+            .insert_fact(&fact("/other", "tokio lives elsewhere", 5, 3))
+            .unwrap();
+
+        // 'tokio' → only /r's tokio fact (other project excluded).
+        let hits = store.search_facts("/r", "tokio").unwrap();
+        assert_eq!(hits.len(), 1);
+        assert!(hits[0].text.contains("tokio"));
+        // 'sqlite' → the other /r fact.
+        let hits2 = store.search_facts("/r", "sqlite").unwrap();
+        assert_eq!(hits2.len(), 1);
+        assert!(hits2[0].text.contains("rusqlite"));
+        // no match → empty.
+        assert!(store.search_facts("/r", "kubernetes").unwrap().is_empty());
+    }
+
+    #[test]
+    fn search_excludes_retired_facts() {
+        let store = MemoryStore::open_in_memory().unwrap();
+        let id = store
+            .insert_fact(&fact("/r", "deprecated approach foobar", 5, 1))
+            .unwrap();
+        {
+            let conn = store.conn.lock().unwrap();
+            conn.execute(
+                "UPDATE memory_fact SET invalid_at = 9 WHERE id = ?1",
+                params![id],
+            )
+            .unwrap();
+        }
+        assert!(
+            store.search_facts("/r", "foobar").unwrap().is_empty(),
+            "a retired fact must drop out of full-text search too"
+        );
     }
 
     #[test]

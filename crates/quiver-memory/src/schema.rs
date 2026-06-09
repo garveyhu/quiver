@@ -58,7 +58,18 @@ pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_fact_current
             ON memory_fact(project, scope, kind, invalid_at);
         CREATE INDEX IF NOT EXISTS idx_fact_superseded
-            ON memory_fact(superseded_by);",
+            ON memory_fact(superseded_by);
+
+        -- FTS5 full-text index over fact text (DESIGN §20 memory_fact_fts).
+        -- External-content (content='memory_fact') so text isn't duplicated; an
+        -- AFTER INSERT trigger keeps it in sync. Append-only → ONLY an insert
+        -- trigger is needed: P2 invalidation sets `invalid_at` (a logical filter on
+        -- read), it never deletes the row, so no delete/update trigger (§20 note).
+        CREATE VIRTUAL TABLE IF NOT EXISTS memory_fact_fts
+            USING fts5(text, content='memory_fact', content_rowid='id');
+        CREATE TRIGGER IF NOT EXISTS memory_fact_ai AFTER INSERT ON memory_fact BEGIN
+            INSERT INTO memory_fact_fts(rowid, text) VALUES (new.id, new.text);
+        END;",
     )?;
     Ok(())
 }
