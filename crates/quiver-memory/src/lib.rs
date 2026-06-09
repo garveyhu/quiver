@@ -18,6 +18,8 @@
 //! Layout mirrors [`quiver_store`]: [`schema`] owns the idempotent migration;
 //! record/fact accessor modules hang off [`MemoryStore`] as they are added.
 
+mod episodes;
+mod facts;
 mod schema;
 
 use std::path::{Path, PathBuf};
@@ -25,11 +27,13 @@ use std::sync::Mutex;
 
 use rusqlite::Connection;
 
+pub use episodes::{EpisodeRecord, NewEpisode};
+pub use facts::{FactRecord, NewFact};
+
 /// A SQLite-backed durable memory store. Cheap to construct; one connection
 /// behind a `Mutex` (rusqlite is synchronous, calls are short — same contract as
 /// [`quiver_store::Store`](../quiver_store/struct.Store.html)).
 pub struct MemoryStore {
-    #[allow(dead_code)] // accessor modules (episodes/facts) land in the next P1 slice.
     conn: Mutex<Connection>,
 }
 
