@@ -1,11 +1,19 @@
 import {
+  bigPlant,
+  bookcase,
+  cableRun,
   ceilDuct,
+  coffeeBar,
   deskLamp,
   deskUnit,
+  patternRug,
   plant,
   pottedShelf,
   serverRack,
+  sofa,
+  wallClock,
   wallPoster,
+  waterCooler,
   whiteboard,
   windowWall,
 } from '@/office/furniture';
@@ -58,10 +66,31 @@ export function buildScene(): Scene {
     b.label((room.c0 + room.c1) / 2, (room.r0 + room.r1) / 2, room.label);
   }
 
+  furnishLounge(b);
   furnishWorkArea(b);
   ceilingLights(b);
 
   return { layout, nodes: b.nodes };
+}
+
+/** 休息室:花纹地毯 + 沙发 ×2 + 咖啡吧 + 书柜 + 大小绿植 + 猫 + 落地窗 + 海报 + 时钟 + 饮水机 + 风管 + 线缆。 */
+function furnishLounge(b: SceneBuilder): void {
+  patternRug(b, 0.4, 2.2, 2.8, 3.2, 'rgba(176,122,142,.4)', 'rgba(120,84,100,.5)');
+  sofa(b, 0.5, 2.4, 1.7);
+  sofa(b, 0.5, 4.8, 1.7);
+  coffeeBar(b, 2.3, 6.4);
+  bookcase(b, 0.15, 0.4, 2.0);
+  bigPlant(b, 2.9, 1.0);
+  plant(b, 0.5, 6.6);
+  plant(b, 2.9, 8.4);
+  b.cat(1.7, 3.6);
+  windowWall(b, 0.6, 2.6, 0);
+  wallPoster(b, 0.05, 2.0, 1.1, ['#2a3550', '#5a86c0', '#ffd27a']);
+  wallClock(b, 0.05, 5.6, 34);
+  waterCooler(b, 0.2, 8.3);
+  pottedShelf(b, 2.95, 5.3);
+  ceilDuct(b, 0.5, 2.6, 0.2, 48);
+  cableRun(b, 2.4, 0.6, 46);
 }
 
 /** 工位区:12 套工位 + 服务器架 ×2 + 白板 + 绿植 + 落地窗 + 海报 + 风管 + 台灯 + 盆栽。 */

@@ -15,6 +15,8 @@ export interface SceneNode {
   text?: string;
   /** 可扩展位的"＋"标记 */
   mark?: boolean;
+  /** 带固定内部结构的复合节点(如猫) */
+  composite?: 'cat';
 }
 
 /** 一个三面体素的三阶配色(顶面 / 左侧 / 右侧)。 */
@@ -152,5 +154,17 @@ export class SceneBuilder {
   /** 窗外射入的体积光束。 */
   godray(left: number, top: number, width: number, height: number, z: number, secondary: boolean): void {
     this.add({ className: `godray${secondary ? ' b' : ''}`, style: { left, top, width, height, zIndex: z } });
+  }
+
+  /** 升腾的咖啡热气(单粒，循环动画)。 */
+  steam(c: number, r: number, z: number): void {
+    const p = this.pt(c, r, 30);
+    this.add({ className: 'steam', style: { left: p.x, top: p.y, zIndex: z, animation: 'steam 2.4s ease-out infinite' } });
+  }
+
+  /** 蜷在地上的猫(复合像素:尾 + 身 + 双耳)。 */
+  cat(c: number, r: number): void {
+    const p = this.pt(c, r);
+    this.add({ className: 'cat', style: { left: p.x - 8, top: p.y - 10, zIndex: zidx(c, r) + 3 }, composite: 'cat' });
   }
 }

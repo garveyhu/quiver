@@ -1,7 +1,25 @@
-import { useMemo, type CSSProperties } from 'react';
+import { useMemo, type CSSProperties, type ReactNode } from 'react';
 
 import { buildScene } from '@/office/buildScene';
+import type { SceneNode } from '@/office/primitives';
 import { useFitScale } from '@/office/useFitScale';
+
+/** 节点内部内容:复合结构(猫) > 可扩展"＋" > 标签文字 > 空。 */
+function nodeChildren(node: SceneNode): ReactNode {
+  if (node.composite === 'cat') {
+    return (
+      <>
+        <div className="t" />
+        <div className="b">
+          <div className="e1" />
+          <div className="e2" />
+        </div>
+      </>
+    );
+  }
+  if (node.mark) return <b>＋</b>;
+  return node.text;
+}
 
 /** 等距像素办公室。构建一次静态场景，按窗口尺寸整体缩放居中。 */
 export function Office() {
@@ -16,7 +34,7 @@ export function Office() {
       <div className="world" style={worldStyle}>
         {scene.nodes.map(node => (
           <div key={node.key} className={node.className} style={node.style}>
-            {node.mark ? <b>＋</b> : node.text}
+            {nodeChildren(node)}
           </div>
         ))}
       </div>

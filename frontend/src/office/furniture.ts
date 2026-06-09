@@ -140,6 +140,115 @@ export function wallPoster(b: SceneBuilder, c: number, r: number, wc: number, sc
   b.southPanel(c, r, wc, 44, 45, 'rgba(255,255,255,.25)', z + 3);
 }
 
+/** 三层花纹地毯(外/内边 + 中心菱形)。 */
+export function patternRug(b: SceneBuilder, c0: number, r0: number, wc: number, dc: number, base: string, trim: string): void {
+  const z = zidx(c0 + wc, r0 + dc) - 1;
+  b.rug(c0, r0, wc, dc, base, z);
+  b.rug(c0 + 0.12, r0 + 0.12, wc - 0.24, dc - 0.24, trim, z);
+  b.rug(c0 + 0.28, r0 + 0.28, wc - 0.56, dc - 0.56, base, z);
+  const m = b.pt(c0 + wc / 2, r0 + dc / 2);
+  b.poly([{ x: m.x, y: m.y - 6 }, { x: m.x + 10, y: m.y }, { x: m.x, y: m.y + 6 }, { x: m.x - 10, y: m.y }], trim, z);
+}
+
+/** 沙发:底座 + 靠背 + 两侧扶手 + 坐垫。 */
+export function sofa(b: SceneBuilder, c: number, r: number, wc: number): void {
+  b.contactShadow(c + wc / 2, r + 0.42, wc * 60, 26);
+  b.isoBox(c, r, wc, 0.7, 8, { top: '#5a4a6e', l: '#322444', r: '#46395c' });
+  b.isoBox(c, r - 0.05, wc, 0.18, 17, { top: '#6a5a80', l: '#3a2c4e', r: '#4e3f66' });
+  b.southPanel(c, r - 0.05, wc, 15, 17, 'rgba(170,150,200,.5)', zidx(c + wc, r) + 5);
+  b.isoBox(c, r, 0.16, 0.7, 13, { top: '#6a5a80', l: '#352848', r: '#4a3c60' });
+  b.isoBox(c + wc - 0.16, r, 0.16, 0.7, 13, { top: '#6a5a80', l: '#352848', r: '#4a3c60' });
+  const n = Math.max(2, Math.round(wc / 0.8));
+  const cw = (wc - 0.32) / n;
+  for (let i = 0; i < n; i++) {
+    const cc = c + 0.16 + i * cw;
+    b.chip(cc + 0.02, r + 0.06, cw - 0.06, 0.56, 8, 12, { top: '#6f5e88', l: '#3c2e52', r: '#54456c' });
+    b.southPanel(cc + 0.02, r + 0.06, cw - 0.06, 10, 12, 'rgba(180,160,210,.4)', zidx(c + wc, r) + 6);
+  }
+}
+
+/** 咖啡吧台:台体 + 咖啡机 + 杯具 + 升腾热气。 */
+export function coffeeBar(b: SceneBuilder, c: number, r: number): void {
+  b.contactShadow(c + 0.5, r + 0.22, 56, 20);
+  const z = b.isoBox(c, r, 1.0, 0.4, 16, { top: '#403a50', l: '#1f1c2c', r: '#2c2840' });
+  b.southPanel(c, r, 1.0, 13, 16, '#544c66', z + 1);
+  b.isoBox(c + 0.08, r, 0.26, 0.26, 20, { top: '#2a2f3e', l: '#15131a', r: '#20242f' });
+  b.southPanel(c + 0.08, r, 0.26, 28, 30, 'rgba(150,170,210,.4)', z + 5);
+  b.led(c + 0.3, r + 0.06, 22, '#ffd27a', true, z + 6);
+  b.chip(c + 0.14, r + 0.2, 0.08, 0.06, 16, 18, { top: '#3a3f50', l: '#1c2030', r: '#2a3040' });
+  b.chip(c + 0.5, r + 0.1, 0.1, 0.1, 16, 20, { top: '#d9d3c4', l: '#8a8276', r: '#aaa294' });
+  b.led(c + 0.55, r + 0.15, 20, '#3a2c20', false, z + 7);
+  b.chip(c + 0.66, r + 0.16, 0.09, 0.09, 16, 19, { top: '#c9a043', l: '#7a6028', r: '#9a7c34' });
+  b.steam(c + 0.2, r, z + 8);
+}
+
+/** 书柜:柜体 + 三层书架 + 高矮错落的书脊。 */
+export function bookcase(b: SceneBuilder, c: number, r: number, wc: number): void {
+  const z = b.isoBox(c, r, wc, 0.3, 46, { top: '#6a4e34', l: '#3a2820', r: '#523a28' });
+  b.southPanel(c, r, wc, 0, 46, '#2e2018', z + 1);
+  b.southPanel(c + 0.02, r, wc - 0.04, 44, 46, '#7a5a3c', z + 2);
+  const books = ['#c45446', '#6f97d6', '#6caf70', '#e6bd6c', '#9c6c80', '#4cc0d8', '#b8855e', '#7e6aa8'];
+  for (let s = 0; s < 3; s++) {
+    b.southPanel(c + 0.03, r, wc - 0.06, 6 + s * 13, 7 + s * 13, '#1c130d', z + 2);
+    let i = 0;
+    let cc = c + 0.06;
+    const end = c + wc - 0.06;
+    while (cc < end - 0.01) {
+      const bw = ((wc - 0.12) / 5) * (0.7 + ((i * 7 + s * 3) % 5) * 0.07);
+      const h = 8 + ((i * 5 + s * 2) % 4) * 3.5;
+      const lean = (i + s) % 6 === 5 ? 2 : 0;
+      b.southPanel(cc, r, Math.min(bw, end - cc) * 0.82, 9 + s * 13, 9 + s * 13 + 11 + h * 0.6 + lean, books[(i + s) % books.length], z + 3);
+      b.southPanel(cc, r, Math.min(bw, end - cc) * 0.18, 9 + s * 13, 9 + s * 13 + 11 + h * 0.6 + lean, 'rgba(0,0,0,.22)', z + 4);
+      cc += bw + 0.005;
+      i++;
+    }
+  }
+}
+
+/** 大型绿植(四层叶冠)。 */
+export function bigPlant(b: SceneBuilder, c: number, r: number): void {
+  b.contactShadow(c + 0.2, r + 0.2, 24, 12);
+  b.isoBox(c, r, 0.4, 0.4, 10, { top: '#9a6a48', l: '#4a3422', r: '#7a4e30' });
+  b.southPanel(c, r, 0.4, 7, 10, 'rgba(210,150,110,.5)', zidx(c + 0.4, r) + 4);
+  b.isoBox(c - 0.05, r - 0.05, 0.5, 0.5, 30, { top: '#427a4c', l: '#2a5034', r: '#387844' });
+  b.isoBox(c - 0.02, r - 0.02, 0.42, 0.42, 40, { top: '#4f8a5a', l: '#2f5a3a', r: '#418a4e' });
+  b.isoBox(c + 0.02, r + 0.02, 0.34, 0.34, 48, { top: '#5b9a66', l: '#356a44', r: '#4f8a5a' });
+  b.isoBox(c + 0.07, r + 0.07, 0.2, 0.2, 54, { top: '#6aab74', l: '#3c7a4e', r: '#58a064' });
+  ['#8ec98e', '#7cbf86', '#9ad19a', '#86c886'].forEach((cl, i) => b.speck(c + 0.08 + i * 0.06, r + 0.05 + i * 0.05, 42 + i * 4, cl, zidx(c, r) + 14));
+}
+
+/** 挂墙时钟(表盘 + 转动的时针/分针)。 */
+export function wallClock(b: SceneBuilder, c: number, r: number, h: number): void {
+  const p = b.pt(c, r, h);
+  const z = zidx(c, r) + 6;
+  b.pxrect(p.x - 7, p.y - 7, 14, 14, '#e7e1cf', z, undefined, { borderRadius: '50%', boxShadow: '0 0 0 2px #3a3040' });
+  const hand = (w: number, len: number, col: string, dur: number) =>
+    b.pxrect(p.x - w / 2, p.y - len, w, len, col, z + 1, 'pclock-h', { animation: `spin ${dur}s linear infinite` });
+  hand(2, 6, '#2a3040', 60);
+  hand(1.5, 4, '#5a86c0', 720);
+}
+
+/** 饮水机(机身 + 水桶 + 出水面板 + 双指示灯)。 */
+export function waterCooler(b: SceneBuilder, c: number, r: number): void {
+  b.contactShadow(c + 0.16, r + 0.16, 18, 9);
+  b.isoBox(c, r, 0.3, 0.3, 22, { top: '#cdd4de', l: '#7a828e', r: '#9aa2ae' });
+  b.isoBox(c + 0.03, r + 0.03, 0.24, 0.24, 40, { top: 'rgba(150,200,230,.55)', l: 'rgba(90,140,180,.55)', r: 'rgba(120,170,210,.55)' });
+  b.southPanel(c + 0.06, r, 0.18, 8, 12, '#3a4660', zidx(c + 0.3, r) + 5);
+  b.led(c + 0.1, r, 11, '#5ce0ff', true, zidx(c + 0.3, r) + 6);
+  b.led(c + 0.2, r, 11, '#e2604f', false, zidx(c + 0.3, r) + 6);
+}
+
+/** 顺墙垂下的线缆束。 */
+export function cableRun(b: SceneBuilder, c: number, r: number, h: number): void {
+  const z = zidx(c, r) - 1;
+  const top = b.pt(c, r, h);
+  const mid = b.pt(c + 0.04, r, h * 0.6);
+  const btm = b.pt(c + 0.02, r, h * 0.25);
+  b.poly([{ x: top.x - 1, y: top.y }, { x: top.x + 1, y: top.y }, { x: mid.x + 1, y: mid.y }, { x: mid.x - 1, y: mid.y }], '#14181f', z);
+  b.poly([{ x: mid.x - 1, y: mid.y }, { x: mid.x + 1, y: mid.y }, { x: btm.x + 1, y: btm.y }, { x: btm.x - 1, y: btm.y }], '#181c24', z);
+  b.led(c + 0.02, r, h * 0.25, '#6cc47a', true, z + 2);
+}
+
 /** 吊顶风管。 */
 export function ceilDuct(b: SceneBuilder, cA: number, cB: number, r: number, h: number, col?: string): void {
   const z = zidx(cA, r) - 2;

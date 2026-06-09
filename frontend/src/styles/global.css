@@ -55,7 +55,21 @@ body {
 .pspeck { position: absolute; width: 2px; height: 2px; border-radius: 1px; pointer-events: none; }
 .pcshadow { position: absolute; border-radius: 50%; background: rgba(0,0,0,.34); filter: blur(1.5px); pointer-events: none; }
 .pscan { position: absolute; pointer-events: none; opacity: .5; background: repeating-linear-gradient(0deg, rgba(255,255,255,.10) 0 1px, transparent 1px 3px); }
+.pclock-h { position: absolute; pointer-events: none; transform-origin: bottom center; }
 @keyframes blink2 { 0%,100%{ opacity: 1; } 50%{ opacity: .2; } }
+@keyframes spin { from{ transform: rotate(0deg); } to{ transform: rotate(360deg); } }
+
+/* 咖啡热气 */
+.steam { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,.5); filter: blur(2px); pointer-events: none; }
+@keyframes steam { 0%{ transform: translate(0,0) scale(1); opacity: .5; } 100%{ transform: translate(-3px,-22px) scale(1.8); opacity: 0; } }
+
+/* 猫 */
+.cat { position: absolute; image-rendering: pixelated; pointer-events: none; }
+.cat .b { position: absolute; width: 16px; height: 8px; background: #cbb89a; border-radius: 4px 4px 2px 2px; bottom: 0; animation: bob 2.4s steps(2) infinite; }
+.cat .e1, .cat .e2 { position: absolute; width: 0; height: 0; border-left: 3px solid transparent; border-right: 3px solid transparent; border-bottom: 4px solid #cbb89a; top: -3px; }
+.cat .e1 { left: 1px; } .cat .e2 { left: 9px; }
+.cat .t { position: absolute; width: 8px; height: 3px; background: #cbb89a; border-radius: 2px; right: -6px; bottom: 4px; }
+@keyframes bob { from{ transform: translateY(0); } to{ transform: translateY(-2px); } }
 
 /* ===== 窗外体积光束 ===== */
 .godray { position: absolute; pointer-events: none; mix-blend-mode: screen; opacity: .5;
