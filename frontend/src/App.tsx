@@ -7,6 +7,7 @@ import { useMorningReport } from '@/hooks/useMorningReport';
 import { Office } from '@/office/Office';
 import { enqueueTask, getInitialState } from '@/services/commands';
 import { Atmosphere } from '@/shell/Atmosphere';
+import { BriefCard } from '@/shell/BriefCard';
 import { Caption } from '@/shell/Caption';
 import { CommandPalette } from '@/shell/CommandPalette';
 import type { QuiverCommand } from '@/shell/commandRegistry';
@@ -16,17 +17,18 @@ import { MorningReport } from '@/shell/MorningReport';
 
 const DEFAULT_CAPTION = '你是 CEO。经理在领导区待命 —— 点「CEO 下目标」把一件事交给公司，它自己跑。';
 
-/** 派给公司的示例目标(轮流取),移植原型 GOALS。真正的 Brief 复述/报价流程留后续切片。 */
+/** 派给公司的示例目标(轮流取),移植原型 GOALS。 */
 const GOALS = ['做转写的导出功能', '修登录态丢失', '给看板加暗色模式', '把召回准确率提上去', '补端到端测试', '清掉废弃依赖'];
 
 /** 当前打开的叠层(同一时刻至多一个)。 */
-type Overlay = 'none' | 'cmdk' | 'report';
+type Overlay = 'none' | 'cmdk' | 'report' | 'brief';
 
-/** 应用根:等距办公室舞台 + 叠层 + 画面后期。叠层开合、派活、状态条文案在此编排。 */
+/** 应用根:等距办公室舞台 + 叠层 + 画面后期。叠层开合、派活握手、状态条文案在此编排。 */
 export function App() {
   const hud = useHud();
   const [overlay, setOverlay] = useState<Overlay>('none');
   const [caption, setCaption] = useState(DEFAULT_CAPTION);
+  const [briefGoal, setBriefGoal] = useState(GOALS[0]);
   const report = useMorningReport(overlay === 'report');
   const goalIdx = useRef(0);
 
@@ -48,8 +50,12 @@ export function App() {
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
-  const dispatchGoal = useCallback(async () => {
-    const goal = GOALS[goalIdx.current++ % GOALS.length];
+  const openBrief = useCallback(() => {
+    setBriefGoal(GOALS[goalIdx.current++ % GOALS.length]);
+    setOverlay('brief');
+  }, []);
+
+  const enqueueGoal = useCallback(async (goal: string) => {
     setCaption(`CEO → 经理：「${goal}」—— 已派给公司（simulate，免费跑）。`);
     try {
       await enqueueTask(goal, 'simulate');
@@ -58,21 +64,34 @@ export function App() {
     }
   }, []);
 
+  const confirmBrief = useCallback(
+    (goal: string) => {
+      setOverlay('none');
+      void enqueueGoal(goal);
+    },
+    [enqueueGoal],
+  );
+
   const runCommand = useCallback(
     (cmd: QuiverCommand) => {
       if (cmd.id === 'report') {
         setOverlay('report');
         return;
       }
+      if (cmd.id === 'new-task') {
+        openBrief();
+        return;
+      }
       setOverlay('none');
-      if (cmd.id === 'dispatch' || cmd.id === 'new-task') {
-        void dispatchGoal();
+      if (cmd.id === 'dispatch') {
+        // 「派活」走快通道:不开 Brief,直接让经理开一个示例任务。
+        void enqueueGoal(GOALS[goalIdx.current++ % GOALS.length]);
         return;
       }
       // 其余命令的真实动作随对应面板/流程建好再接;先给状态条反馈,不留死按钮。
       setCaption(`「${cmd.label}」即将接入 —— 对应面板 / 流程建设中。`);
     },
-    [dispatchGoal],
+    [openBrief, enqueueGoal],
   );
 
   return (
@@ -81,11 +100,12 @@ export function App() {
         <Office />
       </div>
       <Hud data={hud} />
-      <Ctrls onCmdk={() => setOverlay('cmdk')} onReport={() => setOverlay('report')} onGoal={() => void dispatchGoal()} />
+      <Ctrls onCmdk={() => setOverlay('cmdk')} onReport={() => setOverlay('report')} onGoal={openBrief} />
       <Caption text={caption} />
       <div className={`scrim${overlay !== 'none' ? ' on' : ''}`} onClick={() => setOverlay('none')} />
       <CommandPalette open={overlay === 'cmdk'} onRun={runCommand} />
       <MorningReport open={overlay === 'report'} data={report} onClose={() => setOverlay('none')} />
+      <BriefCard open={overlay === 'brief'} defaultGoal={briefGoal} onClose={() => setOverlay('none')} onConfirm={confirmBrief} />
       <Atmosphere spentUsd={hud.spentUsd} budgetCapUsd={hud.budgetCapUsd} />
       <div id="vignette" />
       <div id="grain" />

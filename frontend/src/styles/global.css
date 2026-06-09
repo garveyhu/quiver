@@ -209,6 +209,12 @@ body {
 .pbtn:active { transform: translateY(1px) scale(.985); }
 .pbtn.go { color: #0e1a10; font-weight: 600; background: linear-gradient(180deg,#a6eaa6,#6cc47a); border: 0; box-shadow: 0 4px 14px rgba(108,196,122,.26), inset 0 1px 0 rgba(255,255,255,.4); }
 .pbtn.go:hover { background: linear-gradient(180deg,#b0f0b0,#75cd83); }
+.field { width: 100%; background: var(--s-inset); border: 1px solid var(--bd-strong); border-radius: var(--r-2); color: var(--tx-1); font-family: var(--ui); font-size: 14px; line-height: 1.5; padding: 12px 13px; resize: none; transition: border-color var(--t-fast), box-shadow var(--t-fast); }
+.field:focus { outline: 0; border-color: rgba(255,210,122,.5); box-shadow: 0 0 0 3px var(--accent-dim); }
+.kv { display: flex; gap: 10px; padding: 4px 0; font-size: 12.5px; line-height: 1.5; }
+.kv b { color: var(--tx-2); min-width: 52px; font-weight: 500; letter-spacing: .2px; }
+.kv span { color: var(--tx-1); }
+.pbtn:disabled { opacity: .5; cursor: not-allowed; }
 .rev { font-size: 12.5px; padding: 8px 10px; background: var(--tint-hi); border: 1px solid var(--bd-soft); border-radius: var(--r-1); display: flex; align-items: center; gap: 9px; flex-wrap: wrap; transition: background var(--t-fast), border-color var(--t-fast); }
 .rev:hover { background: rgba(255,255,255,.06); border-color: var(--bd); }
 .body .rev + .rev { margin-top: 6px; }

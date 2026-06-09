@@ -57,6 +57,22 @@ export type AgentEvent =
   | (AgentEventBase & { kind: 'error'; code: string; message: string })
   | (AgentEventBase & { kind: 'finished'; status: string; costUsd: number | null; branch: string | null; verifyOutput: string });
 
+/** 经理一拍的决策(§21,action 标签)。本前端主要用 action;字段按需。 */
+export interface Decision {
+  action: 'spawn' | 'continue' | 'deliver' | 'block' | 'escalate' | 'refresh_memory' | 'noop';
+  prompt?: string;
+  reason?: string;
+}
+
+/** AI 经理在此刻真实局面下的决策预览(manager_preview,只看不动)。 */
+export interface ManagerPreview {
+  inflight: number;
+  queued: number;
+  maxInflight: number;
+  budgetRemainingUsd: number;
+  decision: Decision;
+}
+
 /** 看板任务行(list_tasks)。 */
 export interface TaskRecord {
   id: string;
