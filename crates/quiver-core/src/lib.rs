@@ -1,3 +1,4 @@
+pub mod capability;
 pub mod circuit;
 pub mod event;
 pub mod git;
