@@ -6,6 +6,26 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 24 轮(loop 已改 5 分钟间隔)
+
+**落了什么**
+- `c2b61af` feat(memory): 机械印证升信任档 corroborate_fact(P2 §6.2)
+
+**这轮**:续 P2 机制层——`corroborate_fact`:同一事实被 ≥2 个独立绿测试 episode 印证 →
+Rust 机械升到「已验证·印证」(AI 碰不到授予)。`fact_corroboration` 复合主键=集合语义
+(记集合不记计数、重放幂等);只升不降。验证:cargo test -p quiver-memory(22 过)+ check。
+(修了一处 SQL 注释 ASCII 引号闭合 Rust 字符串的编译错,改全角。)
+
+**P2 机制层进度**:✅ 作废 supersede、✅ 待审 staging+promote、✅ 印证升档 corroborate。
+**剩(机制)**:状态唯一约束(§6.4,需给 memory_fact 加 entity 列做部分唯一索引,且 supersede
+要先退后插以不违约——略复杂)。**仍卡你**:向量召回(sqlite-vec 依赖 + 千问 key)、AI 判断触发。
+
+**进度**:🎉 P0 ✅ · P1 ✅ · 前端核心+交互 ✅ · P2 机制层大部完成。git 本地领先 origin 多个(未推)。
+**⚠ 等你**:推送/合 main、关 live 实例做 e2e、向量依赖拍板、loop 继续否。
+**今天该接哪**:P2 状态唯一约束(略复杂,可做)或回头补前端微调;向量需你拍依赖。
+
+---
+
 ### 2026-06-09 · 第 23 轮
 
 **落了什么**
@@ -863,6 +883,9 @@ stats=小后端切片 / 连续语义缩放增强=较复杂)。
 ---
 
 ## 📜 历轮记录
+
+### 第 24 轮(2026-06-09)
+- P2 续:corroborate_fact 机械印证升信任档(fact_corroboration 集合表,§6.2)(`c2b61af`);quiver-memory 22 过。loop 改 5 分钟。
 
 ### 第 23 轮(2026-06-09)
 - P2 续:memory_staging 待审区 + stage/pending/promote(§6.4 防投毒)(`14f5a52`);quiver-memory 20 过。
