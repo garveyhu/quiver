@@ -6,6 +6,19 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 🎨 前端重写 · 第 4 刀:右列房间家具 — 静态办公室收口
+- `70ce404` feat(office): 右列房间静态家具。`office/furniture` 加 qaBench(审查屏+扫描线)、
+  board(三列看板卡片)、memoryBook(经理记忆书)、safeBox(保险柜+转盘)、shipBay(卷帘门+警示条+出货灯)、
+  crateStack(货箱堆);buildScene `furnishRightColumn` 装配质检台/领导区/运维·预算/发货口四间。
+  纯加家具函数,复用已有原语,无新 CSS。
+- **🎉 等距办公室静态美术全部到齐**:休息室 + 工位区 + 右列四间,全代码生成像素、零图片资源。
+- **验证**:`tsc --noEmit` 过;真窗口截图对照原型 —— 整间办公室家具齐全、几何配色贴原型
+  (947 polys / 13 pscan=12工位+1质检 / 117 LED),console 无 error/warn。
+- **▶ 下一刀(转动态)**:① 氛围粒子(dust 浮尘 / stars 窗外星 / shootstar,纯 CSS 动画);
+  ② **§8.3 接真实数据**:get_initial_state/get_stats/list_tasks → HUD 真值 + 看板。
+  这一刀起要建 services 具名命令封装 + wire 类型(**以 src-tauri/src/lib.rs 为准核对 camelCase**)、
+  TanStack 风格的数据 hook(或轻量 hook)。收尾已拆实例、腾空 :1420。**绝不 push/合 main**。
+
 ### 2026-06-09 · 🎨 前端重写 · 第 3 刀:休息室静态家具
 - `029a001` feat(office): 休息室静态家具。
   - `office/furniture` 加休息室件:patternRug(三层花纹+中心菱形)、sofa ×2(底座/靠背/扶手/坐垫)、
