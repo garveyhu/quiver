@@ -6,6 +6,21 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 🧵 前端重写 · 第 18 刀:worksurf 深挖接 get_task_events — 真实事件轨迹
+- `77a6988` feat(office): 下钻再往里一层看真实运行轨迹。
+  - `services`:加 `getTaskEvents(taskId)` + wire `StoredEvent`(camelCase,payloadJson 串)。
+  - `hooks/useTaskEvents`:taskId 变化拉一次 + 订阅 agent-event(该任务来新事件就重拉),worksurf 实时填充。
+  - `office/workers`:working 工人带 taskId。`office/Worksurf`:有 taskId 则渲染事件流(解析 payloadJson →
+    开工/工具/输出/结果/终态,按 kind 上色)。Office 拉 events 传入。
+- **验证**:`tsc` 过;真窗口经 bridge 派活→趁工位工人在点它下钻→worksurf 实时显示真实流:
+  开工·claude-sonnet-4-5 → Edit·edit main.rs → 输出 → 结果·$0.01·2轮 → 终态·verified;截图对照原型;console 无报错。
+- **🎉 读类 IPC 基本全接**:get_initial_state · get_stats · get_metrics · list_tasks · manager_preview ·
+  get_episodes · get_settings · get_task_events + 写:enqueue_task_cmd · update_settings + 事件:agent-event · task-updated。
+  **余**:get_brief(facts 当前 0,记忆未接入,接了也空)· cancel_task_cmd/reorder_task(看板写操作)。
+- **▶ 下一刀**:① 走廊寻路(经 HALLS 折线)+ 交质检/发货走位 + 验收灯效(qaBench 绿/红闪、发货动画);
+  ② 看板取消/拖排(cancel_task_cmd/reorder_task,需在途任务);③ 急停命令接真(批量 cancel);
+  ④ 设置写面板。收尾已拆实例、腾空 :1420。**绝不 push/合 main**。
+
 ### 2026-06-09 · 🔬 前端重写 · 第 17 刀:语义缩放上层 — 点小人下钻(相机飞入 + worksurf)
 - `b81c538` feat(office): §8.5 连续语义缩放的上层(滚轮缩放第 12 刀已有,本刀补点击下钻)。
   - `office/useCamera`:暴露 `diveTo(x,y)`(飞入聚焦 fit*6,平滑动画)+ `reset()`;worksurf 打开时也不抢滚轮。
