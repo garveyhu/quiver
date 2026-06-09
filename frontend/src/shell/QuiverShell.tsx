@@ -37,6 +37,7 @@ import { ProjectDialog } from './ProjectDialog';
 import { CommandPalette } from './CommandPalette';
 import type { PaletteCommand } from './CommandPalette';
 import { TaskCard } from './TaskCard';
+import { BriefPanel } from './BriefPanel';
 
 type View = 'board' | 'archive' | 'settings';
 
@@ -442,6 +443,9 @@ export function QuiverShell() {
                   </div>
                 </Panel>
               )}
+
+              {/* 经理记忆书 · 简报(§6/§22):有记忆才显示,免占空 Rail。 */}
+              <BriefPanel />
             </div>
           )}
 
