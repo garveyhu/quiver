@@ -6,6 +6,23 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 🕰 前端重写 · 第 15 刀:时间线面板 — 过夜交付记录接 get_episodes
+- `2b3b4d7` feat(shell): 时间线面板。(先起真窗口探得 get_episodes 有 7 条真数据、get_brief facts 0/episodes 7,
+  故选 episodes 时间线。)
+  - `services`:加 `getEpisodes(limit)` + wire `EpisodeRecord`(camelCase,以 quiver-memory/episodes.rs 为准:
+    summary/verifyResult/diffStat/commitSha/createdAt…)。
+  - `hooks/useEpisodes` + `shell/Timeline`:按时间倒序列出过夜每笔交付(时刻 HH:MM + 目标 + 验收徽章 +
+    diff/提交)。原型 scrub+ghost 位置回放依赖未记录的历史坐标,故落地为真实 episode 列表。复用 .panel/.rev。
+  - `App`:加 'timeline' 叠层,命令栏「看整夜时间线」→ 开。
+- **验证**:`tsc` 过;真窗口经 bridge ⌘K→「看整夜时间线」→ 7 条真实 episode(22:43 做转写的导出功能 审计通过
+  41e5502 …),贴原型;console 无报错。**至此 get_episodes IPC 接通。**
+- **已接 IPC**:get_initial_state · get_stats · get_metrics · list_tasks · manager_preview · get_episodes ·
+  enqueue_task_cmd · agent-event · task-updated。**未接**:get_brief(facts 当前为 0,记忆未接入)·
+  get_settings/update_settings(可去掉 HUD 硬编码预算 30)· cancel_task_cmd/reorder_task(看板写操作)。
+- **▶ 下一刀**:① 设置面板(get_settings/update_settings,顺带把 HUD/Atmosphere 的预算上限接真,去硬编码 30);
+  ② 语义缩放上层(worksurf/dive,点小人接 get_task_events);③ 走廊寻路 + 交质检/发货走位 + 验收灯效;
+  ④ 看板拖排(reorder_task/cancel_task_cmd)。收尾已拆实例、腾空 :1420。**绝不 push/合 main**。
+
 ### 2026-06-09 · 🛡 前端重写 · 第 14 刀:信任卡 — 自治战绩接 get_metrics
 - `3166015` feat(shell): 移植原型 openTrust。
   - `services`:加 `getMetrics()` + wire `MetricsDto`(runs/verified/failed/verifyRate/p50·p95/cost)。
