@@ -6,6 +6,16 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 集成阶段 · 第 4 刀:manager_preview(编排器接真实状态)
+- `deb2201` feat(app): manager_preview IPC —— 组装真实 ManagerContext(在途/排队/上限/预算)+
+  免费 RuleBrain 跑一拍,返回经理此刻的决策。只看不动(不 spawn/不花钱)。src-tauri 加 quiver-
+  orchestrator 依赖。
+- 🎉 真跑验证:真窗口 invoke('manager_preview') → {inflight 0, queued 0, maxInflight 1, decision noop}
+  (无排队 → RuleBrain 正确不派活)。§5 经理已接真实状态。
+- **▶ 下一块集成**:① 真接调度:把 manager 的 tick→Effect 接进 scheduler 真起 worker(QwenBrain
+  可选档,大+花钱);② supervisor 验收接 clean_clone_verify + judge_acceptance(触 verify 路径);
+  ③ 沙箱套 spawn(gated)。cron 06a96c93 在跑。
+
 ### 2026-06-09 · 集成阶段 · 第 3 刀:独立审计动态半 clean_clone_verify
 - `3ed1581` feat(core): clean_clone_verify —— 把成果完整克隆到干净副本、检出 commit、跑 verify,
   挫败 worktree 内对测试的篡改。真 git fixture 测过(clone+隔离 verify)。quiver-core audit 5 过 + 无警告。
