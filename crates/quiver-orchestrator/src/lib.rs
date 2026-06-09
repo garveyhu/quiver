@@ -14,12 +14,14 @@ mod engine;
 mod flow;
 mod gate;
 mod ladder;
+mod submanager;
 #[cfg(feature = "qwen")]
 pub use brain::QwenBrain;
 pub use engine::{Effect, Orchestrator, Step};
 pub use flow::{Fence, InFlight, SagaLedger};
 pub use gate::{GateVerdict, ValueGate};
 pub use ladder::{Budget, EscalationLadder, Rung};
+pub use submanager::ManagerNode;
 
 use serde::{Deserialize, Serialize};
 
