@@ -19,6 +19,7 @@ use quiver_core::supervisor::{
     run_task_streaming, Cleanup, FinishStatus, RunOptions, RunOutcome, TaskSpec,
 };
 use quiver_core::verify::VerifyCommand;
+use quiver_memory::NewEpisode;
 use quiver_store::{NewEvent, NewRun, Settings, Store};
 
 /// The Tauri event channel the UI subscribes to (see `useSupervisor.ts`).
@@ -119,6 +120,9 @@ pub async fn run_one_task(
                 summary.branch.as_deref(),
                 crate::now_ms(),
             );
+            // Record a §6.2 episode (before `project`/`prompt`/`status` move into the
+            // run-history row below). Mechanical: what happened + its terminal status.
+            record_episode(app, &project, &task_id, &summary.status, &prompt);
             let _ = store.record_run(&NewRun {
                 project,
                 prompt,
@@ -136,8 +140,30 @@ pub async fn run_one_task(
             // here (no live error event from a finished worker) — the card status
             // carries it.
             let _ = store.update_task_status(&task_id, "failed", crate::now_ms());
+            record_episode(app, &project, &task_id, "failed", &prompt);
         }
     }
+}
+
+/// Record a §6.2 episode for a finished run into durable agent memory. Best-effort:
+/// memory is additive to the run loop, so a missing store or a write error never
+/// affects the task outcome. `commit_sha` / `diff_stat` are left for a follow-up
+/// that queries git post-run; this first wiring captures task/status/summary.
+fn record_episode(app: &AppHandle, project: &str, task_id: &str, verify_result: &str, summary: &str) {
+    let Some(state) = app.try_state::<crate::AppState>() else {
+        return;
+    };
+    let Some(mem) = state.memory.get() else {
+        return;
+    };
+    let _ = mem.record_episode(&NewEpisode {
+        project: project.to_string(),
+        task_id: Some(task_id.to_string()),
+        verify_result: Some(verify_result.to_string()),
+        summary: Some(summary.to_string()),
+        created_at: crate::now_ms(),
+        ..Default::default()
+    });
 }
 
 /// The streaming run core: resolve the binary + options for the mode, run the

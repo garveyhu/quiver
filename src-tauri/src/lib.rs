@@ -31,6 +31,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
+use quiver_memory::MemoryStore;
 use quiver_store::{
     InitialState, NewTask, Settings, SettingsPatch, Store, StoredEvent, TaskRecord,
 };
@@ -46,6 +47,9 @@ use crate::scheduler::{Scheduler, TASK_EVENT_CHANNEL};
 struct AppState {
     project_path: Mutex<Option<PathBuf>>,
     store: std::sync::OnceLock<Arc<Store>>,
+    /// Durable agent memory (episodes + facts, DESIGN §6). Shared as an `Arc` so
+    /// spawned queue workers can record episodes on completion. Installed in `setup`.
+    memory: std::sync::OnceLock<Arc<MemoryStore>>,
     scheduler: Scheduler,
     /// task_id → child PID of currently-running tasks. Populated when a task's
     /// agent spawns, removed when it ends. Read by `cancel_task_cmd` to stop a
@@ -476,6 +480,20 @@ pub fn run() {
             })?;
             let state = app.state::<AppState>();
             let _ = state.store.set(Arc::new(store));
+
+            // Open the durable agent memory (DESIGN §6/§20) alongside the operational
+            // store — a separate memory.sqlite. A failure here must not block startup
+            // (memory is additive to the run loop), so we only warn and carry on.
+            let mem_path = MemoryStore::default_db_path(&data_dir);
+            match MemoryStore::open(&mem_path) {
+                Ok(mem) => {
+                    let _ = state.memory.set(Arc::new(mem));
+                }
+                Err(e) => eprintln!(
+                    "Warning: could not open memory.sqlite at {}: {e:#}",
+                    mem_path.display()
+                ),
+            }
 
             // Crash recovery (DESIGN §23 P0): a prior session may have died mid-run,
             // leaving tasks stuck `running` and orphan worktrees behind. Requeue
