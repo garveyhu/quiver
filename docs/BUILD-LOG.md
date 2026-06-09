@@ -6,6 +6,19 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 🔬 前端重写 · 第 17 刀:语义缩放上层 — 点小人下钻(相机飞入 + worksurf)
+- `b81c538` feat(office): §8.5 连续语义缩放的上层(滚轮缩放第 12 刀已有,本刀补点击下钻)。
+  - `office/useCamera`:暴露 `diveTo(x,y)`(飞入聚焦 fit*6,平滑动画)+ `reset()`;worksurf 打开时也不抢滚轮。
+  - `office/Worker`:加 onClick → onDive(worker)。
+  - `office/Worksurf`:点小人落点面板,展示身份(员工#N/经理/审计)+ 当前状态/活动。**真实轨迹
+    (get_task_events 事件流/diff)留后续刀**。
+  - `Office`:focused 状态 + dive/closeDive + Esc 退出;`global.css` 加 .worksurf。
+- **验证**:`tsc` 过;真窗口经 bridge 点经理 → 相机飞入 scale 1.433→8.596(=fit*6) + worksurf「经理·领导区/
+  在领导区盯着公司」;Esc → 复位 1.433 + worksurf 关;截图对照原型;console 无报错。
+- **▶ 下一刀**:① worksurf 深挖接 get_task_events(点工位工人看真实事件流/diff,连最后一个未接 IPC);
+  ② 走廊寻路 + 交质检/发货走位 + 验收灯效(qaBench 绿/红闪);③ 看板拖排/取消(reorder_task/cancel_task_cmd);
+  ④ 记忆书(get_brief,facts 当前 0)。收尾已拆实例、腾空 :1420。**绝不 push/合 main**。
+
 ### 2026-06-09 · 💰 前端重写 · 第 16 刀:预算上限接 get_settings(去硬编码 30)
 - `0d03ab1` feat(hud): 把 HUD/Atmosphere 的预算上限从硬编码 30 改为真实 get_settings.nightlyBudgetUsd。
   - `services`:加 getSettings/updateSettings + wire Settings/SettingsPatch(camelCase,以 store/settings.rs 为准)。
