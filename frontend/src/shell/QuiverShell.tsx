@@ -67,6 +67,15 @@ export function QuiverShell() {
   const [queueCursor, setQueueCursor] = useState(-1);
   const dragId = useRef<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+  // 连续缩放(原型 §"连续语义缩放"的基础:.world transform:scale)。滚轮缩放等距办公室,
+  // 只缩 StudioRoom、不缩悬浮 HUD/Rail。语义增强(缩进→模糊→工作台详情)留后续切片。
+  const [zoom, setZoom] = usePersistedState('qv.zoom', 1);
+  const ZOOM_MIN = 0.5;
+  const ZOOM_MAX = 2.5;
+  const onStageWheel = (e: React.WheelEvent) => {
+    const factor = e.deltaY < 0 ? 1.08 : 1 / 1.08;
+    setZoom(z => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z * factor * 100) / 100)));
+  };
   // 委托队列:进行中的活在上(排队/运行/校验/待 rebase),最近完成的在下(压暗、只读),
   // 既不会被几十条"已合并"挤成网站式长列表,也不会空着。
   const TERMINAL = ['verified', 'done', 'failed', 'verify_failed'];
@@ -350,8 +359,22 @@ export function QuiverShell() {
       {/* —— 内容区:稳定的世界 + 悬浮 UI —— */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         {/* 稳定世界:全幅场景始终常驻(UI 悬浮其上、不挤压它,切视图也不重挂载/重排) */}
-        <div className="qv-stage" style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
-          <StudioRoom workers={roomWorkers} onWorkerClick={(id) => setSelected(id)} focusedTaskId={selected ?? undefined} />
+        <div className="qv-stage" onWheel={onStageWheel} style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+          {/* 只缩这层办公室世界,悬浮 HUD/Rail(下面的兄弟节点)不受缩放影响 */}
+          <div style={{ position: 'absolute', inset: 0, transform: `scale(${zoom})`, transformOrigin: 'center center', transition: 'transform .12s ease-out' }}>
+            <StudioRoom workers={roomWorkers} onWorkerClick={(id) => setSelected(id)} focusedTaskId={selected ?? undefined} />
+          </div>
+
+          {/* 缩放读数:仅缩放态显示,点一下复位(滚轮缩放办公室) */}
+          {zoom !== 1 && (
+            <div
+              onClick={() => setZoom(1)}
+              title="点按复位缩放"
+              style={{ position: 'absolute', bottom: 56, left: 12, zIndex: 7, cursor: 'pointer', fontSize: 11, color: cssVar('dim'), background: PALETTE.night, padding: '3px 8px', boxShadow: 'inset 0 0 0 1px ' + PALETTE.wall }}
+            >
+              {Math.round(zoom * 100)}% ⟲
+            </div>
+          )}
 
           {/* HUD 仪表:左上悬浮 */}
           <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', maxWidth: 'calc(100% - 20px)', zIndex: 6 }}>
