@@ -6,6 +6,21 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 🔌 前端重写 · 第 5 刀:接真实数据 — HUD 接 get_stats/list_tasks
+- `50792f8` feat(hud): HUD 显示真实后端数据(§8.3 接数据第一刀,从静态美术转活)。
+  - `services/wire`:**以 lib.rs/store 核对**的 camelCase wire 类型 —— Stats{total/verified/
+    failed/costUsd/xp/level/spentDay/spentMonth/verifiedDay/failedDay}、TaskRecord、TaskStatus。
+  - `services/commands`:具名命令封装 `getStats` / `listTasks(project?,status?)`。
+  - `hooks/useHud`:挂载拉 get_stats + 在途(running)任务数,订阅 `task-updated` 事件实时刷新;
+    后端不可用静默退化占位 0(不破画面)。
+  - `shell/Hud` 接 useHud:经理/运行/通过/今夜花费/预算条全改真值。
+- **验证**:`tsc --noEmit` 过;真窗口 —— 后端 get_stats(total 45/verified 42/failed 3/level 7/
+  spentDay 0),HUD 显示「通过 42」「$0.00/30」「运行 0」精确一致,console 无报错。
+  (spentDay=0 是真值:那批任务 run 在滚动 24h 窗外。)
+- **▶ 下一刀**:① **看板**(list_tasks → 任务卡看板,工位区/发货口呈现真实任务,§8.3);② 工人落瓦片 +
+  listen('agent-event') 实时动画(§8.4,simulate 跑 fake-claude 验);③ 氛围粒子。
+  事件通道确认:`agent-event`(带 taskId) / `task-updated`(刷看板)。收尾已拆实例、腾空 :1420。**绝不 push/合 main**。
+
 ### 2026-06-09 · 🎨 前端重写 · 第 4 刀:右列房间家具 — 静态办公室收口
 - `70ce404` feat(office): 右列房间静态家具。`office/furniture` 加 qaBench(审查屏+扫描线)、
   board(三列看板卡片)、memoryBook(经理记忆书)、safeBox(保险柜+转盘)、shipBay(卷帘门+警示条+出货灯)、
