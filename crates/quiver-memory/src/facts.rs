@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use rusqlite::{params, OptionalExtension};
 
-use crate::MemoryStore;
+use crate::{Embedder, MemoryStore};
 
 /// Default scope for a fact when unspecified (DESIGN §19 — a fact is about the
 /// current repo unless promoted to company-wide).
@@ -443,6 +443,57 @@ impl MemoryStore {
         });
         ranked.truncate(limit);
         Ok(ranked)
+    }
+
+    /// Embed one fact's `text` with an injected `embedder` and store the vector
+    /// (§6.7). The store stays embedder-agnostic — callers pass the Embedder (Fake
+    /// in tests/simulate, 千问 in real runs). Use at insert/promote time.
+    pub fn embed_fact(
+        &self,
+        fact_id: i64,
+        text: &str,
+        embedder: &dyn Embedder,
+    ) -> anyhow::Result<()> {
+        let vecs = embedder.embed(std::slice::from_ref(&text.to_string()))?;
+        let vec = vecs
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("embedder 返回空结果"))?;
+        self.set_fact_embedding(fact_id, &vec, embedder.model())
+    }
+
+    /// Backfill embeddings for up to `limit` current-truth facts in `project` that
+    /// have none yet (batch-embed in one `embedder` call). Returns how many were
+    /// stored. Idempotent: a second call once everything is embedded returns 0.
+    pub fn embed_unembedded(
+        &self,
+        project: &str,
+        embedder: &dyn Embedder,
+        limit: usize,
+    ) -> anyhow::Result<usize> {
+        let pending: Vec<(i64, String)> = {
+            let conn = self.conn.lock().expect("memory store lock");
+            let mut stmt = conn.prepare(
+                "SELECT id, text FROM memory_fact
+                 WHERE project = ?1 AND invalid_at IS NULL AND embedding IS NULL
+                 ORDER BY id LIMIT ?2",
+            )?;
+            let rows = stmt
+                .query_map(params![project, limit as i64], |r| Ok((r.get(0)?, r.get(1)?)))?
+                .collect::<Result<Vec<_>, _>>()?;
+            rows
+        };
+        if pending.is_empty() {
+            return Ok(0);
+        }
+        let texts: Vec<String> = pending.iter().map(|(_, t)| t.clone()).collect();
+        let vecs = embedder.embed(&texts)?;
+        let mut stored = 0usize;
+        for ((id, _), v) in pending.iter().zip(vecs.iter()) {
+            self.set_fact_embedding(*id, v, embedder.model())?;
+            stored += 1;
+        }
+        Ok(stored)
     }
 }
 
@@ -889,5 +940,22 @@ mod tests {
         assert_eq!(hits[0].text, "tokio async runtime", "wins keyword+vector+intrinsic fusion");
         // B (no keyword/semantic match, high importance) still surfaces via the intrinsic leg.
         assert!(hits.iter().any(|f| f.text == "database schema"));
+    }
+
+    #[test]
+    fn embed_unembedded_backfills_and_is_idempotent() {
+        use crate::FakeEmbedder;
+        let store = MemoryStore::open_in_memory().unwrap();
+        store.insert_fact(&fact("/r", "alpha", 5, 1)).unwrap();
+        store.insert_fact(&fact("/r", "beta", 5, 1)).unwrap();
+        let emb = FakeEmbedder::new(8);
+
+        assert_eq!(store.embed_unembedded("/r", &emb, 100).unwrap(), 2, "both backfilled");
+        assert_eq!(store.embed_unembedded("/r", &emb, 100).unwrap(), 0, "nothing left to embed");
+
+        // The stored vectors are now queryable: alpha's own vector matches alpha.
+        let qv = emb.embed(&["alpha".into()]).unwrap().remove(0);
+        let hits = store.vector_search("/r", &qv, 2).unwrap();
+        assert_eq!(hits[0].text, "alpha", "alpha's own embedding is its closest match");
     }
 }
