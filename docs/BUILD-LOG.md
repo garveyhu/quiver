@@ -6,6 +6,46 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 18 轮
+
+**落了什么**
+- `d8233e8` build(deps): 锁定 quiver-memory 进 Cargo.lock(随推送补)
+- `0b7a3b0` feat(ui): 办公室连续缩放(滚轮 + 缩放读数,原型 §连续缩放基础)
+
+**这轮做了什么**
+- 你回来要求"推送一波到 github"——已把 `feat/game-first` 推到 `origin`
+  (github.com:garveyhu/quiver,原是空仓库,推了全历史 36M;首次 broken pipe、重试成功)。
+  随推前补了 Cargo.lock(加 quiver-memory 后的 lock 更新,保 fresh clone 一致)。
+- 续 loop 默认方向:**办公室连续缩放**——忠实原型 `.world transform:scale`:滚轮缩放
+  等距办公室(只缩 StudioRoom 那层、HUD/Rail 不缩),0.5–2.5 clamp + 持久化,缩放态显
+  「N% ⟲」读数点按复位。语义增强(缩进→模糊→工作台)留后。
+
+**验证过的**
+- `yarn tsc --noEmit` 过。
+- **真实运行实例里端到端验证缩放机制**(dev bridge 派发 wheel):向下滚 → 包裹层
+  transform=scale(0.93) + 徽章「93%」出现;反向滚 → 复位 scale(1) 徽章消失。测后已复位无痕。
+
+**git/推送状态**
+- `origin/feat/game-first` 已存在,推到 `d8233e8`。**本地现领先 origin**(0b7a3b0 缩放 +
+  本条 BUILD-LOG 未推)——红线仍是"非你明确要求不 push";要推再说一声。
+
+**各阶段进度**
+- 🎉 P0 ✅ · P1 ✅ · 前端 ✅;**前端交互补全开始**:连续缩放(基础)✅。
+- 剩前端交互:连续语义缩放(模糊→工作台)、时间轴、信任卡、晨报;后端 P2(待你拍板)。
+
+**⚠ 需要你拍板 / 处理**(同前,你在线了)
+- runtime 验证债:你的 live dev 实例(旧二进制)仍占 :1420;关掉我可重建做 e2e
+  (记忆 episode 落库含 commit/diff + BriefPanel 真数据)。
+- 方向:继续前端交互补全(默认),还是开 P2(向量+图书管理员),还是先 squash/理顺
+  提交再合 main?repo 根残留(png 删除/tauri.conf/未追踪 docs)要不要我落一个清理 commit?
+
+**今天该接哪**
+1. 前端交互继续:时间轴 或 信任卡(纯前端 tsc+bridge 可验),或连续语义缩放增强。
+2. (你关 live 实例后)记忆接线 e2e 验证。
+3. (待拍板)P2 起步 / 提交理顺 / repo 根清理。
+
+---
+
 ### 2026-06-09 · 第 17 轮
 
 **落了什么**
@@ -713,6 +753,12 @@
 ---
 
 ## 📜 历轮记录
+
+### 第 18 轮(2026-06-09)
+- 应用户要求把 feat/game-first 推到 origin(空仓库,推全历史,重试成功);补 Cargo.lock(`d8233e8`)。
+- 前端连续缩放:滚轮缩放办公室 + 读数复位,忠实原型 .world scale(`0b7a3b0`);
+  bridge 真机验证 wheel→scale→复位。
+- 验证:tsc + dev bridge wheel 派发端到端。
 
 ### 第 17 轮(2026-06-09)
 - episode 绑 diff_stat:GitGuard::diff_stat + base_sha 捕获 + RunOutcome/RunSummary/
