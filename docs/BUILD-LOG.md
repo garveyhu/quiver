@@ -6,6 +6,39 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 15 轮
+
+**落了什么**
+- `3073b14` feat(ui): 经理记忆书·简报 Rail 面板(接 useBrief)
+
+**这轮做了什么**
+- BriefPanel(§6/§22 领导区):用 useBrief 读 get_brief,在右栏 Rail 渲染当前真相事实
+  (trust 上色 + importance)+ 近期 episode(终态上色);空记忆返回 null 不占位;纯 CSS
+  像素风,颜色全取 PALETTE。**至此 brief 纵向切片端到端完整**:
+  quiver-memory.brief → get_brief IPC → useBrief hook → BriefPanel UI。
+
+**验证过的**
+- `yarn tsc --noEmit` 过。
+- **经 dev bridge 对热重载后的运行实例做了 DOM 验证**(vite HMR 让纯前端改动即时生效):
+  app 正常渲染(.qv-stage 204 元素)、无白屏、无 console 报错;面板按预期缺席(运行的
+  是旧二进制无 get_brief,useBrief 静默退化)。**带数据的像素视觉对照仍待重建**(见 ⚠)。
+
+**各阶段进度**
+- 🎉 后端 P0 全完成;前端 ✅ 落定+运行验证+IPC 完整。
+- **P1 记忆:schema + 读写 + FTS5 + recall + brief + 接进 app + get_brief/useBrief +
+  BriefPanel UI**。记忆这条线后端+数据层+UI 都通了,只差带真数据的运行时确认。
+
+**今天该接哪**(优先级从上到下)
+1. **(需你先关 live 实例 pid 34558)合并 runtime 验证**:重建起 app → 跑 simulate 任务 →
+   ① memory.sqlite 有 episode(记忆接线 e2e)② BriefPanel 显示真数据 ③ 截图视觉对照原型。
+   这是攒了几轮的验证债,关掉旧实例就能一次还清。
+2. **episode 补 git 细节**(§6.2):GitGuard::head_sha(worktree)→ supervisor 在 cleanup 前
+   把 commit_sha 带进 RunOutcome → run.rs 填进 episode。可在 quiver-core 内测(cargo),
+   不被 live 实例阻塞——**纯后端可独立推进的下一刀**。
+3. P2 起步评估(向量 sqlite-vec + 图书管理员作废)——大阶段,建议你早上拍板再开。
+
+---
+
 ### 2026-06-09 · 第 14 轮
 
 **落了什么**
@@ -599,6 +632,11 @@
 ---
 
 ## 📜 历轮记录
+
+### 第 15 轮(2026-06-09)
+- BriefPanel UI:经理记忆书·简报 Rail 面板接 useBrief(`3073b14`)。brief 纵向切片
+  端到端完整(memory→IPC→hook→UI)。
+- 验证:tsc + dev bridge DOM(HMR 后 app 正常、面板按预期缺席)。带数据视觉待重建。
 
 ### 第 14 轮(2026-06-09)
 - get_brief IPC + useBrief hook:经理简报数据层端到端(quiver-memory 加 Serialize、
