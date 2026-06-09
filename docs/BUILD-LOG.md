@@ -6,6 +6,16 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 38 轮(后端收尾 · §5 编排基座开张)
+- `09d8f16` feat(orchestrator): §5 编排基座 —— 新 crate quiver-orchestrator。
+  Decision(§21 结构化决策 Spawn/Continue/Deliver/Block/Escalate/RefreshMemory/Noop)+
+  ManagerContext(压扁局面)+ ManagerBrain trait + FakeBrain(测试)+ RuleBrain(P0 无 AI 兜底)。
+  验证:quiver-orchestrator 4 过 + workspace check 无警告。
+- **▶ 下一步(§5 续)**:① saga_step 去重钥匙=决策序号(幂等重放,store 已有 saga_step 列?
+  对账)+ 栅栏令牌(§5.5);② 有界在途状态机(§5.6,跟 max_inflight);③ 真 LLM
+  ManagerBrain(QwenBrain,§21 json-schema 输出 Decision)+ smoke 真跑;④ 接 runner/
+  scheduler 把 Decision 执行起来。之后 P3 安全 → P4 → P5。
+
 ### 2026-06-09 · 第 37 轮(后端收尾 · P2 图书管理员真 LLM 判断 — 🎉 P2 记忆完成)
 - `244334a` feat(memory): QwenJudge 真 LLM 矛盾判断器 + smoke 真跑。
   🎉 **真跑验证**:「SQLite→PostgreSQL」→IncomingSupersedes ✓、「前端React/后端Rust」
