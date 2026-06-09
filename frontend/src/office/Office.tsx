@@ -1,9 +1,9 @@
-import { useMemo, type CSSProperties, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 
 import { useWorkers } from '@/hooks/useWorkers';
 import { buildScene } from '@/office/buildScene';
 import type { SceneNode } from '@/office/primitives';
-import { useFitScale } from '@/office/useFitScale';
+import { useCamera } from '@/office/useCamera';
 import { Worker } from '@/office/Worker';
 
 /** 节点内部内容:复合结构(猫) > 可扩展"＋" > 标签文字 > 空。 */
@@ -23,27 +23,27 @@ function nodeChildren(node: SceneNode): ReactNode {
   return node.text;
 }
 
-/** 等距像素办公室。构建一次静态场景 + 初始工人，按窗口尺寸整体缩放居中。 */
+/** 等距像素办公室。构建一次静态场景 + 实时工人，滚轮连续缩放、按窗口 fit 居中。 */
 export function Office() {
   const scene = useMemo(() => buildScene(), []);
   const workers = useWorkers(scene.layout);
-  const scale = useFitScale(scene.layout.worldW, scene.layout.worldH);
-
-  const worldStyle: CSSProperties = { width: scene.layout.worldW, height: scene.layout.worldH };
-  (worldStyle as Record<string, string | number>)['--s'] = scale;
+  const camera = useCamera(scene.layout.worldW, scene.layout.worldH);
 
   return (
-    <div className="scene-fit">
-      <div className="world" style={worldStyle}>
-        {scene.nodes.map(node => (
-          <div key={node.key} className={node.className} style={node.style}>
-            {nodeChildren(node)}
-          </div>
-        ))}
-        {workers.map(w => (
-          <Worker key={w.id} worker={w} />
-        ))}
+    <>
+      <div className="scene-fit">
+        <div className="world" style={camera.worldStyle}>
+          {scene.nodes.map(node => (
+            <div key={node.key} className={node.className} style={node.style}>
+              {nodeChildren(node)}
+            </div>
+          ))}
+          {workers.map(w => (
+            <Worker key={w.id} worker={w} />
+          ))}
+        </div>
       </div>
-    </div>
+      <div className={`zoomhint${camera.zoomed ? ' on' : ''}`}>滚轮缩放 · Esc / 双击 复位</div>
+    </>
   );
 }

@@ -36,7 +36,9 @@ body {
 /* ===== 舞台 + 等距世界 ===== */
 .stage { position: fixed; inset: 0; background: radial-gradient(130% 100% at 50% 32%, #1b2440 0%, #10162b 62%, #0a0e1a 100%); }
 .scene-fit { position: absolute; inset: 0; display: grid; place-items: center; }
-.world { position: relative; transform: scale(var(--s,1)); transform-origin: center; }
+.world { position: relative; transform-origin: center; will-change: transform; }
+.zoomhint { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #7c89ad; z-index: 9000; opacity: 0; transition: opacity .3s; pointer-events: none; }
+.zoomhint.on { opacity: 1; }
 
 .tile { position: absolute; width: var(--tw); height: var(--th); margin-left: calc(var(--tw)/-2); margin-top: calc(var(--th)/-2);
   clip-path: polygon(50% 0,100% 50%,50% 100%,0 50%); }
