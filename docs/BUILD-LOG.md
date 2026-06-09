@@ -6,6 +6,23 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 🌌 前端重写 · 第 7 刀:氛围后期层(夜空/预算染色/浮尘)
+- 选这刀的理由:§8.4 工人实时动画**需真实跑任务才能自动验证**(当前 0 在途任务),风险大不易自检;
+  改挑完全可自验、高保真且能接真实数据的氛围层。
+- `8e301ec` feat(office): 氛围后期层。照原型移植画面后期:
+  - `shell/Atmosphere`:整夜缓慢循环夜空(nightTick 黄昏→深夜→黎明三段)+ 预算=能量染色
+    (budgetTick:花费逼近上限→转冷转暗、临界亮红边),ref+interval 驱动不触发重渲染;**预算口径接
+    §8.3 真实今夜花费**。
+  - `office/primitives` 加 `dust` 原语;`buildScene.ambientDust` 撒 26 粒暖白错落浮尘。
+  - `global.css` 加 #sky/#budgetTint/#rededge/.dust + floaty/redpulse 关键帧。
+  - 顺手把 `Hud` 改纯展示(接 props)、`App` 提升 useHud 为单一数据源分发给 Hud + Atmosphere。
+- **验证**:`tsc --noEmit` 过;真窗口 —— 26 浮尘 + 夜空渐变在跑 + 预算染色随真实 spend(=0 故无染色),
+  HUD 数据不变,console 无报错。
+- **▶ 下一刀**:① 余烬/流星/窗外星(微切片,需给 ceilLamp 记 LAMPS 位);② **§8.4 工人派活实时动画** ——
+  建议与 §8.6 的「派活」(enqueue_task_cmd,simulate 免费)一起做,这样能真触发任务→看工人 idle→走工位→
+  敲键→交质检→发货,用 agent-event 驱动,可自验;③ 命令栏(⌘K)/晨报/连续缩放等叠层(§8.5)。
+  收尾已拆实例、腾空 :1420。**绝不 push/合 main**。
+
 ### 2026-06-09 · 🧍 前端重写 · 第 6 刀:工人精灵 + 初始静态人口
 - `9e16c43` feat(office): 工人精灵 + 初始静态人口。照原型 makeWorker 移植像素工人。
   - `office/Worker`:精灵组件(shadow/body/stack/hair/hood/phones/visor/face/eye/torso/arms/
