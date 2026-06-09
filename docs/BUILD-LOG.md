@@ -6,6 +6,23 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 26 轮
+
+**落了什么**
+- `e9006fc` feat(memory): 读出 entity + current_state(模块当前状态查询,§6.4)
+
+**这轮**:补完整性缺口(上轮 entity 列只写不可读)——FactRecord 读出 entity、
+`current_state(project,entity)` 查模块当前 状态 事实、前端 wire 类型同步。
+验证:cargo test -p quiver-memory(25 过)+ check + tsc。
+
+**⚠ 我已到"独立干净推进"的尽头**(连续多轮在做完整性/边角)。实质进展需你解锁:
+向量召回(sqlite-vec+千问网络 API,离线难验)、AI 经理/编排(P2/P3)、P3 安全、
+推送合 main(本地领先 origin 18+)、关 live 实例做 e2e。**请拍个方向或说"停"。**
+
+**进度**:🎉 P0 ✅ · P1 ✅ · P2 机制层 ✅ · 前端核心+交互 ✅。
+
+---
+
 ### 2026-06-09 · 第 25 轮
 
 **落了什么**
@@ -908,6 +925,9 @@ stats=小后端切片 / 连续语义缩放增强=较复杂)。
 ---
 
 ## 📜 历轮记录
+
+### 第 26 轮(2026-06-09)
+- 完整性:FactRecord 读出 entity + current_state(模块当前状态,§6.4)(`e9006fc`);quiver-memory 25 过。
 
 ### 第 25 轮(2026-06-09)
 - P2 收尾:状态唯一约束(entity 列 + 部分唯一索引)+ supersede 先退后插(§6.4)(`7ee54df`);
