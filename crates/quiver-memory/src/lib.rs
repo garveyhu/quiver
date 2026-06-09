@@ -38,6 +38,8 @@ pub use embed::QwenEmbedder;
 pub use episodes::{EpisodeRecord, NewEpisode};
 pub use facts::{FactRecord, NewFact};
 pub use librarian::{ContradictionJudge, FakeJudge, Verdict};
+#[cfg(feature = "qwen")]
+pub use librarian::QwenJudge;
 pub use staging::{NewStaged, StagedRecord};
 
 /// A SQLite-backed durable memory store. Cheap to construct; one connection

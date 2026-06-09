@@ -33,6 +33,90 @@ impl ContradictionJudge for FakeJudge {
     }
 }
 
+/// Map a verdict string (from the LLM) to [`Verdict`]; unknown → `Independent`
+/// (the safe default — never retire a fact on an ambiguous answer).
+#[cfg_attr(not(feature = "qwen"), allow(dead_code))] // only QwenJudge (or tests) use it
+fn parse_verdict(s: &str) -> Verdict {
+    match s.trim().to_ascii_lowercase().as_str() {
+        "incoming_supersedes" => Verdict::IncomingSupersedes,
+        "keep_existing" => Verdict::KeepExisting,
+        _ => Verdict::Independent,
+    }
+}
+
+/// Extract the first balanced-ish `{…}` block from an LLM reply (tolerates code
+/// fences / prose around the JSON).
+#[cfg_attr(not(feature = "qwen"), allow(dead_code))] // only QwenJudge (or tests) use it
+fn extract_json_object(s: &str) -> Option<&str> {
+    let start = s.find('{')?;
+    let end = s.rfind('}')?;
+    if end > start {
+        Some(&s[start..=end])
+    } else {
+        None
+    }
+}
+
+/// 真 LLM 矛盾判断器(§21):问千问两条事实是否矛盾、谁当道,要 JSON 裁决。behind `qwen`
+/// feature(reqwest)。key 运行时从 ~/.agents/resources.json 读,绝不打印/提交。
+#[cfg(feature = "qwen")]
+pub struct QwenJudge {
+    creds: crate::QwenCreds,
+    model: String,
+    client: reqwest::blocking::Client,
+}
+
+#[cfg(feature = "qwen")]
+impl QwenJudge {
+    /// `profile` = `"personal"`/`"company"`; `model` e.g. `"qwen-plus"`/`"qwen-turbo"`.
+    pub fn new(profile: &str, model: impl Into<String>) -> anyhow::Result<Self> {
+        Ok(Self {
+            creds: crate::load_qwen_creds(profile)?,
+            model: model.into(),
+            client: reqwest::blocking::Client::new(),
+        })
+    }
+}
+
+#[cfg(feature = "qwen")]
+impl ContradictionJudge for QwenJudge {
+    fn judge(&self, existing: &str, incoming: &str) -> anyhow::Result<Verdict> {
+        use anyhow::Context;
+        let url = format!("{}/chat/completions", self.creds.base_url.trim_end_matches('/'));
+        let sys = "你是项目记忆库的图书管理员。判断两条关于同一项目的事实是否矛盾,以及该让哪条当道。只输出一个 JSON 对象,不要解释。";
+        let user = format!(
+            "已有事实:{existing}\n新来事实:{incoming}\n\n输出 {{\"verdict\":\"X\"}},X 取:\
+             independent(不冲突,各自成立)、incoming_supersedes(矛盾,新的取代旧的)、\
+             keep_existing(矛盾,但旧的更可信,保留旧的)。"
+        );
+        let body = serde_json::json!({
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": sys},
+                {"role": "user", "content": user}
+            ],
+            "temperature": 0
+        });
+        let resp = self
+            .client
+            .post(&url)
+            .bearer_auth(&self.creds.api_key)
+            .json(&body)
+            .send()
+            .context("千问判断请求失败")?
+            .error_for_status()
+            .context("千问判断返回错误状态")?;
+        let parsed: serde_json::Value = resp.json().context("千问判断响应非 JSON")?;
+        let content = parsed["choices"][0]["message"]["content"]
+            .as_str()
+            .context("千问响应缺 choices[0].message.content")?;
+        let obj = extract_json_object(content).context("千问回复里找不到 JSON 对象")?;
+        let v: serde_json::Value = serde_json::from_str(obj).context("裁决 JSON 解析失败")?;
+        let verdict = v["verdict"].as_str().context("裁决 JSON 缺 verdict")?;
+        Ok(parse_verdict(verdict))
+    }
+}
+
 impl MemoryStore {
     /// Retire a current fact: mark it invalid/retired now and link it as superseded by
     /// `superseded_by` (an already-existing fact). Returns true if it was current and
@@ -222,6 +306,23 @@ mod tests {
             .unwrap();
         assert!(retired.is_empty(), "无 entity → 不自动选候选");
         assert_eq!(store.current_facts("/r").unwrap().len(), 2);
+    }
+
+    #[test]
+    fn parse_verdict_maps_and_defaults_safe() {
+        assert_eq!(parse_verdict("incoming_supersedes"), Verdict::IncomingSupersedes);
+        assert_eq!(parse_verdict(" Keep_Existing "), Verdict::KeepExisting);
+        assert_eq!(parse_verdict("independent"), Verdict::Independent);
+        assert_eq!(parse_verdict("???"), Verdict::Independent, "unknown → 安全默认不作废");
+    }
+
+    #[test]
+    fn extract_json_object_tolerates_fences_and_prose() {
+        assert_eq!(
+            extract_json_object("```json\n{\"verdict\":\"x\"}\n```"),
+            Some("{\"verdict\":\"x\"}")
+        );
+        assert_eq!(extract_json_object("没有 JSON"), None);
     }
 
     #[test]
