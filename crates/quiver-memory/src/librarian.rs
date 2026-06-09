@@ -82,6 +82,38 @@ impl MemoryStore {
         Ok(retired)
     }
 
+    /// 便捷:新事实 `new_id` 自动挑候选(§6.4 矛盾位点 = 同一 `entity` 的其它当前事实)
+    /// 再 [`reconcile_fact`](Self::reconcile_fact)。新事实没 entity 时返回空(用显式
+    /// `reconcile_fact` 传候选)。语义邻居(vector)选候选是后续精化。
+    pub fn reconcile_new_fact(
+        &self,
+        new_id: i64,
+        judge: &dyn ContradictionJudge,
+        at_ms: i64,
+    ) -> anyhow::Result<Vec<i64>> {
+        let (project, entity): (String, Option<String>) = {
+            let conn = self.conn.lock().expect("memory store lock");
+            let row = conn
+                .query_row(
+                    "SELECT project, entity FROM memory_fact WHERE id = ?1 AND invalid_at IS NULL",
+                    params![new_id],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .optional()?;
+            row.ok_or_else(|| anyhow::anyhow!("new fact {new_id} 不存在或非当前真相"))?
+        };
+        let Some(entity) = entity else {
+            return Ok(Vec::new()); // 无实体 → 无自动候选
+        };
+        let candidates: Vec<i64> = self
+            .current_facts(&project)?
+            .into_iter()
+            .filter(|f| f.id != new_id && f.entity.as_deref() == Some(entity.as_str()))
+            .map(|f| f.id)
+            .collect();
+        self.reconcile_fact(new_id, &candidates, judge, at_ms)
+    }
+
     /// Text of a CURRENT fact by id (None if missing or already invalid).
     fn fact_text(&self, id: i64) -> anyhow::Result<Option<String>> {
         let conn = self.conn.lock().expect("memory store lock");
@@ -147,6 +179,48 @@ mod tests {
             .reconcile_fact(b, &[a], &FakeJudge(Verdict::Independent), 100)
             .unwrap();
         assert!(retired.is_empty(), "independent facts: nothing retired");
+        assert_eq!(store.current_facts("/r").unwrap().len(), 2);
+    }
+
+    fn fact_e(project: &str, text: &str, entity: &str) -> NewFact {
+        NewFact {
+            kind: "笔记".into(),
+            entity: Some(entity.into()),
+            ..fact(project, text)
+        }
+    }
+
+    #[test]
+    fn reconcile_new_fact_auto_selects_same_entity_only() {
+        let store = MemoryStore::open_in_memory().unwrap();
+        let old = store.insert_fact(&fact_e("/r", "A 用 RocksDB", "moduleA")).unwrap();
+        let new = store.insert_fact(&fact_e("/r", "A 改用 SQLite", "moduleA")).unwrap();
+        // 不同实体的事实绝不被当候选。
+        let other = store.insert_fact(&fact_e("/r", "B 用 Redis", "moduleB")).unwrap();
+
+        let retired = store
+            .reconcile_new_fact(new, &FakeJudge(Verdict::IncomingSupersedes), 100)
+            .unwrap();
+        assert_eq!(retired, vec![old], "只作废同实体的旧事实");
+        let current: Vec<i64> = store
+            .current_facts("/r")
+            .unwrap()
+            .into_iter()
+            .map(|f| f.id)
+            .collect();
+        assert!(current.contains(&other), "别的实体的事实不受影响");
+        assert!(!current.contains(&old));
+    }
+
+    #[test]
+    fn reconcile_new_fact_no_entity_is_noop() {
+        let store = MemoryStore::open_in_memory().unwrap();
+        store.insert_fact(&fact("/r", "用 SQLite")).unwrap();
+        let new = store.insert_fact(&fact("/r", "用 RocksDB")).unwrap();
+        let retired = store
+            .reconcile_new_fact(new, &FakeJudge(Verdict::IncomingSupersedes), 100)
+            .unwrap();
+        assert!(retired.is_empty(), "无 entity → 不自动选候选");
         assert_eq!(store.current_facts("/r").unwrap().len(), 2);
     }
 
