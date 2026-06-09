@@ -6,6 +6,33 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 27 轮 ⏸ LOOP 已暂停(等你拍板)
+
+**为什么暂停**:能独立、干净、可验证推进的实质工作已全部做完(见下)。再每 5 分钟自动
+唤醒只会硬凑边角、烧 token,违背"绝不空转"红线。故把 cron(5930b49c)**删了**。
+交接状态:`cargo check --workspace` ✅ + tsc ✅ + 工作树干净 + 本地领先 origin 18 个提交。
+**恢复**:回一句方向(下面任一),或重发 `/loop 5m …` 重新拉起。
+
+**已完成(全 cargo/tsc 验证,40+ 干净提交在 feat/game-first)**
+- 🎉 后端 P0 全 5 项:session_id 透出+落库+--resume 续接、reconcile 崩溃恢复、schema
+  崩溃恢复列、killpg 杀进程组无孤儿。
+- 🎉 P1 记忆:quiver-memory(episode/双时间事实/FTS5/recall §6.7/简报)+ 接进 app
+  (完成记 episode 绑 commit_sha/diff_stat)+ get_brief/useBrief/BriefPanel UI。
+- 🎉 P2 机制层:supersede 作废、staging 待审+promote、corroborate 印证升档、状态唯一+current_state。
+- 🎉 前端:Phaser→React/CSS 像素办公室迁移、命令栏、连续缩放(滚轮+键盘)、晨报(含昨晚窗)、
+  记忆书简报面板;均 dev bridge 真机验证。
+- 推送:feat/game-first 推过 origin 一次(到 d8233e8);之后 18 提交本地领先未推。
+
+**需要你拍板/解锁才能继续(按价值)**
+1. **向量召回**(P2 剩余):引 `sqlite-vec` 扩展 + 千问 v2 embedding 网络 API(key 运行时
+   读 ~/.agents/resources.json)。要我引依赖吗?(embedding 需联网,离线测不了。)
+2. **AI 经理/编排**(P2/P3):上 AI 决策,解锁信任卡等。大阶段。
+3. **P3 安全**:沙箱/独立审计/权能分权。大阶段。
+4. **收尾**:推剩余 18 提交 / 合 main / squash 不可独立编译的 a8502fd~75ee6c5 段 / 关你的
+   live dev 实例(旧二进制占 :1420)让我做 e2e 真机验证 / repo 根残留清理。
+
+---
+
 ### 2026-06-09 · 第 26 轮
 
 **落了什么**
