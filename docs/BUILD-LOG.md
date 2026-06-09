@@ -6,6 +6,39 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 10 轮
+
+**落了什么**
+- `f76cb0f` feat(memory): scaffold quiver-memory crate + memory.db 基础表（**P1 第一刀**)
+
+**这轮做了什么**
+- **IPC 完整性审计(无代码,结论)**:比对前端 15 个 `invoke()` 命令 vs lib.rs 注册命令
+  —— **全部对得上,无断裂、无缺口**。唯一注册但前端没用的是 `run_task_cmd`(单发路径,
+  已被 enqueue+scheduler 取代,无害)。前端↔后端 IPC 是完整的,没有补缺要做。
+- **启动 P1 记忆地基**(P0 已收官,按"顺序来"进 P1;新 crate 纯增量、不碰现有):
+  新增 `crates/quiver-memory`(镜像 quiver-store)+ memory.db 两张只追加基础表
+  episode(§6.2)+ memory_fact(§6.3 双时间事实全字段 + trust CHECK 五档)+ §20 索引。
+  P1 只追加;作废/FTS5/向量留后续刀(字段已为 P2 留好)。
+
+**验证过的**
+- `cargo test -p quiver-memory` ✅(5 过:迁移幂等 / 列齐 / trust CHECK 拒非法 / 默认当前真相)
+- `cargo check --workspace` ✅(exit 0,新 crate 入 workspace)
+
+**各阶段进度**
+- 🎉 后端 P0 全部完成(#1–#5)。
+- 前端:✅ 落定 + 运行时验证 + **IPC 完整**(无缺口)。
+- **P1 记忆地基:已起步**(crate + schema 落地;下一步 accessor + 简报 + FTS5)。
+
+**今天该接哪**(优先级从上到下)
+1. **P1 记忆 accessor 切片**:给 MemoryStore 加 `record_episode` / `insert_fact` /
+   `current_facts`(invalid_at IS NULL 查询)+ 测试——让只追加记忆真正可写可读。
+2. **P1 接线**:setup() 开 memory.sqlite(`MemoryStore::default_db_path`),merge 成功后
+   机械记一条 episode(绑 commit_sha + verify_result + diff_stat,§6.2 全机械、无 AI)。
+3. **P1 FTS5 + 简报(brief)**:memory_fact_fts(§20)+ 关键词检索 + 给经理的简报面。
+4. 前端视觉对照原型(仍需先解决截图:窗口可见 + 终端 Screen Recording 权限)。
+
+---
+
 ### 2026-06-09 · 第 9 轮
 
 **落了什么**
@@ -422,6 +455,13 @@
 ---
 
 ## 📜 历轮记录
+
+### 第 10 轮(2026-06-09)
+- IPC 完整性审计:前端 15 个 invoke 命令全部对上 lib.rs 注册命令,无缺口
+  (run_task_cmd 注册但前端没用=单发路径,无害)。无代码改动。
+- 启动 P1:scaffold quiver-memory crate + memory.db episode/memory_fact 只追加基础表
+  + §20 索引 + trust CHECK(`f76cb0f`)。
+- 验证:cargo test -p quiver-memory(5 过)+ cargo check --workspace 全过。
 
 ### 第 9 轮(2026-06-09)
 - P0 #5 killpg 混沌测试:process_group(0) + lib.rs killpg + fake-claude spawn_child
