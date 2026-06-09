@@ -2,6 +2,7 @@ import '@/styles/global.css';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useEpisodes } from '@/hooks/useEpisodes';
 import { useHud } from '@/hooks/useHud';
 import { useMetrics } from '@/hooks/useMetrics';
 import { useMorningReport } from '@/hooks/useMorningReport';
@@ -15,6 +16,7 @@ import type { QuiverCommand } from '@/shell/commandRegistry';
 import { Ctrls } from '@/shell/Ctrls';
 import { Hud } from '@/shell/Hud';
 import { MorningReport } from '@/shell/MorningReport';
+import { Timeline } from '@/shell/Timeline';
 import { TrustCard } from '@/shell/TrustCard';
 
 const DEFAULT_CAPTION = '你是 CEO。经理在领导区待命 —— 点「CEO 下目标」把一件事交给公司，它自己跑。';
@@ -23,7 +25,7 @@ const DEFAULT_CAPTION = '你是 CEO。经理在领导区待命 —— 点「CEO 
 const GOALS = ['做转写的导出功能', '修登录态丢失', '给看板加暗色模式', '把召回准确率提上去', '补端到端测试', '清掉废弃依赖'];
 
 /** 当前打开的叠层(同一时刻至多一个)。 */
-type Overlay = 'none' | 'cmdk' | 'report' | 'brief' | 'trust';
+type Overlay = 'none' | 'cmdk' | 'report' | 'brief' | 'trust' | 'timeline';
 
 /** 应用根:等距办公室舞台 + 叠层 + 画面后期。叠层开合、派活握手、状态条文案在此编排。 */
 export function App() {
@@ -33,6 +35,7 @@ export function App() {
   const [briefGoal, setBriefGoal] = useState(GOALS[0]);
   const report = useMorningReport(overlay === 'report');
   const metrics = useMetrics(overlay === 'trust');
+  const episodes = useEpisodes(overlay === 'timeline');
   const goalIdx = useRef(0);
 
   // 启动读启动包:副作用是让后端设好当前项目,派活才有目标仓库。
@@ -89,6 +92,10 @@ export function App() {
         setOverlay('trust');
         return;
       }
+      if (cmd.id === 'timeline') {
+        setOverlay('timeline');
+        return;
+      }
       setOverlay('none');
       if (cmd.id === 'dispatch') {
         // 「派活」走快通道:不开 Brief,直接让经理开一个示例任务。
@@ -114,6 +121,7 @@ export function App() {
       <MorningReport open={overlay === 'report'} data={report} onClose={() => setOverlay('none')} />
       <BriefCard open={overlay === 'brief'} defaultGoal={briefGoal} onClose={() => setOverlay('none')} onConfirm={confirmBrief} />
       <TrustCard open={overlay === 'trust'} metrics={metrics} onClose={() => setOverlay('none')} />
+      <Timeline open={overlay === 'timeline'} episodes={episodes} onClose={() => setOverlay('none')} />
       <Atmosphere spentUsd={hud.spentUsd} budgetCapUsd={hud.budgetCapUsd} />
       <div id="vignette" />
       <div id="grain" />

@@ -57,6 +57,21 @@ export type AgentEvent =
   | (AgentEventBase & { kind: 'error'; code: string; message: string })
   | (AgentEventBase & { kind: 'finished'; status: string; costUsd: number | null; branch: string | null; verifyOutput: string });
 
+/** 一条过夜交付记录(get_episodes,§6.2):机械绑 git 的 episode。 */
+export interface EpisodeRecord {
+  id: number;
+  project: string;
+  nodeId: string | null;
+  taskId: string | null;
+  commitSha: string | null;
+  mergeSeq: number | null;
+  /** "verified" | "failed" | … */
+  verifyResult: string | null;
+  diffStat: string | null;
+  summary: string | null;
+  createdAt: number;
+}
+
 /** 观测指标(get_metrics,§10-12):所有项目已结束运行的聚合。 */
 export interface MetricsDto {
   runs: number;

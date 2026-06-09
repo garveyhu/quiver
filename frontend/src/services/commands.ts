@@ -1,5 +1,5 @@
 import { call } from '@/services/ipc';
-import type { InitialState, ManagerPreview, MetricsDto, RunMode, Stats, TaskRecord, TaskStatus } from '@/services/wire';
+import type { EpisodeRecord, InitialState, ManagerPreview, MetricsDto, RunMode, Stats, TaskRecord, TaskStatus } from '@/services/wire';
 
 /**
  * 具名后端命令封装 —— 每条 IPC 命令一个有类型的函数。hook/服务层调这里，
@@ -25,3 +25,6 @@ export const managerPreview = (): Promise<ManagerPreview> => call<ManagerPreview
 
 /** 观测指标聚合(验收率/时延/花费,§10-12)。 */
 export const getMetrics = (): Promise<MetricsDto> => call<MetricsDto>('get_metrics');
+
+/** 当前项目近期 episode(过夜交付记录,§6.2),时间线用。 */
+export const getEpisodes = (limit = 12): Promise<EpisodeRecord[]> => call<EpisodeRecord[]>('get_episodes', { limit });
