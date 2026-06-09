@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import type { CompletionFx } from '@/hooks/useCompletionFx';
 import { useTaskEvents } from '@/hooks/useTaskEvents';
 import { useWorkers } from '@/hooks/useWorkers';
 import { buildScene } from '@/office/buildScene';
 import type { SceneNode } from '@/office/primitives';
 import { useCamera } from '@/office/useCamera';
 import { Worker } from '@/office/Worker';
+import { WorldFx } from '@/office/WorldFx';
 import { Worksurf } from '@/office/Worksurf';
 import type { PlacedWorker } from '@/office/workers';
 
@@ -26,8 +28,13 @@ function nodeChildren(node: SceneNode): ReactNode {
   return node.text;
 }
 
-/** 等距像素办公室。静态场景 + 实时工人 + 滚轮缩放 + 点小人下钻聚焦。 */
-export function Office() {
+interface OfficeProps {
+  /** 交付时刻特效(验收通过/打回),在世界内质检台/发货口播放 */
+  completionFx: CompletionFx;
+}
+
+/** 等距像素办公室。静态场景 + 实时工人 + 滚轮缩放 + 点小人下钻聚焦 + 交付特效。 */
+export function Office({ completionFx }: OfficeProps) {
   const scene = useMemo(() => buildScene(), []);
   const workers = useWorkers(scene.layout);
   const camera = useCamera(scene.layout.worldW, scene.layout.worldH);
@@ -68,6 +75,7 @@ export function Office() {
           {workers.map(w => (
             <Worker key={w.id} worker={w} onDive={dive} />
           ))}
+          <WorldFx layout={scene.layout} fx={completionFx} />
         </div>
       </div>
       <div className={`zoomhint${camera.zoomed || focused ? ' on' : ''}`}>滚轮缩放 · Esc / 双击 复位</div>

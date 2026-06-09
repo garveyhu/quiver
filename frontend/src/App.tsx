@@ -139,7 +139,7 @@ export function App() {
   return (
     <>
       <div id="stage" className={`stage${frozen ? ' frozen' : ''}`}>
-        <Office />
+        <Office completionFx={completionFx} />
       </div>
       <Hud data={hud} budgetCap={budgetCap} />
       <Ctrls onCmdk={() => setOverlay('cmdk')} onReport={() => setOverlay('report')} onGoal={openBrief} />

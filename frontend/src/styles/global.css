@@ -70,6 +70,12 @@ body {
 .poly { position: absolute; inset: 0; pointer-events: none; transition: background .3s; }
 .rect { position: absolute; pointer-events: none; transition: background .3s; }
 .glow { position: absolute; border-radius: 50%; filter: blur(9px); mix-blend-mode: screen; pointer-events: none; }
+/* 交付世界内特效:质检台一闪 + 发货口飞箱 */
+.worldfx-glow { position: absolute; width: 64px; height: 36px; margin-left: -32px; margin-top: -18px; border-radius: 50%; filter: blur(7px); mix-blend-mode: screen; pointer-events: none; animation: worldfx-pulse 1.1s ease-out; }
+@keyframes worldfx-pulse { 0%{ opacity: 0; transform: scale(.6); } 25%{ opacity: .95; } 100%{ opacity: 0; transform: scale(1.5); } }
+.crate { position: absolute; width: 16px; height: 13px; margin-left: -8px; background: linear-gradient(180deg,#9a7350,#5a4636); border: 1px solid #4a3628; image-rendering: pixelated; pointer-events: none; }
+.worldfx-ship { animation: shipout 1s ease-in forwards; }
+@keyframes shipout { 0%{ opacity: 0; transform: translate(0,0) scale(.7); } 25%{ opacity: 1; } 100%{ opacity: 0; transform: translate(58px,-22px) scale(.9); } }
 
 /* ===== 家具/道具像素细节 ===== */
 .pled { position: absolute; width: 2px; height: 2px; margin-left: -1px; margin-top: -1px; border-radius: 1px; pointer-events: none; }
