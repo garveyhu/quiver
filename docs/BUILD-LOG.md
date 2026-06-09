@@ -6,6 +6,14 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 39 轮(后端收尾 · §5 流控:有界在途+栅栏+saga)
+- `bb2ee51` feat(orchestrator): InFlight(有界在途+栅栏令牌对账 §5.5/§5.6)+ SagaLedger
+  (决策序号去重钥匙,幂等重放)。验证:quiver-orchestrator 8 过 + workspace 无警告。
+- **▶ 下一步(§5 续)**:① 真 LLM ManagerBrain(QwenBrain,§21 让千问按 Decision schema 输出,
+  解析成 Decision)+ smoke 真跑;② 一个 tick 编排循环把 ManagerBrain+InFlight+SagaLedger
+  串起来(产出决策→校验/去重→admit/complete→返回待执行 Effect);③ 接 runner/scheduler 真执行。
+  之后 P3 安全(沙箱脚手架/独立审计/权能/熔断)→ P4 → P5。
+
 ### 2026-06-09 · 第 38 轮(后端收尾 · §5 编排基座开张)
 - `09d8f16` feat(orchestrator): §5 编排基座 —— 新 crate quiver-orchestrator。
   Decision(§21 结构化决策 Spawn/Continue/Deliver/Block/Escalate/RefreshMemory/Noop)+
