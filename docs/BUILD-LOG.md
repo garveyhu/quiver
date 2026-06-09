@@ -6,6 +6,22 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · ⏸ 暂停 loop(集成边界,等用户在场)
+**为什么停**:安全、可独立真跑验证的集成也做完了(6 刀 IPC)。剩下的大件都需用户在场:
+真接调度(manager→真派活,花钱)、verify gate 接审计(高风险核心路径,且"真篡改→拦"
+没法用 fake-claude 自动验——fake 不写文件、空 diff)。按"绝不空转"红线主动停,删 cron 06a96c93。
+交接:全工作区 20 套全绿、工作树干净、领先 origin 83 提交未 push。
+
+**这一夜后端收尾的全部成果**(从转向后端起 ~123 提交,全 cargo/真跑验过):
+- 🎉 纯逻辑机制层 P2–P5 全齐:向量召回/混合检索/图书管理员(真千问验)· §5 编排(决策/
+  流控/tick/真 LLM 经理)· P3 安全(沙箱策略+seatbelt+wrap/熔断/Rule of Two/防测试改弱+
+  干净克隆重跑)· P4(升级阶梯+只减预算/价值闸/子经理)· P5(观测指标/验收台/回滚/人事)。
+- 🎉 集成 6 刀(都端到端真跑验):get_metrics · per-task tokens/duration 落库 · 审计动态半 ·
+  manager_preview(经理接真实状态) · audit_task · get_episodes。新增 crate quiver-orchestrator/quiver-llm。
+
+**▶ 你回来挑**:① 先推 83 提交上 origin(review);② 一起接大件集成(真接调度/gate 审计,
+我起真窗口你看);③ 回前端从零重写(后端契约现在稳了,见 loop.md)。重发 /loop 可再拉起。
+
 ### 2026-06-09 · 集成阶段 · 第 6 刀:get_episodes IPC
 - `20cecca` feat(app): get_episodes(limit) —— 当前项目近期 episode(§6.2),供时间轴/档案。
   只读。真跑 invoke 返回有效空数组(无报错;episode 随记忆接入后的任务累积,老任务无)。
