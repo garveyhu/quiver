@@ -6,6 +6,14 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 51 轮(后端收尾 · P5 验收台)
+- `67af0ba` feat(core): judge_acceptance —— verify + 审计 tamper + 改动量 汇成验收单,
+  给 Pass/Block(带理由),任一硬信号即拦(含篡改测试哪怕 verify 过)。验证:acceptance 4 过 + 无警告。
+- **▶ 下一步(P5 续)**:① 回滚/还原点(记 merge_seq → 选一点回退;纯结构:还原点表 +
+  "回到 seq N" 的目标解析);② 人事/升级阶梯档案(§13-14 纯逻辑部分)。
+  之后偏集成的(MCP 自管记忆 rmcp、把 metrics/acceptance/orchestrator 接进 app/runner/调度)
+  需触运行时,适合用户在场一起验。
+
 ### 2026-06-09 · 第 50 轮(后端收尾 · P5 乙部开张:观测指标)
 - `44165dc` feat(core): metrics —— 多次 run 聚成验收率(自治度核心)/总花费/总 tokens/
   时延 p50/p95。验证:quiver-core metrics 2 过 + 无警告。
