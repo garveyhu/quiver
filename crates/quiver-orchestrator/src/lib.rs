@@ -12,10 +12,12 @@
 mod brain;
 mod engine;
 mod flow;
+mod ladder;
 #[cfg(feature = "qwen")]
 pub use brain::QwenBrain;
 pub use engine::{Effect, Orchestrator, Step};
 pub use flow::{Fence, InFlight, SagaLedger};
+pub use ladder::{Budget, EscalationLadder, Rung};
 
 use serde::{Deserialize, Serialize};
 
