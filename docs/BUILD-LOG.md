@@ -6,6 +6,16 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 35 轮(后端收尾 · P2 图书管理员机制层)
+- `af3c4b2` feat(memory): 图书管理员机制层 — AI 判矛盾作废(§6.4)。
+  ContradictionJudge trait + Verdict + FakeJudge;retire_fact(作废并链到新事实);
+  reconcile_fact(新事实对候选过 judge,IncomingSupersedes 的旧事实作废)。
+  验证:quiver-memory 33 过 + workspace check。
+- **▶ 下一步**:① 真 LLM 判断器(ContradictionJudge 用 claude/千问,§21 --json-schema,
+  qwen feature 或新模块,可注入);② 自动选候选(同 entity / hybrid_recall 邻居)封个
+  reconcile_new_fact(new_id, judge);③ 真跑一次判断验证。**P2 记忆基本齐** → 转
+  **§5 AI 经理编排**(经理决策 schema + saga_step 去重 + 栅栏对账)→ P3 安全 → P4 → P5。
+
 ### 2026-06-09 · 第 34 轮(后端收尾 · P2 向量 — 真跑验证)
 - `c79ebce` test(memory): 千问 embedding smoke 示例,真跑验证 API。
   🎉 **真调 DashScope 成功**:2 条文本 ~409ms、model=text-embedding-v2、**dim=1536**
