@@ -82,6 +82,7 @@ mod tests {
             kind: "decision".into(),
             text: text.into(),
             entities: None,
+            entity: None,
             importance: Some(importance),
             valid_at: None,
             recorded_at: importance, // vary so ordering is deterministic in tests

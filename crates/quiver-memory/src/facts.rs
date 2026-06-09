@@ -24,6 +24,9 @@ pub struct NewFact {
     pub text: String,
     /// JSON array of entity strings, or `None`.
     pub entities: Option<String>,
+    /// Scalar entity this fact is about — only meaningful for `kind='状态'`, where
+    /// (project, entity) is unique among current facts (§6.4). `None` otherwise.
+    pub entity: Option<String>,
     pub importance: Option<i64>,
     /// When the fact became true in reality (§6.3); `None` = unknown/now.
     pub valid_at: Option<i64>,
@@ -62,15 +65,16 @@ impl MemoryStore {
         let conn = self.conn.lock().expect("memory store lock");
         conn.execute(
             "INSERT INTO memory_fact
-                (project, scope, kind, text, entities, importance, valid_at,
+                (project, scope, kind, text, entities, entity, importance, valid_at,
                  recorded_at, provenance, trust, source_commit, source_episode_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 f.project,
                 scope,
                 f.kind,
                 f.text,
                 f.entities,
+                f.entity,
                 importance,
                 f.valid_at,
                 f.recorded_at,
@@ -101,17 +105,28 @@ impl MemoryStore {
         let importance = new.importance.unwrap_or(DEFAULT_IMPORTANCE);
         let mut conn = self.conn.lock().expect("memory store lock");
         let tx = conn.transaction()?;
+        // (1) Retire the old fact FIRST — frees the current-状态 (project,entity) slot
+        // before the insert, so the §6.4 partial-unique index never sees two current
+        // versions (§6.4: "先把旧的标失效、再插新的"). Conditional on it still being
+        // current, so a stale supersede is a no-op on the old row.
+        let retired = tx.execute(
+            "UPDATE memory_fact SET invalid_at = ?2, retired_at = ?2
+             WHERE id = ?1 AND invalid_at IS NULL",
+            params![old_id, at_ms],
+        )?;
+        // (2) Insert the new current-truth fact.
         tx.execute(
             "INSERT INTO memory_fact
-                (project, scope, kind, text, entities, importance, valid_at,
+                (project, scope, kind, text, entities, entity, importance, valid_at,
                  recorded_at, provenance, trust, source_commit, source_episode_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 new.project,
                 scope,
                 new.kind,
                 new.text,
                 new.entities,
+                new.entity,
                 importance,
                 new.valid_at,
                 new.recorded_at,
@@ -122,11 +137,14 @@ impl MemoryStore {
             ],
         )?;
         let new_id = tx.last_insert_rowid();
-        tx.execute(
-            "UPDATE memory_fact SET invalid_at = ?2, retired_at = ?2, superseded_by = ?3
-             WHERE id = ?1 AND invalid_at IS NULL",
-            params![old_id, at_ms, new_id],
-        )?;
+        // (3) Link old → new, but only if WE just retired it (else don't re-link an
+        // already-retired fact to a newer successor).
+        if retired == 1 {
+            tx.execute(
+                "UPDATE memory_fact SET superseded_by = ?2 WHERE id = ?1",
+                params![old_id, new_id],
+            )?;
+        }
         tx.commit()?;
         Ok(new_id)
     }
@@ -327,6 +345,7 @@ mod tests {
             kind: "decision".into(),
             text: text.into(),
             entities: None,
+            entity: None,
             importance: Some(importance),
             valid_at: None,
             recorded_at,
@@ -585,5 +604,43 @@ mod tests {
             "权威 must not be touched by corroboration"
         );
         assert_eq!(store.current_facts("/r").unwrap()[0].trust, "权威");
+    }
+
+    fn state_fact(project: &str, entity: &str, text: &str) -> NewFact {
+        NewFact {
+            kind: "状态".into(),
+            entity: Some(entity.into()),
+            ..fact(project, text, 5, 1)
+        }
+    }
+
+    #[test]
+    fn current_state_unique_per_project_entity() {
+        let store = MemoryStore::open_in_memory().unwrap();
+        store.insert_fact(&state_fact("/r", "moduleA", "uses tokio")).unwrap();
+        // A second CURRENT 状态 fact for the same (project, entity) is rejected (§6.4).
+        assert!(
+            store.insert_fact(&state_fact("/r", "moduleA", "uses async-std")).is_err(),
+            "two current 状态 facts for same (project,entity) must be rejected by the DB"
+        );
+        // A different entity — and a non-状态 fact on the same entity — are fine.
+        assert!(store.insert_fact(&state_fact("/r", "moduleB", "uses sqlite")).is_ok());
+        assert!(store.insert_fact(&fact("/r", "moduleA note", 5, 1)).is_ok());
+    }
+
+    #[test]
+    fn supersede_state_fact_swaps_without_violating_unique() {
+        let store = MemoryStore::open_in_memory().unwrap();
+        let old = store.insert_fact(&state_fact("/r", "moduleA", "uses tokio")).unwrap();
+        // Retire-old-before-insert-new lets the same-entity 状态 swap pass the unique index.
+        store.supersede_fact(old, &state_fact("/r", "moduleA", "uses smol"), 100).unwrap();
+        let current: Vec<String> = store
+            .current_facts("/r")
+            .unwrap()
+            .into_iter()
+            .filter(|f| f.kind == "状态")
+            .map(|f| f.text)
+            .collect();
+        assert_eq!(current, vec!["uses smol"], "only the new 状态 is current after supersede");
     }
 }

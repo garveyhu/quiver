@@ -39,6 +39,7 @@ pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
             kind                   TEXT NOT NULL,                   -- decision / 状态 / …
             text                   TEXT NOT NULL,
             entities               TEXT,                            -- JSON array
+            entity                 TEXT,                            -- 标量实体(§6.4 状态唯一约束键)
             importance             INTEGER NOT NULL DEFAULT 5,
             valid_at               INTEGER,                         -- 现实成立
             invalid_at             INTEGER,                         -- 现实失效 (NULL=当前真相)
@@ -95,6 +96,41 @@ pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
             PRIMARY KEY (fact_id, episode_id)
         );",
     )?;
+
+    // Backfill the scalar `entity` column onto memory_fact for DBs created before it
+    // (CREATE TABLE IF NOT EXISTS won't reshape an existing table). Idempotent.
+    add_column_if_absent(conn, "memory_fact", "entity", "TEXT")?;
+
+    // §6.4 hard rule: at most ONE current 状态 fact per (project, entity) — the
+    // database rejects a second. A partial unique index (only current 状态 rows)
+    // enforces it; supersede must retire-old-before-insert-new so the swap never
+    // trips it (see `supersede_fact`).
+    conn.execute_batch(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_fact_current_state
+            ON memory_fact(project, entity)
+            WHERE kind = '状态' AND invalid_at IS NULL;",
+    )?;
+    Ok(())
+}
+
+/// Add `column` (`decl` = its SQL type) to `table` only if absent (SQLite has no
+/// `ADD COLUMN IF NOT EXISTS`; probe `PRAGMA table_info` first). Keeps `migrate`
+/// idempotent across re-opens and across DBs created before the column existed.
+fn add_column_if_absent(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    decl: &str,
+) -> anyhow::Result<()> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+    let exists = stmt
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<Result<Vec<_>, _>>()?
+        .iter()
+        .any(|name| name == column);
+    if !exists {
+        conn.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} {decl}"))?;
+    }
     Ok(())
 }
 
