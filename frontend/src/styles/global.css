@@ -188,6 +188,21 @@ body {
 .caption .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 9px var(--ok); flex: none; animation: blink 1.6s var(--ease) infinite; }
 @keyframes blink { 50% { opacity: .35; } }
 
+/* ===== 叠层:遮罩 + 命令栏(⌘K) ===== */
+.scrim { position: fixed; inset: 0; background: rgba(5,8,16,.56); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); z-index: 9500; opacity: 0; pointer-events: none; transition: opacity var(--t-mid) var(--ease); }
+.scrim.on { opacity: 1; pointer-events: auto; }
+.cmdk { position: fixed; left: 50%; top: 17%; transform: translateX(-50%) translateY(-10px) scale(.99); width: min(540px,92vw); background: var(--s-2); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); border: 1px solid var(--bd-strong); border-radius: var(--r-3); box-shadow: var(--sh-3), inset 0 1px 0 var(--hairline-top); z-index: 9700; opacity: 0; pointer-events: none; transition: opacity var(--t-fast) var(--ease), transform var(--t-fast) var(--ease); overflow: hidden; }
+.cmdk.on { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0) scale(1); }
+.cmdk input { width: 100%; background: transparent; border: 0; outline: 0; color: var(--tx-1); font-family: var(--ui); font-size: 15px; letter-spacing: .1px; padding: 15px 17px; border-bottom: 1px solid var(--bd-soft); }
+.cmdk input::placeholder { color: var(--tx-3); }
+#cmdk-list { padding: 5px; }
+.cmdk .row { position: relative; display: flex; justify-content: space-between; align-items: center; padding: 9px 13px; border-radius: var(--r-1); font-size: 13px; letter-spacing: .1px; color: var(--tx-2); cursor: pointer; transition: background var(--t-fast), color var(--t-fast); }
+.cmdk .row:hover { background: rgba(255,255,255,.05); color: var(--tx-1); }
+.cmdk .row.sel { background: var(--accent-dim); color: var(--tx-1); }
+.cmdk .row.sel::before { content: ""; position: absolute; left: 3px; top: 8px; bottom: 8px; width: 2.5px; border-radius: 2px; background: var(--accent); box-shadow: 0 0 8px rgba(255,210,122,.5); }
+.cmdk .row .cmdk-hint { color: var(--tx-3); }
+.cmdk .row kbd { font-family: var(--mono); font-size: 10.5px; font-weight: 600; color: var(--tx-2); background: var(--s-inset); border: 1px solid var(--bd-strong); border-bottom-width: 2px; border-radius: 5px; padding: 2px 6px; line-height: 1.2; letter-spacing: .5px; }
+
 /* ===== 氛围粒子 + 画面后期 ===== */
 .dust { position: absolute; width: 3px; height: 3px; background: #fff; border-radius: 50%; opacity: .35; pointer-events: none; }
 @keyframes floaty { from{ transform: translateY(0); opacity: .45; } to{ transform: translateY(-24px); opacity: 0; } }

@@ -1,9 +1,13 @@
-/** 底部状态条:呼吸灯 + 一句当前公司状态。本轮为静态引导文案。 */
-export function Caption() {
+interface CaptionProps {
+  text: string;
+}
+
+/** 底部状态条:呼吸灯 + 当前公司状态文案(由上层状态驱动)。 */
+export function Caption({ text }: CaptionProps) {
   return (
     <div className="caption">
       <span className="dot" />
-      <span>你是 CEO。经理在领导区待命 —— 点「CEO 下目标」把一件事交给公司，它自己跑。</span>
+      <span>{text}</span>
     </div>
   );
 }
