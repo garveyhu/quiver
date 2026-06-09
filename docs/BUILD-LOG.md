@@ -6,6 +6,15 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 集成阶段 · 第 2 刀:per-task tokens/duration 落库
+- `6c25a0e` feat(metrics): task 加 tokens/duration_ms 列 + set_task_metrics + metric_samples;
+  run.rs 从 Result 取真 tokens/duration 落库;get_metrics 改用 metric_samples、优先真值缺则
+  退回 0/墙钟代理。链路每环有测试覆盖(parser tokens=165 / metrics_from_samples 单测 / 全工作区
+  20 套全绿)。simulate 真跑即填真 tokens(165)。
+- **▶ 下一块集成(用户在场挑)**:Orchestrator 接 scheduler(AI 经理真派活,大+花钱)/
+  沙箱套 spawn(注意 fake-claude)/ 审计动态半(干净克隆重跑)/ acceptance 需先把 diff 入库。
+  注:cron 06a96c93 在跑(5 分钟,"把蓝图后端做完并验证")。
+
 ### 2026-06-09 · 集成阶段(用户在场)· 第 1 刀:get_metrics IPC
 - `6f1edda` feat(app): get_metrics IPC —— 把 quiver-core::metrics 接到真实任务数据 + IPC。
   metrics_from_tasks 纯函数(任务→样本→聚合)+ 单测;get_metrics 命令两处 handler 登记。
