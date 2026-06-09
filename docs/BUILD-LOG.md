@@ -6,6 +6,21 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 🎨 前端重写 · 第 2 刀:体素原语 + 工位区静态家具
+- `d3f2fb1` feat(office): 工位区静态家具 + 体素原语 + 顶光。
+  - `office/primitives` SceneBuilder 补低层体素原语:isoBox/chip/southPanel/rug/led/
+    speck/contactShadow/pxrect/ceilLamp/godray + WOOD/WOOD2/DARK 配色常量(`pt()` 公开供家具取点)。
+  - `office/furniture`(新)忠实移植工位区家具:deskUnit ×12(椅/木桌/显示器/键盘/咖啡/散纸/走线)、
+    serverRack ×2(8 层灯阵)、whiteboard、deskLamp ×3、plant、pottedShelf、windowWall(玻璃/月亮/
+    竖框/双体积光束)、wallPoster、ceilDuct ×2;buildScene 在墙/标签后叠家具 + 6 盏分色顶光。
+  - 命令式 append → 声明式 SceneNode[] 的模式延续:furniture 函数只往 builder 上 push。
+- **验证**:`tsc --noEmit` 过;真窗口截图对照原型 —— 工位区 12 工位/机架/白板/窗光束/暖冷光晕齐,
+  几何配色贴原型,console 无 error/warn(12 个 .pscan = 12 屏)。
+- **▶ 下一刀**:① 休息室家具(sofa/coffeeBar/bookcase/bigPlant/cat/waterCooler/wallClock/
+  patternRug,需补 .cat/.steam/.pclock-h 等 CSS + 几个家具函数);② 右列(qaBench/board/memoryBook/
+  safeBox/serverRack/shipBay/crateStack);③ 氛围粒子(dust/stars);然后 §8.3 接 get_initial_state/
+  get_stats/list_tasks 出真值。收尾已拆实例、腾空 :1420。**绝不 push/合 main**。
+
 ### 2026-06-09 · 🎨 前端从零重写 · 第 1 刀:骨架 + 静态等距地基
 **方向**:后端契约已稳(见上"暂停 loop"晨报),按 loop.md 转**前端从零重写** —— 删
 frontend/src 旧平视版,照 docs/redesign-iso-directions.html(唯一视觉真相)忠实移植
