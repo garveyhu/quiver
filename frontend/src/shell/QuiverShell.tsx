@@ -146,10 +146,15 @@ export function QuiverShell() {
       else if (e.key === '3') setView('settings');
       else if (e.key === '?') setShowShortcuts((s) => !s);
       else if (e.key === ']' || e.key === '[') setRailOpen((r) => !r);
+      // 键盘缩放(配合滚轮):+ 放大 / - 缩小 / 0 复位。
+      else if (e.key === '+' || e.key === '=') setZoom((z) => Math.min(ZOOM_MAX, Math.round(z * 1.08 * 100) / 100));
+      else if (e.key === '-' || e.key === '_') setZoom((z) => Math.max(ZOOM_MIN, Math.round((z / 1.08) * 100) / 100));
+      else if (e.key === '0') setZoom(1);
       else if (e.key === 'Escape') {
         setSelected(null);
         setProjOpen(false);
         setShowShortcuts(false);
+        setShowReport(false);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -547,6 +552,7 @@ export function QuiverShell() {
                 { label: '队列重排(上/下移)', keys: ['K', 'J'] },
                 { label: '撤回待接任务', keys: ['x'] },
                 { label: '折叠/展开右栏', keys: [']'] },
+                { label: '缩放办公室(0 复位,也可滚轮)', keys: ['+', '-'] },
                 { label: '快捷键', keys: ['?'] },
                 { label: '关闭 / 取消', keys: ['Esc'] },
               ]}
