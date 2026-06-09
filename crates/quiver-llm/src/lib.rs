@@ -72,6 +72,35 @@ pub fn qwen_chat(creds: &QwenCreds, model: &str, system: &str, user: &str) -> an
     Ok(content.to_string())
 }
 
+/// 一次千问 embedding(OpenAI 兼容 `{base_url}/embeddings`):返回每条输入的稠密向量。
+pub fn qwen_embed(creds: &QwenCreds, model: &str, texts: &[String]) -> anyhow::Result<Vec<Vec<f32>>> {
+    let client = reqwest::blocking::Client::new();
+    let url = format!("{}/embeddings", creds.base_url.trim_end_matches('/'));
+    let body = serde_json::json!({ "model": model, "input": texts });
+    let resp = client
+        .post(&url)
+        .bearer_auth(&creds.api_key)
+        .json(&body)
+        .send()
+        .context("千问 embedding 请求失败")?
+        .error_for_status()
+        .context("千问 embedding 返回错误状态")?;
+    let parsed: serde_json::Value = resp.json().context("千问 embedding 响应非 JSON")?;
+    let data = parsed
+        .get("data")
+        .and_then(|d| d.as_array())
+        .context("千问响应缺 data[]")?;
+    let mut out = Vec::with_capacity(data.len());
+    for item in data {
+        let emb = item
+            .get("embedding")
+            .and_then(|e| e.as_array())
+            .context("千问响应 data[].embedding 缺失")?;
+        out.push(emb.iter().filter_map(|x| x.as_f64().map(|f| f as f32)).collect());
+    }
+    Ok(out)
+}
+
 /// 从 LLM 回复里抠出第一个 `{…}` JSON 对象(容忍代码围栏 / 散文)。
 pub fn extract_json_object(s: &str) -> Option<&str> {
     let start = s.find('{')?;

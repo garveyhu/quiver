@@ -32,7 +32,7 @@ use std::sync::Mutex;
 use rusqlite::Connection;
 
 pub use brief::Brief;
-pub use embed::{load_qwen_creds, parse_qwen_creds, Embedder, FakeEmbedder, QwenCreds};
+pub use embed::{Embedder, FakeEmbedder};
 #[cfg(feature = "qwen")]
 pub use embed::QwenEmbedder;
 pub use episodes::{EpisodeRecord, NewEpisode};

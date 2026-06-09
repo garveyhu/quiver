@@ -13,13 +13,13 @@ serde_json = "1"
 # Embedded durable state. `bundled` compiles SQLite from source so there is no
 # system libsqlite3 dependency on any target (matches quiver-store).
 rusqlite = { version = "0.31", features = ["bundled"] }
-# Real 千问 (DashScope) embedding HTTP client — only under the `qwen` feature, so
-# the default build/test stays offline + dependency-light (tests use FakeEmbedder).
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"], optional = true }
+# 真千问 HTTP(embedding/chat)走共享适配层 quiver-llm,只在 `qwen` feature 下启用 ——
+# 默认构建离线、不拉 HTTP(测试用 FakeEmbedder / FakeJudge)。
+quiver-llm = { path = "../quiver-llm", optional = true }
 
 [features]
-# Enable the real network-backed QwenEmbedder (pulls in reqwest). Off by default.
-qwen = ["dep:reqwest"]
+# 启用真网络的 QwenEmbedder/QwenJudge(经 quiver-llm 调千问)。默认关。
+qwen = ["dep:quiver-llm"]
 
 [dev-dependencies]
 tempfile = "3"
