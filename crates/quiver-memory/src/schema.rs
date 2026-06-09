@@ -84,7 +84,16 @@ pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
             created_at     INTEGER NOT NULL,
             promoted       INTEGER NOT NULL DEFAULT 0
         );
-        CREATE INDEX IF NOT EXISTS idx_staging_pending ON memory_staging(project, promoted);",
+        CREATE INDEX IF NOT EXISTS idx_staging_pending ON memory_staging(project, promoted);
+
+        -- §6.2 机械印证集合:一条事实被哪些 episode(独立绿测试)印证过。复合主键 =
+        -- 集合语义(同一 (fact,episode) 重放被忽略):记集合而非计数,所以重放幂等。
+        -- 同一事实印证 episode 数 ≥ 2 时,Rust 把它升到「已验证·印证」(AI 碰不到授予)。
+        CREATE TABLE IF NOT EXISTS fact_corroboration (
+            fact_id    INTEGER NOT NULL REFERENCES memory_fact(id),
+            episode_id INTEGER NOT NULL REFERENCES episode(id),
+            PRIMARY KEY (fact_id, episode_id)
+        );",
     )?;
     Ok(())
 }

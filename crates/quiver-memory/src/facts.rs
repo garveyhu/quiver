@@ -131,6 +131,48 @@ impl MemoryStore {
         Ok(new_id)
     }
 
+    /// Record that `episode_id` (an independent green-test run) corroborates fact
+    /// `fact_id`, and — if the fact now has ≥2 distinct corroborating episodes and
+    /// its trust is below 已验证·印证 — mechanically upgrade it to that tier
+    /// (DESIGN §6.2: "两次独立绿测试印证 → Rust 升档;AI 拥有否决、不是授予"). Set
+    /// semantics (the (fact,episode) pair is INSERT-OR-IGNOREd) → recording the SET
+    /// not a count, so replaying the same corroboration is idempotent. Never
+    /// downgrades (权威 / 已验证·* stay). Returns whether an upgrade happened.
+    pub fn corroborate_fact(&self, fact_id: i64, episode_id: i64) -> anyhow::Result<bool> {
+        let mut conn = self.conn.lock().expect("memory store lock");
+        let tx = conn.transaction()?;
+        tx.execute(
+            "INSERT OR IGNORE INTO fact_corroboration (fact_id, episode_id) VALUES (?1, ?2)",
+            params![fact_id, episode_id],
+        )?;
+        let distinct: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM fact_corroboration WHERE fact_id = ?1",
+            params![fact_id],
+            |r| r.get(0),
+        )?;
+        let mut upgraded = false;
+        if distinct >= CORROBORATION_THRESHOLD {
+            let current: Option<String> = tx
+                .query_row(
+                    "SELECT trust FROM memory_fact WHERE id = ?1 AND invalid_at IS NULL",
+                    params![fact_id],
+                    |r| r.get(0),
+                )
+                .ok();
+            if let Some(tier) = current {
+                if tier_rank(&tier) < tier_rank(TIER_CORROBORATED) {
+                    tx.execute(
+                        "UPDATE memory_fact SET trust = ?2 WHERE id = ?1",
+                        params![fact_id, TIER_CORROBORATED],
+                    )?;
+                    upgraded = true;
+                }
+            }
+        }
+        tx.commit()?;
+        Ok(upgraded)
+    }
+
     /// Current-truth facts for `project` (`invalid_at IS NULL`), most important and
     /// most recent first (DESIGN §6.3 — current truth is the un-retired set). The
     /// §6.7 recall ranking (recency·importance·trust + FTS/vector) is a later slice;
@@ -233,6 +275,22 @@ const RECALL_HALF_LIFE_DAYS: f64 = 14.0;
 const W_IMPORTANCE: f64 = 1.0; // importance is 1–10
 const W_TRUST: f64 = 2.0; // trust tier maps to 1–5 → contributes 2–10
 const W_RECENCY: f64 = 3.0; // recency is 0–1 → contributes 0–3
+
+/// The tier a fact reaches once corroborated by ≥2 independent green-test episodes
+/// (§6.2), and how many distinct episodes that takes.
+const TIER_CORROBORATED: &str = "已验证·印证";
+const CORROBORATION_THRESHOLD: i64 = 2;
+
+/// Ordinal rank of a §6.2 trust tier for "only ever upgrade, never downgrade"
+/// comparisons. 权威 > 已验证·* > 员工汇报 > 不可信/unknown.
+fn tier_rank(trust: &str) -> i32 {
+    match trust {
+        "权威" => 4,
+        "已验证·机械" | "已验证·印证" => 3,
+        "员工汇报" => 1,
+        _ => 0,
+    }
+}
 
 /// Numeric weight of a §6.2 trust tier (higher = more trustworthy). Unknown /
 /// untrusted tiers floor at 1.
@@ -486,5 +544,46 @@ mod tests {
         let texts: Vec<String> = store.current_facts("/r").unwrap().into_iter().map(|f| f.text).collect();
         assert!(texts.contains(&"v3".to_string()) && texts.contains(&"v2".to_string()));
         let _ = v3;
+    }
+
+    fn episode(store: &MemoryStore, ts: i64) -> i64 {
+        store
+            .record_episode(&crate::NewEpisode {
+                project: "/r".into(),
+                created_at: ts,
+                ..Default::default()
+            })
+            .unwrap()
+    }
+
+    #[test]
+    fn corroborate_upgrades_after_two_distinct_episodes_idempotently() {
+        let store = MemoryStore::open_in_memory().unwrap();
+        let (ep1, ep2) = (episode(&store, 1), episode(&store, 2));
+        let fid = store.insert_fact(&fact("/r", "claim", 5, 1)).unwrap(); // 员工汇报
+        // 1st corroboration: below threshold → no upgrade.
+        assert!(!store.corroborate_fact(fid, ep1).unwrap());
+        assert_eq!(store.current_facts("/r").unwrap()[0].trust, "员工汇报");
+        // 2nd DISTINCT episode → mechanical upgrade to 已验证·印证.
+        assert!(store.corroborate_fact(fid, ep2).unwrap());
+        assert_eq!(store.current_facts("/r").unwrap()[0].trust, "已验证·印证");
+        // Replaying ep1 (dup pair) → set unchanged, no re-upgrade (idempotent).
+        assert!(!store.corroborate_fact(fid, ep1).unwrap());
+        assert_eq!(store.current_facts("/r").unwrap()[0].trust, "已验证·印证");
+    }
+
+    #[test]
+    fn corroborate_never_downgrades_authoritative() {
+        let store = MemoryStore::open_in_memory().unwrap();
+        let (ep1, ep2) = (episode(&store, 1), episode(&store, 2));
+        let fid = store
+            .insert_fact(&NewFact { trust: "权威".into(), ..fact("/r", "ceo says", 5, 1) })
+            .unwrap();
+        store.corroborate_fact(fid, ep1).unwrap();
+        assert!(
+            !store.corroborate_fact(fid, ep2).unwrap(),
+            "权威 must not be touched by corroboration"
+        );
+        assert_eq!(store.current_facts("/r").unwrap()[0].trust, "权威");
     }
 }
