@@ -267,3 +267,97 @@ export function ceilDuct(b: SceneBuilder, cA: number, cB: number, r: number, h: 
     b.poly([{ x: t.x - 0.7, y: t.y }, { x: t.x + 0.7, y: t.y }, { x: btm.x + 0.7, y: btm.y }, { x: btm.x - 0.7, y: btm.y }], '#1a2030', z);
   }
 }
+
+/** 质检台:浅色工作台 + 立式审查屏(扫描线)+ 摄像头 + 手持设备。 */
+export function qaBench(b: SceneBuilder, c: number, r: number): void {
+  b.contactShadow(c - 0.02, r + 0.2, 48, 22);
+  const z = b.isoBox(c - 0.45, r - 0.1, 0.95, 0.6, 12, { top: '#aeb6c4', l: '#5a6272', r: '#828c9c' });
+  b.southPanel(c - 0.45, r - 0.1, 0.95, 10, 12, '#cdd4de', z + 1);
+  b.southPanel(c - 0.5, r, 0.9, 16, 44, '#0e1118', z + 2);
+  b.southPanel(c - 0.46, r, 0.82, 18, 42, '#24405a', z + 3);
+  const sp = b.pt(c - 0.46, r, 42);
+  b.pxrect(sp.x, sp.y, 42, 14, '', z + 4, 'pscan');
+  b.southPanel(c - 0.46, r, 0.82, 40, 42, 'rgba(140,180,220,.35)', z + 4);
+  b.isoBox(c + 0.32, r - 0.05, 0.18, 0.18, 24, { top: '#9aa2b0', l: '#4a5260', r: '#727c8c' });
+  b.led(c + 0.41, r + 0.04, 24, '#5ce0ff', true, z + 6);
+  b.chip(c + 0.14, r + 0.22, 0.22, 0.14, 12, 13.5, { top: '#c4ccd6', l: '#7a828e', r: '#9aa2ae' });
+}
+
+/** 看板:窄立柱 + 板面 + 三列卡片(带高光)。 */
+export function board(b: SceneBuilder, c: number, r: number): void {
+  const z = zidx(c, r) + 2;
+  b.isoBox(c, r, 0.12, 0.5, 40, { top: '#3a4060', l: '#191d30', r: '#2a3048' });
+  b.southPanel(c - 0.12, r, 0.74, 14, 42, '#161f33', z + 3);
+  b.southPanel(c - 0.12, r, 0.74, 40, 42, '#2a3454', z + 4);
+  const cols: Array<[string, string]> = [
+    ['#5a86c0', '#6caf70'],
+    ['#c45446', '#7aa7e6'],
+    ['#ffd27a', '#6caf70'],
+  ];
+  for (let col = 0; col < 3; col++) {
+    const x = c - 0.08 + col * 0.22;
+    b.southPanel(x, r, 0.02, 18, 40, '#0e1424', z + 4);
+    for (let k = 0; k < 3; k++) {
+      const y = 20 + k * 7 + ((col + k) % 2) * 1;
+      const cardCol = cols[col][k % 2];
+      b.southPanel(x + 0.02, r, 0.16, y, y + 5, cardCol, z + 5);
+      b.southPanel(x + 0.02, r, 0.16, y, y + 1, 'rgba(255,255,255,.3)', z + 6);
+    }
+  }
+}
+
+/** 经理的记忆书(桌 + 两本立书 + 翻开的金页)。 */
+export function memoryBook(b: SceneBuilder, c: number, r: number): void {
+  b.isoBox(c - 0.2, r - 0.1, 0.5, 0.45, 10, WOOD2);
+  b.southPanel(c - 0.2, r - 0.1, 0.5, 8, 10, '#b98a5e', zidx(c + 0.3, r) + 3);
+  const z = zidx(c, r) + 4;
+  b.chip(c - 0.2, r - 0.06, 0.18, 0.34, 10, 12, { top: '#efe6cf', l: '#b8ad92', r: '#d4cbae' });
+  b.chip(c - 0.01, r - 0.06, 0.18, 0.34, 10, 12, { top: '#efe6cf', l: '#b8ad92', r: '#d4cbae' });
+  b.southPanel(c - 0.16, r, 0.34, 12, 22, '#ffd27a', z);
+  b.southPanel(c - 0.16, r, 0.34, 12, 13.5, '#5a4636', z + 1);
+  b.led(c - 0.01, r - 0.02, 12, '#c45446', false, z + 3);
+}
+
+/** 预算保险柜(箱体 + 面板 + 角钉灯 + 把手 + 转盘)。 */
+export function safeBox(b: SceneBuilder, c: number, r: number): void {
+  b.contactShadow(c + 0.3, r + 0.25, 32, 17);
+  const z = b.isoBox(c, r, 0.6, 0.5, 34, { top: '#2f3550', l: '#191d30', r: '#252a42' });
+  b.southPanel(c + 0.06, r, 0.48, 5, 32, '#2a3048', z + 1);
+  b.southPanel(c + 0.1, r, 0.4, 8, 28, '#3a4060', z + 2);
+  b.southPanel(c + 0.1, r, 0.4, 26, 28, 'rgba(120,140,190,.35)', z + 3);
+  const studs: Array<[number, number]> = [[0.13, 10], [0.45, 10], [0.13, 26], [0.45, 26]];
+  studs.forEach(([cc, h]) => b.led(c + cc, r, h, '#5a6488', false, z + 4));
+  b.southPanel(c + 0.5, r, 0.04, 11, 15, '#5a6488', z + 4);
+  b.southPanel(c + 0.5, r, 0.04, 22, 26, '#5a6488', z + 4);
+  const dial = b.pt(c + 0.3, r, 18);
+  b.pxrect(dial.x - 4, dial.y - 4, 9, 9, '#ffd27a', z + 5, undefined, { borderRadius: '50%', boxShadow: '0 0 0 1px #b8860f inset' });
+  b.southPanel(c + 0.38, r, 0.06, 16, 20, '#c9a043', z + 5);
+}
+
+/** 发货口:门框 ×2 + 卷帘门 + 警示条 + 地面胶带 + 出货指示灯。 */
+export function shipBay(b: SceneBuilder, c: number, r: number): void {
+  b.isoBox(c, r - 0.1, 0.2, 1.2, 46, { top: '#3a4060', l: '#1a1f30', r: '#2a3048' });
+  b.isoBox(c + 1.0, r - 0.1, 0.2, 1.2, 46, { top: '#3a4060', l: '#1a1f30', r: '#2a3048' });
+  const door = [b.pt(c + 0.2, r, 0), b.pt(c + 1.0, r, 0), b.pt(c + 1.0, r, 40), b.pt(c + 0.2, r, 40)];
+  b.poly(door, 'repeating-linear-gradient(180deg,#323a54 0 3px,#222a40 3px 6px)', zidx(c + 1, r + 1) + 4);
+  const warn = [b.pt(c + 0.2, r, 6), b.pt(c + 1.0, r, 6), b.pt(c + 1.0, r, 9), b.pt(c + 0.2, r, 9)];
+  b.poly(warn, 'repeating-linear-gradient(45deg,#ffd27a 0 5px,#3a3020 5px 10px)', zidx(c + 1, r + 1) + 5);
+  b.rug(c + 0.25, r + 0.05, 0.7, 0.06, 'rgba(255,210,122,.35)', zidx(c + 1, r) + 1);
+  b.led(c + 0.6, r, 42, '#6cc47a', true, zidx(c + 1, r + 1) + 6);
+}
+
+/** 货箱堆(三只木箱 + 板条 + 贴纸)。 */
+export function crateStack(b: SceneBuilder, c: number, r: number): void {
+  const slat = (cc: number, rr: number, h0: number) => {
+    b.southPanel(cc, rr, 0.4, h0 + 2, h0 + 3, '#3a2818', zidx(cc + 0.4, rr) + 5);
+    b.southPanel(cc, rr, 0.4, h0 + 9, h0 + 10, '#3a2818', zidx(cc + 0.4, rr) + 5);
+  };
+  b.contactShadow(c + 0.45, r + 0.25, 40, 20);
+  b.isoBox(c, r, 0.4, 0.4, 14, { top: '#9a7350', l: '#4a3628', r: '#7a5a3c' });
+  slat(c, r, 1);
+  b.southPanel(c + 0.08, r, 0.22, 5, 11, '#d9d3c4', zidx(c + 0.4, r) + 6);
+  b.isoBox(c + 0.5, r + 0.1, 0.4, 0.4, 14, { top: '#8e6a48', l: '#42301f', r: '#6e5232' });
+  slat(c + 0.5, r + 0.1, 1);
+  b.isoBox(c + 0.2, r - 0.1, 0.4, 0.4, 30, { top: '#a87f57', l: '#4a3628', r: '#7a5a3c' });
+  b.southPanel(c + 0.28, r - 0.1, 0.06, 18, 30, '#c9bfa6', zidx(c + 0.6, r) + 7);
+}

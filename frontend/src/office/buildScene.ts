@@ -1,15 +1,21 @@
 import {
   bigPlant,
+  board,
   bookcase,
   cableRun,
   ceilDuct,
   coffeeBar,
+  crateStack,
   deskLamp,
   deskUnit,
+  memoryBook,
   patternRug,
   plant,
   pottedShelf,
+  qaBench,
+  safeBox,
   serverRack,
+  shipBay,
   sofa,
   wallClock,
   wallPoster,
@@ -68,9 +74,35 @@ export function buildScene(): Scene {
 
   furnishLounge(b);
   furnishWorkArea(b);
+  furnishRightColumn(b);
   ceilingLights(b);
 
   return { layout, nodes: b.nodes };
+}
+
+/** 右列四间:质检台 / 领导区(看板+记忆书) / 运维·预算(机架+保险柜) / 发货口(卷帘门+货箱)。 */
+function furnishRightColumn(b: SceneBuilder): void {
+  // 质检台
+  qaBench(b, 11.7, 0.6);
+  plant(b, 12.8, 0.3);
+  wallClock(b, 11.1, 0.2, 30);
+  deskLamp(b, 11.0, 0.95);
+  // 领导区(经理 + 记忆书)
+  board(b, 11.2, 2.4);
+  memoryBook(b, 12.6, 2.6);
+  plant(b, 12.9, 3.5);
+  wallPoster(b, 11.05, 2.0, 1.0, ['#3a2e1a', '#e6bd6c', '#ffd27a']);
+  deskLamp(b, 12.2, 2.2);
+  // 运维 · 预算
+  serverRack(b, 11.3, 6.3);
+  safeBox(b, 12.6, 7.0);
+  cableRun(b, 11.4, 6.0, 44);
+  ceilDuct(b, 11.2, 13, 6.0, 50, '#2a2218');
+  // 发货口
+  shipBay(b, 11.6, 8.3);
+  crateStack(b, 12.7, 9.0);
+  crateStack(b, 11.2, 9.1);
+  pottedShelf(b, 11.1, 8.2);
 }
 
 /** 休息室:花纹地毯 + 沙发 ×2 + 咖啡吧 + 书柜 + 大小绿植 + 猫 + 落地窗 + 海报 + 时钟 + 饮水机 + 风管 + 线缆。 */
