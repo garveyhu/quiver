@@ -6,6 +6,17 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 52 轮(后端收尾 · P5 回滚/还原点)
+- `1e5f68b` feat(core): RestoreLog —— 合并记还原点(merge_seq+commit),"回到 seq N" 解析
+  目标 commit + 被撤销点;record 强制单调。验证:quiver-core rollback 4 过 + 无警告。
+- ⚠ **重要:可离线建+测的纯逻辑机制层,跨 P0–P5 已基本做完**。统计:quiver-memory 35 ·
+  quiver-orchestrator 24 · quiver-core 多模块(sandbox/circuit/capability/audit/metrics/
+  acceptance/rollback)· quiver-llm 2,全绿。
+- **▶ 剩下的几乎都是"集成"**(需触 app/runner/调度/runtime,适合用户在场一起验):
+  ① 沙箱 sandbox-exec 真包 worker 进程;② 审计动态半(干净克隆重跑测试);③ Orchestrator
+  接 scheduler 真派活/回流;④ metrics/acceptance 接账本与 IPC;⑤ MCP 自管记忆(rmcp);
+  ⑥ 真 LLM 经理/图书管理员实跑接线。**下一轮起会偏集成,建议用户在场。**
+
 ### 2026-06-09 · 第 51 轮(后端收尾 · P5 验收台)
 - `67af0ba` feat(core): judge_acceptance —— verify + 审计 tamper + 改动量 汇成验收单,
   给 Pass/Block(带理由),任一硬信号即拦(含篡改测试哪怕 verify 过)。验证:acceptance 4 过 + 无警告。
