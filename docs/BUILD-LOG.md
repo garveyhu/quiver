@@ -6,6 +6,17 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 41 轮(后端收尾 · §5 真 LLM 经理大脑 QwenBrain)
+- `6aaf031` feat(orchestrator): QwenBrain + 共享 quiver-llm crate。
+  🎉 **真跑验证**:有预算+排队→Spawn(自动拟"写 README+--version"的合理任务)、
+  没预算→Escalate(升级给人)。新 crate quiver-llm(千问凭证+chat 共享适配层)。
+  验证:quiver-llm 2 过 + orchestrator 13 过 + workspace 无警告 + 真跑。
+- **▶ 下一步**:① memory 的 qwen(embed/judge/creds)迁到 quiver-llm 去重(纯重构,
+  cargo 保绿);② 把 Orchestrator 接进 app:tick 产出 Effect→真起 worker/合并,on_complete
+  回流(AI 经理作为 scheduler 之上的可选档,P0 的 Rust 直跑队列保留)。
+  **§5 主体齐**(决策/流控/tick/真大脑)→ 转 **P3 安全**:沙箱脚手架(克隆前就位)、
+  独立审计(变异式)、权能分权(Rule of Two)、熔断。
+
 ### 2026-06-09 · 第 40 轮(后端收尾 · §5 一拍编排循环)
 - `bd6f71d` feat(orchestrator): Orchestrator::tick —— 把 Brain 决策 + InFlight 有界在途/栅栏
   + SagaLedger 去重串成一拍,产出待执行 Effect;on_complete 完成回流(栅栏对账释放名额)。
