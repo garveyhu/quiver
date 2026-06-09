@@ -6,7 +6,27 @@
 
 ## ☀️ 晨报（最新在最上）
 
-### 2026-06-09 · 第 27 轮 ⏸ LOOP 已暂停(等你拍板)
+### 2026-06-09 · 第 28 轮(修"启动报错" + bridge 测试)
+
+**你的报障**:"甚至启动都报错"。**根因找到**:一个**孤儿 Quiver vite**(pid 80901,父 yarn
+80899)残留占着 :1420——老 `cargo tauri dev` 的 vite 子进程没随 app 一起退。你再跑
+`cargo tauri dev` 就 "Port 1420 already in use" → 启动失败。**app 本身没问题**。
+
+**做了什么**:
+- 杀掉孤儿 vite(80899/80901)腾空 :1420(没碰隔壁 Chameleon 的 vite)。
+- 干净 `cargo tauri dev` 重启验证:bridge 就绪 pid=70167、**无端口错误**、渲染正常
+  (新构建有"晨报"、`.qv-stage`、HUD 实时 `$0.38`、无 console 错)。**现在 app 正常跑着。**
+- bridge e2e:✅ 启动/渲染/IPC 读路径(HUD 实时统计)。⚠ 入队 e2e 没驱动成功——bridge
+  程序化 click 触发不了 React 受控输入/onClick handler(驱动限制,非 app bug;enqueue→
+  调度→运行链路有 `scheduler_concurrency` 集成测试覆盖、是过的)。
+
+**给你的提醒**:`cargo tauri dev` 的 vite 子进程在 app 崩/被杀后**容易残留**占 :1420。
+下次"启动报错"先 `lsof -nP -iTCP:1420 -sTCP:LISTEN` 看谁占着,kill 掉那个 node/vite 即可。
+(我现在留了一个干净实例 70167 在跑;你要自己重启就先 kill 它。)
+
+---
+
+### 2026-06-09 · 第 27 轮 ⏸ (已被本轮恢复)
 
 **为什么暂停**:能独立、干净、可验证推进的实质工作已全部做完(见下)。再每 5 分钟自动
 唤醒只会硬凑边角、烧 token,违背"绝不空转"红线。故把 cron(5930b49c)**删了**。
