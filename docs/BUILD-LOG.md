@@ -6,6 +6,17 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-10 · 📦 前端重写 · 第 21 刀:交付世界特效 — 质检台一闪 + 发货口飞箱
+- `7c94ef7` feat(office): 把第 20 刀的全屏脉冲升级为原型的局部交付终局(随相机缩放)。
+  - `office/WorldFx`:验收那刻质检台亮绿(通过)/红(打回),通过时从发货口飞出一只货箱(shipout)。
+  - App→Office 传 completionFx;Office 在 .world 内渲染 WorldFx。`global.css`:.worldfx-glow + .crate/shipout 关键帧。
+- **验证**:`tsc` 过;真窗口经 bridge 派 simulate 任务 → 验收那刻 质检台绿 glow(glow=1) + 发货货箱(ship=1) +
+  全屏脉冲(flash=ok) + 状态条「审计通过→发货」;截图见质检台泛绿;console 无报错。
+- **▶ 剩余打磨(低边际,可选)**:① 走廊寻路 + 工人交质检/发货走位(状态机较重,与快任务生命周期同步难);
+  ② 看板拖排(reorder_task,需非原型的列表 UI);③ 设置写面板(update_settings);④ 项目选择器(pick_project,
+  非原型,fresh user 才需)。**前端从零重写实质完成** —— 6 阶段全过、后端 IPC 近全接、原型交互/面板/特效齐。
+  收尾已拆实例、腾空 :1420。**绝不 push/合 main**。
+
 ### 2026-06-10 · ✨ 前端重写 · 第 20 刀:交付时刻反馈 — 验收通过/打回脉冲
 - `35c8803` feat(shell): 移植原型派活终局的"审计通过→发货 / 打回"反馈。
   - `hooks/useCompletionFx`:订阅 task-updated,比对 get_stats 验收/失败计数 —— 验收 +1 → 'ok'、失败 +1 → 'bad',
