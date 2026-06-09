@@ -127,6 +127,10 @@ pub struct RunOutcome {
     /// the episode can bind to its commit. `None` if the worktree never existed
     /// (spawn failure) or the read failed.
     pub commit_sha: Option<String>,
+    /// `git diff --shortstat <base>` for the attempt (DESIGN §6.2 — diff size on the
+    /// episode). Empty string for a no-op run; `None` if base/diff couldn't be read
+    /// or the agent never ran (spawn failure).
+    pub diff_stat: Option<String>,
 }
 
 /// Run one task to completion in an isolated worktree (DESIGN Phase 1 Tasks
@@ -191,6 +195,9 @@ pub async fn run_task_streaming(
 
     // (1) Isolated worktree on a unique per-attempt branch.
     let worktree = guard.create(&task.id, ATTEMPT).await?;
+    // Base commit the attempt branches from — captured now (== worktree HEAD before
+    // the agent runs) so we can diff the attempt against it afterwards (§6.2).
+    let base_sha = guard.head_sha(&worktree).await.ok();
 
     // (2) Spawn the agent in the worktree. A spawn failure here must still GC
     // the worktree we just created (§8.4) — never leak it.
@@ -220,6 +227,7 @@ pub async fn run_task_streaming(
                 branch,
                 verify_output: None,
                 commit_sha: None,
+                diff_stat: None,
             });
         }
     };
@@ -245,10 +253,15 @@ pub async fn run_task_streaming(
         events.push(event);
     }
 
-    // Bind the run to its commit BEFORE any cleanup removes the worktree (§6.2):
-    // the worktree HEAD is the attempt's commit (real mode) or the base it branched
-    // from (a no-op run). Best-effort — a read failure just leaves it unrecorded.
+    // Bind the run to its commit + diff BEFORE any cleanup removes the worktree
+    // (§6.2): the worktree HEAD is the attempt's commit (real mode) or the base it
+    // branched from (a no-op run); diff_stat summarizes the change vs base.
+    // Best-effort — a read failure just leaves it unrecorded.
     let commit_sha = guard.head_sha(&worktree).await.ok();
+    let diff_stat = match &base_sha {
+        Some(base) => guard.diff_stat(&worktree, base).await.ok(),
+        None => None,
+    };
 
     // (4) Agent ran cleanly → run the verify-gate in its worktree (§7 step 1).
     if saw_result_ok {
@@ -270,6 +283,7 @@ pub async fn run_task_streaming(
                     branch,
                     verify_output: None,
                     commit_sha: commit_sha.clone(),
+                    diff_stat: diff_stat.clone(),
                 });
             }
         };
@@ -300,6 +314,7 @@ pub async fn run_task_streaming(
             branch,
             verify_output: Some(verify_output),
             commit_sha: commit_sha.clone(),
+            diff_stat: diff_stat.clone(),
         });
     }
 
@@ -321,6 +336,7 @@ pub async fn run_task_streaming(
         branch,
         verify_output: None,
         commit_sha,
+        diff_stat,
     })
 }
 
@@ -609,6 +625,13 @@ mod tests {
         assert!(
             sha.chars().all(|c| c.is_ascii_hexdigit()),
             "commit_sha must be hex: {sha:?}"
+        );
+        // diff_stat is captured too; a fake/no-op run changed nothing → empty string.
+        assert_eq!(
+            out.diff_stat.as_deref(),
+            Some(""),
+            "a no-op run's diff_stat is captured and empty, got {:?}",
+            out.diff_stat
         );
     }
 

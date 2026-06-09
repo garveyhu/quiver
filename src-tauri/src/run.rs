@@ -73,6 +73,8 @@ pub struct RunSummary {
     pub branch: Option<String>,
     /// Worktree HEAD sha at run end (§6.2) — bound onto the episode.
     pub commit_sha: Option<String>,
+    /// `git diff --shortstat <base>` for the attempt (§6.2) — bound onto the episode.
+    pub diff_stat: Option<String>,
 }
 
 /// A terminal event synthesized AFTER `run_task` returns, carrying the §5.2
@@ -131,6 +133,7 @@ pub async fn run_one_task(
                 &summary.status,
                 &prompt,
                 summary.commit_sha.as_deref(),
+                summary.diff_stat.as_deref(),
             );
             let _ = store.record_run(&NewRun {
                 project,
@@ -149,15 +152,15 @@ pub async fn run_one_task(
             // here (no live error event from a finished worker) — the card status
             // carries it.
             let _ = store.update_task_status(&task_id, "failed", crate::now_ms());
-            record_episode(app, &project, &task_id, "failed", &prompt, None);
+            record_episode(app, &project, &task_id, "failed", &prompt, None, None);
         }
     }
 }
 
 /// Record a §6.2 episode for a finished run into durable agent memory. Best-effort:
 /// memory is additive to the run loop, so a missing store or a write error never
-/// affects the task outcome. `commit_sha` binds the episode to its commit (the
-/// worktree HEAD at run end); `diff_stat` is still a follow-up.
+/// affects the task outcome. `commit_sha` + `diff_stat` bind the episode to its
+/// commit and change size (§6.2 机械绑 git).
 fn record_episode(
     app: &AppHandle,
     project: &str,
@@ -165,6 +168,7 @@ fn record_episode(
     verify_result: &str,
     summary: &str,
     commit_sha: Option<&str>,
+    diff_stat: Option<&str>,
 ) {
     let Some(state) = app.try_state::<crate::AppState>() else {
         return;
@@ -176,6 +180,7 @@ fn record_episode(
         project: project.to_string(),
         task_id: Some(task_id.to_string()),
         commit_sha: commit_sha.map(str::to_string),
+        diff_stat: diff_stat.map(str::to_string),
         verify_result: Some(verify_result.to_string()),
         summary: Some(summary.to_string()),
         created_at: crate::now_ms(),
@@ -355,6 +360,7 @@ pub async fn run_streaming(
         cost_usd: last_cost,
         branch,
         commit_sha: outcome.commit_sha,
+        diff_stat: outcome.diff_stat,
     })
 }
 

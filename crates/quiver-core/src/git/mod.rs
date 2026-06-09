@@ -405,6 +405,15 @@ impl GitGuard {
         let out = run_git_in(worktree.as_path(), &["rev-parse", "HEAD"]).await?;
         Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
     }
+
+    /// `git diff --shortstat <base>` in a worktree: the one-line change summary of
+    /// everything the attempt did versus `base` (committed + uncommitted). Empty
+    /// for a no-op run; e.g. `" 2 files changed, 9 insertions(+), 1 deletion(-)"`
+    /// for a real one. Binds the episode to its diff size (DESIGN §6.2). Lock-free.
+    pub async fn diff_stat(&self, worktree: &WorktreePath, base: &str) -> anyhow::Result<String> {
+        let out = run_git_in(worktree.as_path(), &["diff", "--shortstat", base]).await?;
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    }
 }
 
 /// Result of the lock-free §7 conflict probe.
