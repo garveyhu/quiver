@@ -6,6 +6,15 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 31 轮(后端收尾 · P2 向量续)
+- `0f4af49` feat(memory): 千问 embedding 客户端走可注入 Embedder trait
+  - Embedder trait + FakeEmbedder(离线确定性)+ parse/load_qwen_creds(读 resources.json
+    的 llm.qwen.<profile>)+ QwenEmbedder(qwen feature,reqwest,OpenAI 兼容 /embeddings)。
+  - 验证:quiver-memory 28 过 + `cargo check --features qwen` 能编 + workspace check。
+- **▶ 下一步**:① 混合检索(vector_search 向量腿 + search_facts FTS 腿 + §6.7 加权融合成
+  一个 hybrid_recall);② 写入/promote 时用注入的 Embedder 生成 embedding(simulate 用
+  FakeEmbedder);③ 在 app 里用 --features qwen 真跑一次千问验证(花钱,标结果)。
+
 ### 2026-06-09 · 第 30 轮 — 🔧 转向【后端按蓝图收尾到 P5】(loop-backend.md)
 
 **方向变更(用户拍板)**:先把后端按蓝图 §23 做到 P5,再回头**从零重写前端**(删
