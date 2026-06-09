@@ -122,6 +122,11 @@ pub struct RunOutcome {
     /// show *why* a `VerifyFailed` run failed. `None` if the gate never ran (spawn
     /// failure, permanent agent failure).
     pub verify_output: Option<String>,
+    /// The worktree HEAD SHA at run end (DESIGN §6.2) — the attempt's commit (real
+    /// mode) or the base it branched from (a no-op run). Captured before cleanup so
+    /// the episode can bind to its commit. `None` if the worktree never existed
+    /// (spawn failure) or the read failed.
+    pub commit_sha: Option<String>,
 }
 
 /// Run one task to completion in an isolated worktree (DESIGN Phase 1 Tasks
@@ -214,6 +219,7 @@ pub async fn run_task_streaming(
                 failure: Some(FailureReason::SpawnFailed),
                 branch,
                 verify_output: None,
+                commit_sha: None,
             });
         }
     };
@@ -239,6 +245,11 @@ pub async fn run_task_streaming(
         events.push(event);
     }
 
+    // Bind the run to its commit BEFORE any cleanup removes the worktree (§6.2):
+    // the worktree HEAD is the attempt's commit (real mode) or the base it branched
+    // from (a no-op run). Best-effort — a read failure just leaves it unrecorded.
+    let commit_sha = guard.head_sha(&worktree).await.ok();
+
     // (4) Agent ran cleanly → run the verify-gate in its worktree (§7 step 1).
     if saw_result_ok {
         // An un-spawnable verify command is a misconfigured gate (§7 hard error,
@@ -258,6 +269,7 @@ pub async fn run_task_streaming(
                     failure: Some(FailureReason::VerifyError),
                     branch,
                     verify_output: None,
+                    commit_sha: commit_sha.clone(),
                 });
             }
         };
@@ -287,6 +299,7 @@ pub async fn run_task_streaming(
             failure: None,
             branch,
             verify_output: Some(verify_output),
+            commit_sha: commit_sha.clone(),
         });
     }
 
@@ -307,6 +320,7 @@ pub async fn run_task_streaming(
         failure: Some(failure),
         branch,
         verify_output: None,
+        commit_sha,
     })
 }
 
@@ -569,6 +583,33 @@ mod tests {
             }
             other => panic!("first event should be WorkerStarted with resumed id, got {other:?}"),
         }
+    }
+
+    /// A completed run binds its episode to a commit (§6.2): the outcome carries the
+    /// worktree HEAD sha (a full 40-char hex). For a fake/no-op run that's the base
+    /// commit; for a real agent it's the agent's commit — either way always present.
+    #[tokio::test]
+    async fn run_records_worktree_commit_sha() {
+        let repo = temp_repo();
+        let wt_root = TempDir::new().expect("wt root");
+        let guard = GitGuard::new(repo.path()).with_worktrees_root(wt_root.path());
+        let bin = fake_claude_bin();
+        let verify = VerifyCommand::shell("exit 0");
+        let task = TaskSpec {
+            id: "sha-1".to_string(),
+            prompt: "p".to_string(),
+        };
+
+        let out = run_task_with_options(&guard, &task, &bin, &verify, RunOptions::default())
+            .await
+            .expect("run ok");
+        assert_eq!(out.status, FinishStatus::Verified);
+        let sha = out.commit_sha.expect("commit_sha is captured before cleanup");
+        assert_eq!(sha.len(), 40, "a full git sha is 40 hex chars, got {sha:?}");
+        assert!(
+            sha.chars().all(|c| c.is_ascii_hexdigit()),
+            "commit_sha must be hex: {sha:?}"
+        );
     }
 
     /// The streaming variant fires `on_event` for EACH event AS it arrives —

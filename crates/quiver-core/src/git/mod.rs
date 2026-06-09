@@ -396,6 +396,15 @@ impl GitGuard {
         let out = run_git(&self.repo, &["rev-parse", refname]).await?;
         Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
     }
+
+    /// The commit SHA at a WORKTREE's HEAD — the attempt branch tip after the agent
+    /// ran (its own commit in real mode; the base it branched from for a no-op run).
+    /// Captured before cleanup to bind an episode to its commit (DESIGN §6.2).
+    /// Lock-free read (worktree-local).
+    pub async fn head_sha(&self, worktree: &WorktreePath) -> anyhow::Result<String> {
+        let out = run_git_in(worktree.as_path(), &["rev-parse", "HEAD"]).await?;
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    }
 }
 
 /// Result of the lock-free §7 conflict probe.
