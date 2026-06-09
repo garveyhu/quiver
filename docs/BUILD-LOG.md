@@ -6,6 +6,44 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 14 轮
+
+**落了什么**
+- `9d941a4` feat(brief): get_brief IPC + useBrief hook（经理简报数据层)
+
+**这轮做了什么**
+- 把记忆简报接到 IPC 数据层(§6):quiver-memory 三类型加 Serialize(camelCase);
+  lib.rs 加 `AppState.memory()` + `get_brief` 命令(当前项目,facts≤20/episodes≤10)+
+  注册;前端 `useBrief` hook + Brief/FactRecord/EpisodeRecord wire 类型(读 get_brief、
+  task-updated 刷新)。**brief 数据层端到端打通**(Rust 命令 ↔ TS hook)。
+
+**验证过的**
+- `cargo check --workspace` 无警告 + `cargo test`(quiver-app 19+1 / quiver-memory 15)
+- `yarn tsc --noEmit` 过。
+
+**⚠ 需要你处理 / 卡住**
+- **runtime 验证债被 live 实例阻塞**:当前有你的 Quiver dev 实例在跑
+  (`target/debug/Quiver` pid 34558,占 :1420)。它是**旧二进制**(无记忆接线/get_brief)。
+  要 e2e 验证记忆接线、起新 UI 面、做视觉对照,都需重建并重启二进制——但那会**打断
+  你的运行会话**(无人值守不敢擅杀),跑第二实例又会和同一 DB/端口冲突。
+  **请早上关掉那个 dev 实例**(或让我下轮重启它),我就能一次性:重建 → e2e 验证记忆
+  (跑 simulate 任务→查 memory.sqlite 有 episode)→ 接"简报书"UI 面 → 截图视觉对照。
+
+**各阶段进度**
+- 🎉 后端 P0 全完成;前端 ✅ 落定+运行验证+IPC 完整。
+- **P1 记忆:schema + 读写 + FTS5 + recall + brief + 接进 app + get_brief/useBrief 数据层**。
+  剩(多被 live 实例阻塞):e2e 验证、"简报书"UI 面、episode 补 git 细节。
+
+**今天该接哪**(优先级从上到下)
+1. **(需你先关 live 实例)合并 runtime 验证**:重建起 app → e2e 记忆 + 简报书 UI + 视觉对照。
+2. **"简报书"UI 面**(纯前端,tsc 可验,可不重建先做):用 useBrief 在经理区渲染一个
+   折叠面板(当前事实列表 + 近期 episode),纯 CSS 像素风。先把 UI 写好接上 hook,
+   渲染验证留到 #1 一起。
+3. **episode 补 git 细节**(murky,已评估):supervisor 在 cleanup 前带出 commit_sha
+   (worktree HEAD)+ diff_stat;fake 运行无真 commit,值偏弱——可放后。
+
+---
+
 ### 2026-06-09 · 第 13 轮
 
 **落了什么**
@@ -561,6 +599,12 @@
 ---
 
 ## 📜 历轮记录
+
+### 第 14 轮(2026-06-09)
+- get_brief IPC + useBrief hook:经理简报数据层端到端(quiver-memory 加 Serialize、
+  lib.rs memory()+get_brief+注册、前端 useBrief+wire 类型)(`9d941a4`)。
+- 验证:cargo check/test + tsc 全过。
+- 记下 runtime 验证债被你的 live dev 实例(旧二进制)阻塞,需关掉才能重建验证。
 
 ### 第 13 轮(2026-06-09)
 - P1 brief:MemoryStore::brief + Brief::to_text 组装经理简报(`adaef26`)。
