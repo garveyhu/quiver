@@ -8,9 +8,18 @@ description = "Quiver — durable SQLite agent memory (episodes + bi-temporal fa
 anyhow = "1"
 # Serialize record/brief shapes for the Tauri IPC wire (camelCase to the UI).
 serde = { version = "1", features = ["derive"] }
+# Parse ~/.agents/resources.json for 千问 creds (always; parse logic is unit-tested).
+serde_json = "1"
 # Embedded durable state. `bundled` compiles SQLite from source so there is no
 # system libsqlite3 dependency on any target (matches quiver-store).
 rusqlite = { version = "0.31", features = ["bundled"] }
+# Real 千问 (DashScope) embedding HTTP client — only under the `qwen` feature, so
+# the default build/test stays offline + dependency-light (tests use FakeEmbedder).
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"], optional = true }
+
+[features]
+# Enable the real network-backed QwenEmbedder (pulls in reqwest). Off by default.
+qwen = ["dep:reqwest"]
 
 [dev-dependencies]
 tempfile = "3"

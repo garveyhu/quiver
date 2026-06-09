@@ -19,6 +19,7 @@
 //! record/fact accessor modules hang off [`MemoryStore`] as they are added.
 
 mod brief;
+mod embed;
 mod episodes;
 mod facts;
 mod schema;
@@ -30,6 +31,9 @@ use std::sync::Mutex;
 use rusqlite::Connection;
 
 pub use brief::Brief;
+pub use embed::{load_qwen_creds, parse_qwen_creds, Embedder, FakeEmbedder, QwenCreds};
+#[cfg(feature = "qwen")]
+pub use embed::QwenEmbedder;
 pub use episodes::{EpisodeRecord, NewEpisode};
 pub use facts::{FactRecord, NewFact};
 pub use staging::{NewStaged, StagedRecord};
