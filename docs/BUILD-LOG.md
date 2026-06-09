@@ -6,6 +6,15 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 40 轮(后端收尾 · §5 一拍编排循环)
+- `bd6f71d` feat(orchestrator): Orchestrator::tick —— 把 Brain 决策 + InFlight 有界在途/栅栏
+  + SagaLedger 去重串成一拍,产出待执行 Effect;on_complete 完成回流(栅栏对账释放名额)。
+  验证:quiver-orchestrator 13 过 + workspace 无警告。
+- **▶ 下一步(§5 收尾)**:① 真 LLM ManagerBrain(QwenBrain,§21 让千问按 Decision schema 输出
+  并解析)+ smoke 真跑;② 把 Orchestrator 接进 app/scheduler:Effect::Spawn→真起 worker、
+  on_complete 回流(目前 scheduler 是 Rust 直跑队列,接 orchestrator 做 AI 经理可选档)。
+  §5 主体齐后 → **P3 安全**:沙箱脚手架(克隆前就位)、独立审计(变异式)、权能分权、熔断。
+
 ### 2026-06-09 · 第 39 轮(后端收尾 · §5 流控:有界在途+栅栏+saga)
 - `bb2ee51` feat(orchestrator): InFlight(有界在途+栅栏令牌对账 §5.5/§5.6)+ SagaLedger
   (决策序号去重钥匙,幂等重放)。验证:quiver-orchestrator 8 过 + workspace 无警告。
