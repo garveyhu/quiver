@@ -6,6 +6,17 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-10 · ✨ 前端重写 · 第 20 刀:交付时刻反馈 — 验收通过/打回脉冲
+- `35c8803` feat(shell): 移植原型派活终局的"审计通过→发货 / 打回"反馈。
+  - `hooks/useCompletionFx`:订阅 task-updated,比对 get_stats 验收/失败计数 —— 验收 +1 → 'ok'、失败 +1 → 'bad',
+    瞬态 1.2s。
+  - `App`:fx 同步状态条 + 渲染 #flashfx 脉冲叠层。`global.css`:#flashfx.ok 绿/.bad 红,边缘泛光淡出。
+- **验证**:`tsc` 过;真窗口经 bridge 派 simulate 任务 → 验收那刻 #flashfx.ok(绿脉冲)+ 状态条
+  「审计通过 → 发货 · main 是绿的」+ HUD 通过数 +1;截图见绿边泛光;console 无报错。
+- **▶ 剩余打磨(低边际)**:① 走廊寻路 + 交质检/发货走位动画;② 看板拖排(reorder_task,需 UI 列表);
+  ③ 设置写面板(update_settings)。**功能/数据/交互面已完整 —— 前端从零重写实质完成**,剩多为动画打磨。
+  收尾已拆实例、腾空 :1420。**绝不 push/合 main**。
+
 ### 2026-06-09 · 🛑 前端重写 · 第 19 刀:急停接真 — 批量取消在途 + 全公司冻结
 - `2e39bd4` feat(shell): 命令栏「急停」从占位接真。
   - `services`:加 `cancelTask(id)` + `cancelActiveTasks()`(列在途/排队 → 逐个 cancel_task_cmd,allSettled 返成功数)。
