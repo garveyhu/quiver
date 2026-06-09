@@ -6,6 +6,27 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 21 轮
+
+**落了什么**
+- `9cd9ed3` feat(stats): 晨报接真"昨晚"时间窗(近 24h 完成/失败)
+
+**这轮**:store `task_stats_since(since_ms)`(按 created_at 窗口聚合)+ get_stats 加
+verified_day/failed_day + 晨报改用「昨晚完成/昨晚失败」。验证:cargo test -p quiver-store
+(31 过)+ check + tsc;dev bridge 真机晨报标签渲染。day 真数据需重建二进制(旧二进制
+退化为 0)。
+
+**git**:本地领先 origin 更多(未推)。
+**进度**:🎉 P0 ✅ · P1 ✅ · 前端核心+交互(命令栏/连续缩放[滚轮+键盘]/晨报[含昨晚窗])✅。
+
+**⚠ 高价值下一步全卡在你拍板(已连续多轮,你不在或没定)**:
+① **P2**(向量+图书管理员,解锁信任卡);② **理顺提交/合 main**(领先 origin 多个,
+含 `a8502fd` 不可独立编译中间提交可 squash);③ 关 live dev 实例→记忆 e2e 真机验证;
+④ repo 根残留清理;⑤ **loop 继续/停**。
+不拍板我继续做低风险小切片,但实质进展需你定方向。
+
+---
+
 ### 2026-06-09 · 第 20 轮
 
 **落了什么**
@@ -804,6 +825,10 @@ stats=小后端切片 / 连续语义缩放增强=较复杂)。
 ---
 
 ## 📜 历轮记录
+
+### 第 21 轮(2026-06-09)
+- 晨报接真"昨晚"时间窗:store task_stats_since + get_stats verified_day/failed_day + 晨报标签(`9cd9ed3`)。
+- 验证:cargo test -p quiver-store(31)+ tsc + bridge。
 
 ### 第 20 轮(2026-06-09)
 - 缩放键盘 +/-/0 + 快捷键面板登记(`cde3a4c`);bridge 真机验证 keydown→scale→复位。
