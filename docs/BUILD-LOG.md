@@ -6,6 +6,15 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 49 轮(后端收尾 · P4 子经理递归 — P4 机制层完成)
+- `12c3d7d` feat(orchestrator): ManagerNode —— 子经理递归,预算守恒(切给子=从父挪)、
+  total_remaining 整树汇总。验证:quiver-orchestrator 24 过 + 无警告。
+- 🎉 **P4 机制层完成**:升级阶梯+只减预算 · 价值闸+配额 · 子经理递归。
+- **▶ 下一阶段:P5 乙部 + 自管**(§10–16)。先挑纯逻辑可测的:① 观测/指标(OTel GenAI 风格:
+  每次 run 的 tokens/cost/duration/verify 结果聚合成指标);② 验收台(把 verify 结果 + 审计
+  tamper-scan + diff_stat 汇成一张"验收单");③ 回滚/还原点(记录 merge_seq → 能回退到某点)。
+  之后偏集成的(MCP 自管记忆 rmcp、像素可写手势)需接 app/runtime,适合用户在场。
+
 ### 2026-06-09 · 第 48 轮(后端收尾 · P4 价值闸 + 配额)
 - `d0725b2` feat(orchestrator): ValueGate —— 派活前过闸(付得起/值不值/配额满没),
   GateVerdict Admit/Defer/Reject。验证:quiver-orchestrator 21 过 + 无警告。
