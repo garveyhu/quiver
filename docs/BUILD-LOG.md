@@ -6,6 +6,18 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 🔍 前端重写 · 第 12 刀:连续缩放相机(滚轮朝光标缩放)
+- `94fa5f1` feat(office): §8.5 招牌交互·连续缩放的底座,移植原型 cam/applyCam/fit/wheel。
+  - `office/useCamera`(替代 useFitScale):cam{s,fx,fy},滚轮朝光标缩放(每帧一次 rAF 节流,
+    clamp 到 [fit, fit*10]),Esc/双击复位到 fit,窗口变化重算;叠层(命令栏/面板)打开时不抢滚轮。
+    返回 world 的完整 transform(translate+scale)。
+  - `Office` 应用 camera.worldStyle + 渲染缩放提示;`global.css` .world 去 --s 标量、加 .zoomhint。
+- **验证**:`tsc` 过;真窗口经 bridge 派 wheel —— scale 1.433→13.28(clamp 上限 14.33 内)、缩放提示显隐、
+  Esc 复位回 fitScale 1.433;console 无报错。(rAF 节流证实:同帧多 wheel 只缩一档。)
+- **▶ 下一刀**:① **语义缩放上层**(高倍 → 模糊办公室 + 弹工作台 worksurf 详情 / 点小人 dive 到其轨迹,
+  原型 dive/altitude/breadcrumb);② 走廊寻路 + 交质检/发货走位 + 验收灯效;③ Brief 卡(manager_preview);
+  ④ 时间轴回放 / 信任卡 / 看板拖排。收尾已拆实例、腾空 :1420。**绝不 push/合 main**。
+
 ### 2026-06-09 · 💬 前端重写 · 第 11 刀:工人气泡接 agent-event 实时工具活动
 - `e7d30e3` feat(office): 工位工人头顶气泡显示真实 agent 在做什么。
   - `wire`:加 `AgentEvent` 判别联合(**以 quiver-core/src/event.rs 为准**:顶层 taskId/seq/tsMs/runner +
