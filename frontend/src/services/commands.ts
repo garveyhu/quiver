@@ -1,5 +1,5 @@
 import { call } from '@/services/ipc';
-import type { InitialState, ManagerPreview, RunMode, Stats, TaskRecord, TaskStatus } from '@/services/wire';
+import type { InitialState, ManagerPreview, MetricsDto, RunMode, Stats, TaskRecord, TaskStatus } from '@/services/wire';
 
 /**
  * 具名后端命令封装 —— 每条 IPC 命令一个有类型的函数。hook/服务层调这里，
@@ -22,3 +22,6 @@ export const enqueueTask = (prompt: string, mode: RunMode = 'simulate'): Promise
 
 /** AI 经理在此刻真实局面下会做的决策(只看不动,不 spawn/不花钱)。 */
 export const managerPreview = (): Promise<ManagerPreview> => call<ManagerPreview>('manager_preview');
+
+/** 观测指标聚合(验收率/时延/花费,§10-12)。 */
+export const getMetrics = (): Promise<MetricsDto> => call<MetricsDto>('get_metrics');

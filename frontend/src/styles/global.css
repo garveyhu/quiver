@@ -215,6 +215,18 @@ body {
 .kv b { color: var(--tx-2); min-width: 52px; font-weight: 500; letter-spacing: .2px; }
 .kv span { color: var(--tx-1); }
 .pbtn:disabled { opacity: .5; cursor: not-allowed; }
+.h2-dim { color: #8b94a6; font-weight: 400; font-size: 12px; }
+.kv .kv-tight { min-width: 0; }
+.trust-head { color: #9fb0d0; margin-bottom: 6px; font-size: 12.5px; }
+.bars { display: inline-flex; gap: 2px; vertical-align: middle; }
+.bars i { width: 6px; height: 13px; border-radius: 1.5px; background: #2a3450; }
+.bars i.g { background: var(--ok); }
+.bars i.r { background: var(--bad); }
+.bars i.a { background: var(--accent); }
+.lockline { position: relative; color: var(--tx-3); font-size: 10.5px; margin: 16px 0 10px; text-align: center; letter-spacing: 1.4px; text-transform: uppercase; display: flex; align-items: center; gap: 10px; justify-content: center; }
+.lockline::before, .lockline::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg,transparent,var(--bd-strong),transparent); }
+.lockrow { font-size: 12px; color: var(--tx-2); padding: 3px 0 3px 16px; position: relative; }
+.lockrow::before { content: ""; position: absolute; left: 3px; top: 7px; width: 5px; height: 5px; border-radius: 1px; background: var(--tx-3); }
 .rev { font-size: 12.5px; padding: 8px 10px; background: var(--tint-hi); border: 1px solid var(--bd-soft); border-radius: var(--r-1); display: flex; align-items: center; gap: 9px; flex-wrap: wrap; transition: background var(--t-fast), border-color var(--t-fast); }
 .rev:hover { background: rgba(255,255,255,.06); border-color: var(--bd); }
 .body .rev + .rev { margin-top: 6px; }

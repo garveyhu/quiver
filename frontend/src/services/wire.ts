@@ -57,6 +57,20 @@ export type AgentEvent =
   | (AgentEventBase & { kind: 'error'; code: string; message: string })
   | (AgentEventBase & { kind: 'finished'; status: string; costUsd: number | null; branch: string | null; verifyOutput: string });
 
+/** 观测指标(get_metrics,§10-12):所有项目已结束运行的聚合。 */
+export interface MetricsDto {
+  runs: number;
+  verified: number;
+  failed: number;
+  totalCostUsd: number;
+  totalTokens: number;
+  p50DurationMs: number;
+  p95DurationMs: number;
+  /** 验收率(自治度核心)0..1 */
+  verifyRate: number;
+  avgCostUsd: number;
+}
+
 /** 经理一拍的决策(§21,action 标签)。本前端主要用 action;字段按需。 */
 export interface Decision {
   action: 'spawn' | 'continue' | 'deliver' | 'block' | 'escalate' | 'refresh_memory' | 'noop';
