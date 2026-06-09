@@ -6,6 +6,20 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 💬 前端重写 · 第 11 刀:工人气泡接 agent-event 实时工具活动
+- `e7d30e3` feat(office): 工位工人头顶气泡显示真实 agent 在做什么。
+  - `wire`:加 `AgentEvent` 判别联合(**以 quiver-core/src/event.rs 为准**:顶层 taskId/seq/tsMs/runner +
+    `kind` 标签 payload —— worker_started/tool_use{tool,summary}/output_chunk/result/error/finished)。
+  - `hooks/useWorkers`:加订阅 `agent-event`,维护 taskId→最新工具摘要的气泡表(tool_use→摘要、
+    worker_started→「开工…」),任务出途时剪枝;喂给 placeWorkers。
+  - `office/workers.placeWorkers`:气泡优先用实时工具摘要,缺则退回任务目标。
+- **验证**:`tsc` 过;真窗口经 bridge 派活 → 工位工人气泡「开工…」→「**edit main.rs**」(fake-claude 的
+  Edit tool_use 真摘要)→ 任务完归位;**截图抓到运行中**(HUD 运行 1 + 工人在工位 +「edit main.rs」气泡)。
+  console 无报错。
+- **▶ 下一刀**:① 走廊寻路(经 HALLS 折线走,非直线滑)+ 交质检/发货走位 + 验收通过/打回的灯效与庆祝;
+  ② Brief 卡(经理复述 manager_preview + 报价握手再派);③ 连续缩放/时间轴/信任卡/看板拖排。
+  收尾已拆实例、腾空 :1420。**绝不 push/合 main**。
+
 ### 2026-06-09 · 🏃 前端重写 · 第 10 刀:派活 + 工人按真实任务落工位(§8.4+§8.6 MVP)
 - `040fdec` feat(office): 让办公室随真实任务流动起来。
   - `services`:加 `getInitialState`(副作用:后端据 last_project 设当前项目,派活才有目标仓库)+
