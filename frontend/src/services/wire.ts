@@ -19,8 +19,11 @@ export interface Stats {
   failedDay: number;
 }
 
-/** 任务生命周期状态(v1.0 spec module 5)。 */
-export type TaskStatus = 'queued' | 'running' | 'verifying' | 'done' | 'failed' | 'needs_rebase';
+/**
+ * 任务生命周期状态。以 src-tauri/src/run.rs 实际写入为准:成功终态是 `verified`(run.rs 验证通过写它),
+ * `verifying` 是过渡态;`done` 亦在用。`queued | running | verifying | verified | done | failed | needs_rebase`。
+ */
+export type TaskStatus = 'queued' | 'running' | 'verifying' | 'verified' | 'done' | 'failed' | 'needs_rebase';
 
 /** 看板任务行(list_tasks)。 */
 export interface TaskRecord {
