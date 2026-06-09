@@ -6,6 +6,16 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 42 轮(后端收尾 · 千问实现去重到 quiver-llm)
+- `a09be94` refactor(memory): memory 的 QwenEmbedder/QwenJudge 迁到共享 quiver-llm,
+  删两处重复的凭证加载/HTTP/extract_json_object;memory 不再依赖 reqwest。
+  验证:memory 35 过 + `--features qwen`(含 examples)能编 + workspace 无警告。
+- 现在千问的凭证/chat/embedding 只有 quiver-llm 一处实现,orchestrator(QwenBrain)和
+  memory(QwenEmbedder/QwenJudge)都用它。
+- **▶ 下一步**:把 Orchestrator 接进 app(Effect→真起 worker/合并、on_complete 回流;
+  AI 经理作为 scheduler 之上可选档)——或直接转 **P3 安全**(沙箱脚手架/独立审计/权能分权/熔断),
+  P3 是放开多员工前的硬前提。倾向先起 P3(新能力 > 集成打磨)。
+
 ### 2026-06-09 · 第 41 轮(后端收尾 · §5 真 LLM 经理大脑 QwenBrain)
 - `6aaf031` feat(orchestrator): QwenBrain + 共享 quiver-llm crate。
   🎉 **真跑验证**:有预算+排队→Spawn(自动拟"写 README+--version"的合理任务)、
