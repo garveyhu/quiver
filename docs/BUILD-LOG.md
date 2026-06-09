@@ -6,6 +6,13 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 50 轮(后端收尾 · P5 乙部开张:观测指标)
+- `44165dc` feat(core): metrics —— 多次 run 聚成验收率(自治度核心)/总花费/总 tokens/
+  时延 p50/p95。验证:quiver-core metrics 2 过 + 无警告。
+- **▶ 下一步(P5 续)**:① 验收台(把 verify 结果 + 审计 tamper-scan signals + diff_stat 汇成
+  一张"验收单",给一个 pass/block 结论 + 理由);② 回滚/还原点(记 merge_seq → 能回退到某点)。
+  之后偏集成的(MCP 自管记忆 rmcp、采样接账本、像素可写手势)需接 app/runtime,适合用户在场。
+
 ### 2026-06-09 · 第 49 轮(后端收尾 · P4 子经理递归 — P4 机制层完成)
 - `12c3d7d` feat(orchestrator): ManagerNode —— 子经理递归,预算守恒(切给子=从父挪)、
   total_remaining 整树汇总。验证:quiver-orchestrator 24 过 + 无警告。
