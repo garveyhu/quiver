@@ -6,6 +6,14 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 44 轮(后端收尾 · P3 熔断器)
+- `2e647d2` feat(core): CircuitBreaker —— 连续失败跳闸/冷却半开/成功复位,纯状态机。
+  验证:quiver-core circuit 3 过 + workspace 无警告。
+- **▶ 下一步(P3 续)**:① 沙箱集成:SandboxPolicy::wrap(把 worker 命令包进 sandbox-exec)+
+  接到 runner base_command(macOS、可配开关,别破 fake-claude 测试);② 权能分权(Rule of
+  Two,§7-8:读/写/网三权不同时给一个不可信 agent);③ 独立审计(变异式:干净克隆重跑+查测试被改弱)。
+  P3 主体后 → P4 监督成本递归 → P5 乙部观测。
+
 ### 2026-06-09 · 第 43 轮(后端收尾 · P3 安全开张:沙箱策略)
 - `e941252` feat(core): SandboxPolicy(默认拒绝/显式放行,最小权能)+ to_seatbelt
   (渲染 macOS sandbox-exec profile,deny default 打底、subpath 限子树、网络显式)。
