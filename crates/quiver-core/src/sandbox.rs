@@ -45,6 +45,24 @@ impl SandboxPolicy {
         self
     }
 
+    /// 当前平台是否支持 sandbox-exec(macOS seatbelt)。其它平台调用方应跳过包裹、原样跑
+    /// (或用各自的沙箱方案)。
+    pub fn is_supported() -> bool {
+        cfg!(target_os = "macos")
+    }
+
+    /// 把一条命令包进 sandbox-exec:返回 `(program, args)` =
+    /// `sandbox-exec -p <profile> <program> <原 args…>`。调用方拿去 spawn 即在沙箱里跑。
+    /// 仅 macOS 有意义(先 [`is_supported`](Self::is_supported))。
+    pub fn wrap(&self, program: &str, args: &[String]) -> (String, Vec<String>) {
+        let mut wrapped = Vec::with_capacity(args.len() + 3);
+        wrapped.push("-p".to_string());
+        wrapped.push(self.to_seatbelt());
+        wrapped.push(program.to_string());
+        wrapped.extend_from_slice(args);
+        ("sandbox-exec".to_string(), wrapped)
+    }
+
     /// 渲染成 macOS seatbelt(`sandbox-exec -p <profile>`)profile 字符串。
     /// `(deny default)` 打底,逐项放行;路径用 `subpath` 限定到子树。
     pub fn to_seatbelt(&self) -> String {
@@ -107,6 +125,21 @@ mod tests {
         assert!(sb.contains("(allow network*)"), "显式放开出网");
         assert!(!sb.contains("(deny network*)"));
         assert!(sb.contains("(subpath \"/opt/toolchain\")"), "追加只读子树");
+    }
+
+    #[test]
+    fn wrap_builds_sandbox_exec_invocation() {
+        let (prog, args) = SandboxPolicy::for_worktree("/tmp/wt")
+            .wrap("claude", &["--foo".to_string(), "bar".to_string()]);
+        assert_eq!(prog, "sandbox-exec");
+        assert_eq!(args[0], "-p");
+        assert!(args[1].contains("(deny default)"), "第二个参数是 profile");
+        assert_eq!(&args[2..], &["claude", "--foo", "bar"], "profile 后接原命令");
+    }
+
+    #[test]
+    fn supported_on_macos() {
+        assert_eq!(SandboxPolicy::is_supported(), cfg!(target_os = "macos"));
     }
 
     #[test]
