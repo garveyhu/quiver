@@ -6,6 +6,13 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 45 轮(后端收尾 · P3 权能分权 Rule of Two)
+- `fbb2401` feat(core): Capabilities 三轴(不可信输入/敏感访问/外部副作用)+ Rule of Two
+  校验(三轴全占=注入→外泄,拒;两轴以内放行)。验证:quiver-core capability 3 过 + 无警告。
+- **▶ 下一步(P3 续)**:① 沙箱集成:SandboxPolicy::wrap(命令包进 sandbox-exec)+ 接 runner
+  (macOS/可配,别破 fake-claude);② 独立审计(变异式:干净克隆重跑测试 + 查测试被改弱)。
+  P3 主体后 → P4 监督成本递归(决策税/配额/价值闸/子经理)→ P5 乙部(观测/验收台/MCP 自管)。
+
 ### 2026-06-09 · 第 44 轮(后端收尾 · P3 熔断器)
 - `2e647d2` feat(core): CircuitBreaker —— 连续失败跳闸/冷却半开/成功复位,纯状态机。
   验证:quiver-core circuit 3 过 + workspace 无警告。
