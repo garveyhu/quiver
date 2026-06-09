@@ -6,6 +6,40 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 12 轮
+
+**落了什么**
+- `edd9524` feat(app): 把 agent 记忆接进 app,完成时记 episode（P1 纵向切片)
+
+**这轮做了什么**
+- 把 quiver-memory 接进 Tauri 层(§6/§23 P1):src-tauri 依赖 quiver-memory;AppState 加
+  `memory: OnceLock<Arc<MemoryStore>>`;setup() 开 memory.sqlite(best-effort,失败只 warn
+  不阻塞);run_one_task 完成(成功/失败)即 `record_episode`(§6.2:project/task_id/
+  verify_result=终态/summary=prompt)。commit_sha/diff_stat 留下刀补。
+
+**验证过的**
+- `cargo check --workspace` ✅ 无警告、`cargo test -p quiver-app` ✅(19+1)。
+- ⚠ **端到端未运行时确认**:真跑一个任务→落 episode 行没现场验证(需重建 Quiver 二进制
+  + 驱动 run + 查 memory.sqlite,较重;且当前 live 实例是旧二进制,Rust 不热重载)。
+  record_episode 本身在 quiver-memory 已单测。
+
+**各阶段进度**
+- 🎉 后端 P0 全部完成;前端 ✅ 落定+运行验证+IPC 完整。
+- **P1 记忆:schema + 读写 + FTS5 + 已接进 app(完成记 episode)**。
+  剩:e2e 验证、episode 补 git 细节(commit_sha/diff_stat)、经理简报、§6.7 混合召回。
+
+**今天该接哪**(优先级从上到下)
+1. **e2e 验证记忆接线**(loop 纪律,真窗口):重建并起 app(`agent-debug.sh up` —
+   :1420 占用时它会直接跑新建二进制)→ 跑一个 simulate 任务 → 用 bridge eval 或直接
+   读 `~/Library/Application Support/<bundle>/memory.sqlite` 确认有 episode 行。
+2. **episode 补 git 细节**:run 后查 `git -C <worktree> rev-parse HEAD`(commit_sha)+
+   `git diff --shortstat`(diff_stat)填进 episode(§6.2 机械绑 git)。
+3. **经理简报 brief**(§6):Rust 侧函数组装 current_facts(+search)成上下文面 + 测试。
+4. **§6.7 混合召回排序**:recency·importance·trust 加权。
+5. 前端视觉对照原型(仍需先解决截图)。
+
+---
+
 ### 2026-06-09 · 第 11 轮
 
 **落了什么**
@@ -493,6 +527,11 @@
 ---
 
 ## 📜 历轮记录
+
+### 第 12 轮(2026-06-09)
+- P1 记忆接进 app:src-tauri 依赖 + AppState.memory + setup 开 memory.sqlite +
+  run_one_task 完成记 episode(`edd9524`)。
+- 验证:cargo check --workspace 无警告 + quiver-app 测试过。e2e 未现场验证(见晨报)。
 
 ### 第 11 轮(2026-06-09)
 - P1 记忆访问器:record_episode/episodes_for_project + insert_fact/current_facts
