@@ -1,15 +1,22 @@
-import { QuiverShell } from '@/shell';
-import { SettingsProvider } from '@/shell/SettingsContext';
+import '@/styles/global.css';
 
-/**
- * App 外壳 —— 全像素 React UI(QuiverShell)。
- * SettingsProvider 让设置成为全应用单一数据源(看板预算 Banner / 默认模式
- * 与设置页实时同步,不再因各自 useSettings 实例分叉)。
- */
+import { Office } from '@/office/Office';
+import { Caption } from '@/shell/Caption';
+import { Ctrls } from '@/shell/Ctrls';
+import { Hud } from '@/shell/Hud';
+
+/** 应用根:等距办公室舞台 + 叠层 HUD/控件/状态条 + 静态画面后期(暗角/颗粒)。 */
 export function App() {
   return (
-    <SettingsProvider>
-      <QuiverShell />
-    </SettingsProvider>
+    <>
+      <div id="stage" className="stage">
+        <Office />
+      </div>
+      <Hud />
+      <Ctrls />
+      <Caption />
+      <div id="vignette" />
+      <div id="grain" />
+    </>
   );
 }
