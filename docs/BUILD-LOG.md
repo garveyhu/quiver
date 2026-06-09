@@ -6,6 +6,15 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 54 轮(后端收尾 · P5 人事/升级阶梯)
+- `9fe59a4` feat(orchestrator): WorkerRecord + tier_for —— 按跑量+验收率定信任档
+  (试用/熟手/骨干),样本不足一律试用。验证:quiver-orchestrator 28 过 + 无警告。
+- ⚠ **纯逻辑机制层到这真的见底了**:P0–P5 各阶段能离线建+测的机制全部落齐(向量/编排/
+  安全/监督/乙部),~30 个干净提交、全绿。§16 开张 + §13 调度按档 + 余下全是集成。
+- **▶ 只剩集成**(沙箱套 spawn / 审计动态半 / 编排接调度 / metrics·acceptance·personnel
+  接账本+IPC / MCP 自管记忆)——都需触 app/runner/runtime,**必须用户在场验**。本地领先 origin
+  48 个提交未 push。**已连续多轮提示到此边界:建议暂停 loop 等用户在场接集成,或先推代码 review。**
+
 ### 2026-06-09 · 第 53 轮(后端收尾 · 沙箱→命令纯桥 wrap)
 - `522f8dc` feat(core): SandboxPolicy::wrap(命令包成 sandbox-exec 调用)+ is_supported。
   沙箱集成的纯半。验证:quiver-core sandbox 6 过 + 无警告。
