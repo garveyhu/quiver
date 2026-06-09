@@ -6,6 +6,15 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 集成阶段 · 第 3 刀:独立审计动态半 clean_clone_verify
+- `3ed1581` feat(core): clean_clone_verify —— 把成果完整克隆到干净副本、检出 commit、跑 verify,
+  挫败 worktree 内对测试的篡改。真 git fixture 测过(clone+隔离 verify)。quiver-core audit 5 过 + 无警告。
+- 🎉 **独立审计两半齐了**:静态半 scan_test_tampering(扫 diff 揪改弱)+ 动态半 clean_clone_verify
+  (干净副本重跑)。
+- **▶ 下一块集成**:① supervisor 验收时接 clean_clone_verify + judge_acceptance(触 verify 路径,接线刀);
+  ② Orchestrator 接 scheduler(AI 经理真派活,大+花钱);③ 沙箱套 spawn(gated 开关,别破 fake-claude)。
+  cron 06a96c93 在跑(5 分钟)。
+
 ### 2026-06-09 · 集成阶段 · 第 2 刀:per-task tokens/duration 落库
 - `6c25a0e` feat(metrics): task 加 tokens/duration_ms 列 + set_task_metrics + metric_samples;
   run.rs 从 Result 取真 tokens/duration 落库;get_metrics 改用 metric_samples、优先真值缺则
