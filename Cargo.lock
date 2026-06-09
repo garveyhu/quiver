@@ -2461,6 +2461,7 @@ dependencies = [
  "fix-path-env",
  "libc",
  "quiver-core",
+ "quiver-memory",
  "quiver-store",
  "rand",
  "scopeguard",
@@ -2488,6 +2489,16 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
+]
+
+[[package]]
+name = "quiver-memory"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "rusqlite",
+ "serde",
+ "tempfile",
 ]
 
 [[package]]
