@@ -37,7 +37,8 @@ pub struct NewFact {
 }
 
 /// A stored fact row (current-truth read shape — the fields recall/brief needs).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FactRecord {
     pub id: i64,
     pub project: String,

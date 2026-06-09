@@ -26,7 +26,8 @@ pub struct NewEpisode {
 }
 
 /// A stored episode row (read shape).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EpisodeRecord {
     pub id: i64,
     pub project: String,

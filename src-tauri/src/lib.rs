@@ -31,7 +31,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
-use quiver_memory::MemoryStore;
+use quiver_memory::{Brief, MemoryStore};
 use quiver_store::{
     InitialState, NewTask, Settings, SettingsPatch, Store, StoredEvent, TaskRecord,
 };
@@ -64,6 +64,14 @@ impl AppState {
             .get()
             .cloned()
             .ok_or_else(|| "持久化存储尚未初始化".to_string())
+    }
+
+    /// The durable agent memory, installed in `setup`.
+    fn memory(&self) -> Result<Arc<MemoryStore>, String> {
+        self.memory
+            .get()
+            .cloned()
+            .ok_or_else(|| "记忆存储尚未初始化".to_string())
     }
 }
 
@@ -199,6 +207,23 @@ fn get_stats(state: State<'_, AppState>) -> Result<Stats, String> {
         spent_day,
         spent_month,
     })
+}
+
+/// How many facts / episodes a brief carries (DESIGN §6 简报). Bounded so the
+/// brief stays a compact context snapshot, not a memory dump.
+const BRIEF_FACT_LIMIT: usize = 20;
+const BRIEF_EPISODE_LIMIT: usize = 10;
+
+/// The current project's memory brief (DESIGN §6): current-truth facts + recent
+/// episodes, for the manager "简报书" panel. Empty (not an error) before any
+/// memory is recorded — a fresh project simply has nothing yet.
+#[tauri::command]
+fn get_brief(state: State<'_, AppState>) -> Result<Brief, String> {
+    let project = current_project(&state)?.display().to_string();
+    let memory = state.memory()?;
+    memory
+        .brief(&project, BRIEF_FACT_LIMIT, BRIEF_EPISODE_LIMIT)
+        .map_err(|e| format!("{e:#}"))
 }
 
 /// Suggest a verify-gate command (DESIGN §7) by sniffing the current project for
@@ -535,6 +560,7 @@ pub fn run() {
         update_settings,
         list_tasks,
         get_stats,
+        get_brief,
         suggest_verify_command,
         reorder_task,
         cancel_task_cmd,
@@ -555,6 +581,7 @@ pub fn run() {
         update_settings,
         list_tasks,
         get_stats,
+        get_brief,
         suggest_verify_command,
         reorder_task,
         cancel_task_cmd,

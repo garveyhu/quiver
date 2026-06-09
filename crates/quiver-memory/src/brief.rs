@@ -7,7 +7,8 @@
 use crate::{EpisodeRecord, FactRecord, MemoryStore};
 
 /// A project's memory snapshot for context injection (§6).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Brief {
     pub project: String,
     /// Current-truth facts (`invalid_at IS NULL`), most important first, capped.

@@ -6,6 +6,8 @@ description = "Quiver — durable SQLite agent memory (episodes + bi-temporal fa
 
 [dependencies]
 anyhow = "1"
+# Serialize record/brief shapes for the Tauri IPC wire (camelCase to the UI).
+serde = { version = "1", features = ["derive"] }
 # Embedded durable state. `bundled` compiles SQLite from source so there is no
 # system libsqlite3 dependency on any target (matches quiver-store).
 rusqlite = { version = "0.31", features = ["bundled"] }
