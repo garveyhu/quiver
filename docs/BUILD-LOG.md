@@ -6,6 +6,22 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 💰 前端重写 · 第 16 刀:预算上限接 get_settings(去硬编码 30)
+- `0d03ab1` feat(hud): 把 HUD/Atmosphere 的预算上限从硬编码 30 改为真实 get_settings.nightlyBudgetUsd。
+  - `services`:加 getSettings/updateSettings + wire Settings/SettingsPatch(camelCase,以 store/settings.rs 为准)。
+  - `hooks/useSettings`:挂载拉一次。`App`:budgetCap = nightlyBudgetUsd ?? null,喂 Hud + Atmosphere;
+    删 palette 硬编码 BUDGET_CAP_USD=30。
+  - `Hud`:cap 设了显「$X/cap」+ 进度条;**未设诚实显「$X 今夜」不显假条**。`Atmosphere`:预算染色 null-safe。
+- **验证(双路径)**:`tsc` 过;真窗口经 bridge —— 真实 nightlyBudgetUsd=null → HUD「$0.07 今夜」无条;
+  临时 update_settings 设 8 + `location.reload()` → 「$0.07/8」+ 条 0.875%(=0.07/8);**验毕复原为 null(净零配置改动)**。
+  console 无报错。**至此 get_settings/update_settings IPC 接通。**
+- **IPC 接通进度**:get_initial_state · get_stats · get_metrics · list_tasks · manager_preview · get_episodes ·
+  get_settings · update_settings · enqueue_task_cmd · agent-event · task-updated。**未接**:get_brief(facts 为 0,
+  记忆未接入)· cancel_task_cmd/reorder_task(看板写操作)· get_task_events(轨迹下钻)。
+- **▶ 下一刀**:① 语义缩放上层(点小人 dive → 相机飞入 + worksurf,接 get_task_events 看真实轨迹);
+  ② 走廊寻路 + 交质检/发货走位 + 验收灯效;③ 看板拖排/取消(reorder_task/cancel_task_cmd);④ 设置面板(写)。
+  收尾已拆实例、腾空 :1420。**绝不 push/合 main**。
+
 ### 2026-06-09 · 🕰 前端重写 · 第 15 刀:时间线面板 — 过夜交付记录接 get_episodes
 - `2b3b4d7` feat(shell): 时间线面板。(先起真窗口探得 get_episodes 有 7 条真数据、get_brief facts 0/episodes 7,
   故选 episodes 时间线。)
