@@ -324,6 +324,64 @@ impl MemoryStore {
         candidates.truncate(limit);
         Ok(candidates)
     }
+
+    /// Attach a dense embedding to a fact (§6.7 向量召回). Stores the f32 vector as a
+    /// little-endian BLOB and stamps which model/dim produced it (so a model swap
+    /// knows what to recompute). Idempotent overwrite.
+    pub fn set_fact_embedding(
+        &self,
+        fact_id: i64,
+        embedding: &[f32],
+        embed_model: &str,
+    ) -> anyhow::Result<()> {
+        let conn = self.conn.lock().expect("memory store lock");
+        conn.execute(
+            "UPDATE memory_fact SET embedding = ?2, embed_model = ?3, embed_dim = ?4 WHERE id = ?1",
+            params![fact_id, vec_to_blob(embedding), embed_model, embedding.len() as i64],
+        )?;
+        Ok(())
+    }
+
+    /// §6.7 向量腿:在 `project` 的当前真相事实里按 cosine 相似度排序返回 top-k(只看已
+    /// 向量化的事实)。小库直接 Rust 暴力余弦;sqlite-vec(vec0)ANN 索引是后续刀(规模化时)。
+    /// 与 `search_facts`(FTS 关键词腿)互补,上层融合成混合检索。
+    pub fn vector_search(
+        &self,
+        project: &str,
+        query: &[f32],
+        limit: usize,
+    ) -> anyhow::Result<Vec<FactRecord>> {
+        let conn = self.conn.lock().expect("memory store lock");
+        let mut stmt = conn.prepare(
+            "SELECT id, project, scope, kind, text, entities, importance,
+                    valid_at, invalid_at, recorded_at, trust, entity, embedding
+             FROM memory_fact
+             WHERE project = ?1 AND invalid_at IS NULL AND embedding IS NOT NULL",
+        )?;
+        let mut scored: Vec<(f32, FactRecord)> = stmt
+            .query_map(params![project], |row| {
+                let blob: Vec<u8> = row.get(12)?;
+                let rec = FactRecord {
+                    id: row.get(0)?,
+                    project: row.get(1)?,
+                    scope: row.get(2)?,
+                    kind: row.get(3)?,
+                    text: row.get(4)?,
+                    entities: row.get(5)?,
+                    importance: row.get(6)?,
+                    valid_at: row.get(7)?,
+                    invalid_at: row.get(8)?,
+                    recorded_at: row.get(9)?,
+                    trust: row.get(10)?,
+                    entity: row.get(11)?,
+                };
+                Ok((cosine(query, &blob_to_vec(&blob)), rec))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        scored.truncate(limit);
+        Ok(scored.into_iter().map(|(_, r)| r).collect())
+    }
 }
 
 /// Half-life (days) of a fact's recency contribution — older facts decay smoothly.
@@ -370,6 +428,41 @@ fn score(f: &FactRecord, now_ms: i64) -> f64 {
     W_IMPORTANCE * f.importance as f64
         + W_TRUST * trust_weight(&f.trust)
         + W_RECENCY * recency_score(now_ms, f.recorded_at)
+}
+
+/// Pack an f32 embedding into a little-endian BLOB.
+fn vec_to_blob(v: &[f32]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(v.len() * 4);
+    for f in v {
+        out.extend_from_slice(&f.to_le_bytes());
+    }
+    out
+}
+
+/// Unpack a little-endian BLOB back into f32s (trailing partial bytes ignored).
+fn blob_to_vec(b: &[u8]) -> Vec<f32> {
+    b.chunks_exact(4)
+        .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+        .collect()
+}
+
+/// Cosine similarity in [-1, 1]; 0 when either vector is empty/zero or dims differ.
+fn cosine(a: &[f32], b: &[f32]) -> f32 {
+    if a.len() != b.len() || a.is_empty() {
+        return 0.0;
+    }
+    let mut dot = 0.0f32;
+    let mut na = 0.0f32;
+    let mut nb = 0.0f32;
+    for i in 0..a.len() {
+        dot += a[i] * b[i];
+        na += a[i] * a[i];
+        nb += b[i] * b[i];
+    }
+    if na == 0.0 || nb == 0.0 {
+        return 0.0;
+    }
+    dot / (na.sqrt() * nb.sqrt())
 }
 
 #[cfg(test)]
@@ -698,5 +791,23 @@ mod tests {
             store.current_state("/r", "moduleA").unwrap().unwrap().text,
             "uses smol"
         );
+    }
+
+    #[test]
+    fn vector_search_ranks_by_cosine_and_skips_unembedded() {
+        let store = MemoryStore::open_in_memory().unwrap();
+        let a = store.insert_fact(&fact("/r", "alpha", 5, 1)).unwrap();
+        let b = store.insert_fact(&fact("/r", "beta", 5, 1)).unwrap();
+        let c = store.insert_fact(&fact("/r", "gamma", 5, 1)).unwrap();
+        store.set_fact_embedding(a, &[1.0, 0.0, 0.0], "qwen-test").unwrap();
+        store.set_fact_embedding(b, &[0.0, 1.0, 0.0], "qwen-test").unwrap();
+        store.set_fact_embedding(c, &[0.9, 0.1, 0.0], "qwen-test").unwrap();
+        // A fact with no embedding must be excluded from the vector leg.
+        store.insert_fact(&fact("/r", "no-vec", 5, 1)).unwrap();
+
+        let hits = store.vector_search("/r", &[1.0, 0.0, 0.0], 2).unwrap();
+        assert_eq!(hits.len(), 2, "limit honored, un-embedded fact skipped");
+        assert_eq!(hits[0].text, "alpha", "exact-match vector ranks first");
+        assert_eq!(hits[1].text, "gamma", "near vector second, orthogonal beta drops");
     }
 }

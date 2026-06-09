@@ -100,6 +100,10 @@ pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
     // Backfill the scalar `entity` column onto memory_fact for DBs created before it
     // (CREATE TABLE IF NOT EXISTS won't reshape an existing table). Idempotent.
     add_column_if_absent(conn, "memory_fact", "entity", "TEXT")?;
+    // §6.7 向量召回:事实的稠密向量(f32 小端打包成 BLOB;embed_model/embed_dim 已有列)。
+    // P2 第一步——存储 + Rust 余弦检索(小库够用);sqlite-vec(vec0)ANN 索引 + 千问
+    // embedding 生成是后续刀。NULL = 尚未向量化。
+    add_column_if_absent(conn, "memory_fact", "embedding", "BLOB")?;
 
     // §6.4 hard rule: at most ONE current 状态 fact per (project, entity) — the
     // database rejects a second. A partial unique index (only current 状态 rows)
