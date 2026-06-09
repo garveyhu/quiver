@@ -8,6 +8,9 @@
 //! 本 crate 是**纯逻辑**:不碰 tauri,也还不直接依赖 runner/store/memory —— 经理拿到的
 //! 是已经压扁的 [`ManagerContext`],产出的 [`Decision`] 由上层(app/core)去执行。
 
+mod flow;
+pub use flow::{Fence, InFlight, SagaLedger};
+
 use serde::{Deserialize, Serialize};
 
 /// 经理一拍的决策(§21)。`action` 标签 + snake_case,既给 LLM 当 json-schema 输出形,
