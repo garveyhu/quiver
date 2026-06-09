@@ -6,6 +6,15 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 36 轮(后端收尾 · P2 图书管理员自动选候选)
+- `60c0558` feat(memory): reconcile_new_fact —— 按 §6.4 自动挑同实体候选再核对。
+  验证:quiver-memory 35 过 + workspace check。
+- **▶ 下一步**:① 真 LLM 判断器 QwenJudge(qwen feature,/chat/completions + JSON 裁决,
+  可注入 ContradictionJudge)+ smoke 真跑;② 语义邻居(vector)选候选精化。
+  **P2 记忆基本齐** → 转 **§5 AI 经理编排**:经理决策 schema(spawn/continue/deliver/
+  block/escalate/refresh_memory)+ saga_step 去重钥匙 + 栅栏令牌对账 + 有界在途。
+  之后 P3 安全 → P4 → P5。
+
 ### 2026-06-09 · 第 35 轮(后端收尾 · P2 图书管理员机制层)
 - `af3c4b2` feat(memory): 图书管理员机制层 — AI 判矛盾作废(§6.4)。
   ContradictionJudge trait + Verdict + FakeJudge;retire_fact(作废并链到新事实);
