@@ -275,6 +275,11 @@ body {
 #rededge { position: fixed; inset: 0; pointer-events: none; z-index: 8520; opacity: 0; background: radial-gradient(120% 100% at 50% 50%,rgba(226,60,50,0) 62%,rgba(226,60,50,.42) 100%); transition: opacity 1.2s linear; }
 #rededge.pulse { animation: redpulse 2.4s ease-in-out infinite; }
 @keyframes redpulse { 0%,100%{ opacity: var(--re,.3); } 50%{ opacity: calc(var(--re,.3) * 1.7); } }
+/* 交付时刻脉冲:验收通过(绿)/打回(红),边缘短暂泛光后散去 */
+#flashfx { position: fixed; inset: 0; pointer-events: none; z-index: 8540; opacity: 0; }
+#flashfx.ok { background: radial-gradient(120% 100% at 50% 50%, rgba(108,196,122,0) 60%, rgba(108,196,122,.42) 100%); animation: flashfx 1.2s ease-out; }
+#flashfx.bad { background: radial-gradient(120% 100% at 50% 50%, rgba(226,96,79,0) 60%, rgba(226,96,79,.42) 100%); animation: flashfx 1.2s ease-out; }
+@keyframes flashfx { 0%{ opacity: 0; } 18%{ opacity: 1; } 100%{ opacity: 0; } }
 #vignette { position: fixed; inset: 0; pointer-events: none; z-index: 8500; background: radial-gradient(130% 110% at 50% 42%,rgba(0,0,0,0) 52%,rgba(0,0,0,.28) 84%,rgba(0,0,0,.6) 100%); }
 #grain { position: fixed; inset: -50%; width: 200%; height: 200%; pointer-events: none; z-index: 8530; opacity: .05; mix-blend-mode: overlay;
   background-image: repeating-radial-gradient(rgba(255,255,255,.6) 0 1px,transparent 1px 2px),repeating-radial-gradient(rgba(0,0,0,.5) 0 1px,transparent 1px 3px);

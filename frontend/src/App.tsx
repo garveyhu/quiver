@@ -2,6 +2,7 @@ import '@/styles/global.css';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useCompletionFx } from '@/hooks/useCompletionFx';
 import { useEpisodes } from '@/hooks/useEpisodes';
 import { useHud } from '@/hooks/useHud';
 import { useMetrics } from '@/hooks/useMetrics';
@@ -40,7 +41,14 @@ export function App() {
   const report = useMorningReport(overlay === 'report');
   const metrics = useMetrics(overlay === 'trust');
   const episodes = useEpisodes(overlay === 'timeline');
+  const completionFx = useCompletionFx();
   const goalIdx = useRef(0);
+
+  // 交付完成 → 状态条同步报喜/报忧(脉冲叠层在下方渲染)。
+  useEffect(() => {
+    if (completionFx === 'ok') setCaption('审计通过 → 发货 · main 是绿的。');
+    else if (completionFx === 'bad') setCaption('审计打回 — 留分支等你决定，绝不自动改 main。');
+  }, [completionFx]);
 
   // 启动读启动包:副作用是让后端设好当前项目,派活才有目标仓库。
   useEffect(() => {
@@ -143,6 +151,7 @@ export function App() {
       <TrustCard open={overlay === 'trust'} metrics={metrics} onClose={() => setOverlay('none')} />
       <Timeline open={overlay === 'timeline'} episodes={episodes} onClose={() => setOverlay('none')} />
       <Atmosphere spentUsd={hud.spentUsd} budgetCapUsd={budgetCap} />
+      <div id="flashfx" className={completionFx ?? ''} />
       <div id="vignette" />
       <div id="grain" />
     </>
