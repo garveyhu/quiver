@@ -1,6 +1,17 @@
+import {
+  ceilDuct,
+  deskLamp,
+  deskUnit,
+  plant,
+  pottedShelf,
+  serverRack,
+  wallPoster,
+  whiteboard,
+  windowWall,
+} from '@/office/furniture';
 import { computeLayout, zidx, type Layout, C, R, WALLH } from '@/office/iso';
 import { SceneBuilder, type SceneNode } from '@/office/primitives';
-import { ROOMS, HALLS, roomAt, type RoomKey } from '@/office/rooms';
+import { DESKS, ROOMS, HALLS, roomAt, type RoomKey } from '@/office/rooms';
 
 export interface Scene {
   layout: Layout;
@@ -47,5 +58,35 @@ export function buildScene(): Scene {
     b.label((room.c0 + room.c1) / 2, (room.r0 + room.r1) / 2, room.label);
   }
 
+  furnishWorkArea(b);
+  ceilingLights(b);
+
   return { layout, nodes: b.nodes };
+}
+
+/** 工位区:12 套工位 + 服务器架 ×2 + 白板 + 绿植 + 落地窗 + 海报 + 风管 + 台灯 + 盆栽。 */
+function furnishWorkArea(b: SceneBuilder): void {
+  DESKS.forEach(([c, r]) => deskUnit(b, c, r));
+  serverRack(b, 5.3, 8.6);
+  serverRack(b, 6.6, 8.6);
+  whiteboard(b, 7.6, 0, 1.6);
+  plant(b, 8.9, 8.6);
+  windowWall(b, 5.6, 7.2, 0);
+  wallPoster(b, 8.5, 0.0, 1.1, ['#243042', '#46a0a0', '#5ce0ff']);
+  ceilDuct(b, 5.4, 7.2, 0.0, 50, '#283044');
+  ceilDuct(b, 5.4, 7.2, 4.0, 50, '#283044');
+  deskLamp(b, 5.4, 0.65);
+  deskLamp(b, 7.4, 0.65);
+  deskLamp(b, 9.4, 0.65);
+  pottedShelf(b, 8.95, 0.2);
+}
+
+/** 顶光:暖区(休息室/运维)与冷区(工位/质检)分色。 */
+function ceilingLights(b: SceneBuilder): void {
+  b.ceilLamp(1.8, 4, 'rgba(255,200,150,.5)');
+  b.ceilLamp(7, 3, 'rgba(150,190,255,.46)');
+  b.ceilLamp(7, 7, 'rgba(150,190,255,.42)');
+  b.ceilLamp(12, 1, 'rgba(150,230,200,.46)');
+  b.ceilLamp(12, 3, 'rgba(255,210,140,.4)');
+  b.ceilLamp(12, 7, 'rgba(255,210,140,.4)');
 }

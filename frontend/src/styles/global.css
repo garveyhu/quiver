@@ -46,6 +46,23 @@ body {
 .roomlabel { position: absolute; transform: translate(-50%,-50%); font-size: 10.5px; letter-spacing: 1.2px; color: var(--tx-2); background: rgba(10,14,26,.5);
   padding: 3px 9px; border-radius: var(--r-1); white-space: nowrap; pointer-events: none; backdrop-filter: blur(2px); border: 1px solid var(--bd-soft); }
 .poly { position: absolute; inset: 0; pointer-events: none; transition: background .3s; }
+.rect { position: absolute; pointer-events: none; transition: background .3s; }
+.glow { position: absolute; border-radius: 50%; filter: blur(9px); mix-blend-mode: screen; pointer-events: none; }
+
+/* ===== 家具/道具像素细节 ===== */
+.pled { position: absolute; width: 2px; height: 2px; margin-left: -1px; margin-top: -1px; border-radius: 1px; pointer-events: none; }
+.pled.b { animation: blink2 1.4s steps(1) infinite; }
+.pspeck { position: absolute; width: 2px; height: 2px; border-radius: 1px; pointer-events: none; }
+.pcshadow { position: absolute; border-radius: 50%; background: rgba(0,0,0,.34); filter: blur(1.5px); pointer-events: none; }
+.pscan { position: absolute; pointer-events: none; opacity: .5; background: repeating-linear-gradient(0deg, rgba(255,255,255,.10) 0 1px, transparent 1px 3px); }
+@keyframes blink2 { 0%,100%{ opacity: 1; } 50%{ opacity: .2; } }
+
+/* ===== 窗外体积光束 ===== */
+.godray { position: absolute; pointer-events: none; mix-blend-mode: screen; opacity: .5;
+  background: linear-gradient(180deg, rgba(173,214,255,.5) 0%, rgba(160,200,255,.18) 42%, rgba(160,200,255,0) 92%);
+  clip-path: polygon(34% 0, 66% 0, 92% 100%, 8% 100%); filter: blur(3px); animation: shaft 7.5s ease-in-out infinite; transform-origin: 50% 0; }
+.godray.b { opacity: .32; clip-path: polygon(44% 0, 58% 0, 78% 100%, 20% 100%); animation-duration: 9.5s; animation-delay: -3s; }
+@keyframes shaft { 0%,100%{ opacity: .34; transform: skewX(-3deg) scaleX(.96); } 50%{ opacity: .6; transform: skewX(0deg) scaleX(1.04); } }
 
 /* ===== 顶部 HUD ===== */
 .hud { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 18px; padding: 0 18px; height: 42px;
