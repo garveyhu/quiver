@@ -6,6 +6,23 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 🏃 前端重写 · 第 10 刀:派活 + 工人按真实任务落工位(§8.4+§8.6 MVP)
+- `040fdec` feat(office): 让办公室随真实任务流动起来。
+  - `services`:加 `getInitialState`(副作用:后端据 last_project 设当前项目,派活才有目标仓库)+
+    `enqueueTask(prompt, simulate)`(入队即自动 kick 调度器跑,fake-claude 免费);wire 加 RunMode/InitialState。
+  - `App`:启动调 get_initial_state;「CEO 下目标」按钮 + 命令栏「派活/新任务」→ 入队 simulate 任务
+    (轮流取 GOALS),状态条反馈。
+  - `office/workers`:initialWorkers → `placeWorkers(layout, active)`,按在途(running/verifying)任务把前 K 个
+    员工移到工位敲键(working+lean),其余待命;员工 id 稳定 → CSS left/top 过渡平滑滑行(休息室⇄工位)。
+  - `hooks/useWorkers`:订阅 task-updated 拉 list_tasks 算在途;Office 消费(替代静态人口)。
+- **验证(全链路真跑)**:`tsc` 过;真窗口经 bridge 点「CEO 下目标」→ 入队 simulate → fake-claude 跑 →
+  **工人滑到工位敲键(working=1 @ deskX=508)→ 任务 verified($0.01)→ 工人归位**;HUD「通过」42→46、
+  花费 0→$0.04 随 task-updated **实时刷新**;状态条显示派活目标。console 无报错。
+  (证实:enqueue→调度→fake-claude→verify gate→记账 整条后端链路 + 前端事件刷新都通。)
+- **▶ 下一刀(精修动态)**:① 走廊寻路(经 HALLS 折线走,非直线滑)+ agent-event 逐工具气泡/敲键节奏/
+  交质检走位/发货动画(worker_started/tool_use/result/finished 驱动);② Brief 卡(经理复述+报价握手再派);
+  ③ 信任卡/连续缩放/时间轴/看板拖排。收尾已拆实例、腾空 :1420。**绝不 push/合 main**。
+
 ### 2026-06-09 · 📋 前端重写 · 第 9 刀:晨报面板 — 接真实过夜数据 + 命令动作接真
 - `5e6611e` feat(shell): 晨报面板。§8.5 叠层第二刀,复用第 8 刀的 scrim/panel 基础设施。
   - `hooks/useMorningReport`:面板打开时拉 get_stats + 近期已结束(verified/done/failed)任务,
