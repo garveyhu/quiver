@@ -182,6 +182,10 @@ struct Stats {
     /// HUD「今夜花费」and the budget banner agree with what actually pauses the queue.
     spent_day: f64,
     spent_month: f64,
+    /// Rolling-24h verified/failed counts — the「昨晚」morning report shows these so
+    /// its tally reflects the night, not all-time.
+    verified_day: i64,
+    failed_day: i64,
 }
 
 /// Compute XP + level from the task table. Pure read-only aggregate — does not
@@ -197,6 +201,9 @@ fn get_stats(state: State<'_, AppState>) -> Result<Stats, String> {
     let now = now_ms();
     let spent_day = store.cost_since(now - DAY_MS).map_err(|e| format!("{e:#}"))?;
     let spent_month = store.cost_since(now - 30 * DAY_MS).map_err(|e| format!("{e:#}"))?;
+    let (_, verified_day, failed_day, _) = store
+        .task_stats_since(now - DAY_MS)
+        .map_err(|e| format!("{e:#}"))?;
     Ok(Stats {
         total,
         verified,
@@ -206,6 +213,8 @@ fn get_stats(state: State<'_, AppState>) -> Result<Stats, String> {
         level,
         spent_day,
         spent_month,
+        verified_day,
+        failed_day,
     })
 }
 

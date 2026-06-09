@@ -174,6 +174,25 @@ impl Store {
         Ok(row)
     }
 
+    /// Like [`task_stats`](Self::task_stats) but only over tasks created at/after
+    /// `since_ms` — a rolling window. Drives the "昨晚" morning report (last 24h)
+    /// so its counts reflect the night, not all-time. Returns
+    /// `(total, verified, failed, cost_usd)`.
+    pub fn task_stats_since(&self, since_ms: i64) -> anyhow::Result<(i64, i64, i64, f64)> {
+        let conn = self.conn.lock().expect("store lock");
+        let row = conn.query_row(
+            "SELECT
+                COUNT(*),
+                COALESCE(SUM(CASE WHEN status IN ('verified','done') THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN status IN ('failed','verify_failed') THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(cost_usd), 0.0)
+             FROM task WHERE created_at >= ?1",
+            params![since_ms],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )?;
+        Ok(row)
+    }
+
     /// Total dollars spent on a single project (sum of `cost_usd` over its tasks).
     pub fn project_cost(&self, project: &str) -> anyhow::Result<f64> {
         let conn = self.conn.lock().expect("store lock");
@@ -593,6 +612,20 @@ mod tests {
         assert!((store.cost_since(5_000).unwrap() - 3.0).abs() < 1e-9);
         // Window covering both.
         assert!((store.cost_since(0).unwrap() - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn task_stats_since_windows_by_created_at() {
+        let store = Store::open_in_memory().unwrap();
+        store.enqueue_task(&new_task("old", "/r", "p", "verified", 1)).unwrap();
+        store.enqueue_task(&new_task("new", "/r", "p", "failed", 9_000)).unwrap();
+        // Window after "old", before "new" → only "new" counts (1 total, 0 verified, 1 failed).
+        assert_eq!(store.task_stats_since(5_000).unwrap().0, 1);
+        let (total, verified, failed, _) = store.task_stats_since(5_000).unwrap();
+        assert_eq!((total, verified, failed), (1, 0, 1));
+        // Window covering both.
+        let (t2, v2, f2, _) = store.task_stats_since(0).unwrap();
+        assert_eq!((t2, v2, f2), (2, 1, 1));
     }
 
     #[test]

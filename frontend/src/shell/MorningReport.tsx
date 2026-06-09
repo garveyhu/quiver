@@ -26,9 +26,10 @@ export function MorningReport({ stats, tasks, onClose }: MorningReportProps) {
   const cost = stats ? `$${stats.spentDay.toFixed(2)}` : '$0.00';
   return (
     <Panel title="晨报 · 昨晚战报 ☀" width={460} onClose={onClose}>
+      {/* 已完成/失败取近 24h(昨晚);等级是全时段累计。 */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-        <StatTile value={stats?.verified ?? 0} label="已完成" />
-        <StatTile value={stats?.failed ?? 0} label="失败" />
+        <StatTile value={stats?.verifiedDay ?? 0} label="昨晚完成" />
+        <StatTile value={stats?.failedDay ?? 0} label="昨晚失败" />
         <StatTile value={cost} label="今夜花费" />
         <StatTile value={`Lv${stats?.level ?? 1}`} label="等级" />
       </div>

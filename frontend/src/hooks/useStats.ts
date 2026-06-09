@@ -15,6 +15,9 @@ export interface Stats {
   /** 滚动窗口花费(全项目),与后端预算闸口径一致:近 24h / 近 30d。 */
   spentDay: number;
   spentMonth: number;
+  /** 近 24h 的完成/失败数 —— 晨报「昨晚」用,反映过夜而非全时段。 */
+  verifiedDay: number;
+  failedDay: number;
 }
 
 export interface StatsState {
