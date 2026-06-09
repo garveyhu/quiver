@@ -6,6 +6,23 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 🛡 前端重写 · 第 14 刀:信任卡 — 自治战绩接 get_metrics
+- `3166015` feat(shell): 移植原型 openTrust。
+  - `services`:加 `getMetrics()` + wire `MetricsDto`(runs/verified/failed/verifyRate/p50·p95/cost)。
+  - `hooks/useMetrics`:打开拉一次 get_metrics。
+  - `shell/TrustCard`:战绩(近 N 次/干净验收/失败 + 20 格验收率条,有失败至少 1 红)+ 验收率/时延/花费(真值)
+    + 锁死破坏半径护栏(产品硬保证,静态)。原型"规划自由度"旋钮暂不接(无对应后端信任设置,不放死控件)。
+    复用 .panel,加 .bars/.lockline/.lockrow CSS。
+  - `App`:加 'trust' 叠层,命令栏「信任设置」→ 开。
+- **验证**:`tsc` 过;真窗口经 bridge ⌘K→「信任设置」→ 信任卡显示 get_metrics 真值(近 50 次 / 验收 49·失败 1 /
+  验收率 98.0% / p50 1234·p95 36480 / 总 $1.56) + 19绿1红条 + 4 护栏;截图对照原型;console 无报错。
+  **至此 get_metrics IPC 接通。**
+- **已接 IPC**:get_initial_state · get_stats · get_metrics · list_tasks · manager_preview · enqueue_task_cmd ·
+  agent-event · task-updated。**未接**:get_episodes(时间轴)· get_brief(记忆书)· get_settings/update_settings。
+- **▶ 下一刀**:① 时间轴回放(get_episodes,原型 scrub/ghost)或记忆书面板(get_brief);② 语义缩放上层
+  (worksurf/dive);③ 走廊寻路 + 交质检/发货走位 + 验收灯效;④ 看板拖排 + 设置面板(get_settings)。
+  收尾已拆实例、腾空 :1420。**绝不 push/合 main**。
+
 ### 2026-06-09 · 🤝 前端重写 · 第 13 刀:Brief 卡 — 派活握手接 manager_preview
 - `a657bde` feat(shell): 把「CEO 下目标」从直接入队改成原型的握手流程(没看到这个之前不花一分钱)。
   - `services`:加 `managerPreview()` + wire `ManagerPreview`/`Decision`(**以 orchestrator/lib.rs 为准**:
