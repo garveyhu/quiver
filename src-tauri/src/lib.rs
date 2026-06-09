@@ -327,6 +327,64 @@ fn manager_preview(state: State<'_, AppState>) -> Result<ManagerPreviewDto, Stri
     })
 }
 
+/// 一次独立审计的结果(DESIGN §8)。`audited=false` 表示没东西可审(无分支 / 没配 verify)。
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AuditResult {
+    audited: bool,
+    passed: Option<bool>,
+    reason: String,
+}
+
+/// §8 独立审计:把某任务的成果分支**完整克隆到干净副本**、重跑配置的 verify 命令,看是否
+/// 仍通过 —— 在 worker 碰不到的副本里重跑,挫败它在自己 worktree 里改弱测试骗验收。
+/// 用户可触发;无独立分支(simulate / 已合并)或没配 verify 命令则短路不审。不改 gate 决策。
+#[tauri::command]
+fn audit_task(state: State<'_, AppState>, task_id: String) -> Result<AuditResult, String> {
+    use quiver_core::audit::clean_clone_verify;
+    use quiver_core::verify::VerifyCommand;
+    let store = state.store()?;
+    let task = store
+        .get_task(&task_id)
+        .map_err(|e| format!("{e:#}"))?
+        .ok_or_else(|| "任务不存在".to_string())?;
+    let Some(branch) = task.branch else {
+        return Ok(AuditResult {
+            audited: false,
+            passed: None,
+            reason: "任务无独立分支(simulate / 已合并),无可审计".to_string(),
+        });
+    };
+    let settings = store.get_settings().map_err(|e| format!("{e:#}"))?;
+    if settings.verify_command.trim().is_empty() {
+        return Ok(AuditResult {
+            audited: false,
+            passed: None,
+            reason: "未配置 verify 命令,无法独立审计".to_string(),
+        });
+    }
+    let project = current_project(&state)?;
+    // 唯一临时目录(git clone 要求目标不存在);用纳秒时间戳防撞。
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let dest = std::env::temp_dir().join(format!("quiver-audit-{task_id}-{nonce}"));
+    let verify = VerifyCommand::shell(settings.verify_command);
+    let result = clean_clone_verify(&project, &branch, &verify, &dest);
+    let _ = std::fs::remove_dir_all(&dest); // 审完清理临时副本
+    let passed = result.map_err(|e| format!("独立审计执行失败:{e:#}"))?;
+    Ok(AuditResult {
+        audited: true,
+        passed: Some(passed),
+        reason: if passed {
+            "干净克隆重跑 verify 通过".to_string()
+        } else {
+            "干净克隆重跑 verify 未通过(疑似 worktree 内作弊 / 真红)".to_string()
+        },
+    })
+}
+
 /// How many facts / episodes a brief carries (DESIGN §6 简报). Bounded so the
 /// brief stays a compact context snapshot, not a memory dump.
 const BRIEF_FACT_LIMIT: usize = 20;
@@ -680,6 +738,7 @@ pub fn run() {
         get_stats,
         get_metrics,
         manager_preview,
+        audit_task,
         get_brief,
         suggest_verify_command,
         reorder_task,
@@ -703,6 +762,7 @@ pub fn run() {
         get_stats,
         get_metrics,
         manager_preview,
+        audit_task,
         get_brief,
         suggest_verify_command,
         reorder_task,
