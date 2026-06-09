@@ -6,6 +6,23 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 📋 前端重写 · 第 9 刀:晨报面板 — 接真实过夜数据 + 命令动作接真
+- `5e6611e` feat(shell): 晨报面板。§8.5 叠层第二刀,复用第 8 刀的 scrim/panel 基础设施。
+  - `hooks/useMorningReport`:面板打开时拉 get_stats + 近期已结束(verified/done/failed)任务,
+    按 updatedAt 倒序取 8 条。
+  - `shell/MorningReport`:晨报·过夜战报,sub 汇总昨晚完成/失败/今夜花费/等级(真值),body 列近期委托
+    (prompt + 状态徽章 审计通过/打回 + 花费)。
+  - `App` 叠层状态收敛为 `Overlay`('none'|'cmdk'|'report'),scrim 统管;命令栏「晨报/验收」+ Ctrls 晨报
+    按钮都 → setOverlay('report') —— **命令栏动作首次接真**。
+  - `wire`:**TaskStatus 按 run.rs 实际写入修正** —— 成功终态是 `verified`(run.rs:413 验证通过写它),
+    补 verifying/verified/done(原只列 verifying,导致 tsc 报错;以后端为准)。
+  - `global.css` 加 .panel/.pbtn/.rev + 状态色类。
+- **验证**:`tsc --noEmit` 过;真窗口经 bridge —— ⌘K→点「晨报/验收」→面板开,sub 真值(Lv7/累计验收 42)、
+  8 条真实委托(审计通过/打回·花费 $0.18/$0.01…),贴原型,console 无报错。
+  (顺带证实:eval `.click()` 能触发 React onClick;之前"bridge click 触发不了"的限制不适用于 eval 派发。)
+- **▶ 下一刀**:① 信任卡 / 连续缩放 / 时间轴等剩余叠层(§8.5);② **§8.4+§8.6:派活(enqueue_task_cmd
+  simulate)+ 工人实时动画**(agent-event 驱动,可真触发自验)。收尾已拆实例、腾空 :1420。**绝不 push/合 main**。
+
 ### 2026-06-09 · ⌨️ 前端重写 · 第 8 刀:命令栏(⌘K) + 叠层基础设施
 - 选这刀的理由:§8.4 工人实时动画仍需真跑任务才能自验;先做键盘触发、可经 bridge 自验的命令栏,
   并立起叠层(scrim/cmdk)基础设施供后续晨报/信任卡/简报复用。
