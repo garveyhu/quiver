@@ -3,8 +3,8 @@ import { useEffect, useRef } from 'react';
 interface AtmosphereProps {
   /** 今夜(滚动 24h)花费,驱动预算染色 */
   spentUsd: number;
-  /** 预算上限 */
-  budgetCapUsd: number;
+  /** 预算上限;null = 未设(不做预算染色) */
+  budgetCapUsd: number | null;
 }
 
 type Rgb = readonly [number, number, number];
@@ -77,8 +77,9 @@ export function Atmosphere({ spentUsd, budgetCapUsd }: AtmosphereProps) {
     };
 
     const budgetTick = () => {
-      const cap = capRef.current || 1;
-      const f = Math.min(1, spentRef.current / cap);
+      const cap = capRef.current;
+      // 未设预算上限 → 不做"逼近上限"的转冷转暗。
+      const f = cap ? Math.min(1, spentRef.current / cap) : 0;
       const e = Math.sqrt(f);
       if (tintRef.current) tintRef.current.style.opacity = (e * 0.55).toFixed(3);
       const edge = edgeRef.current;

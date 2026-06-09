@@ -17,6 +17,3 @@ export const PALETTE = {
   bad: '#e2604f',
   info: '#8fd0ff',
 } as const;
-
-/** 预算上限(美元)——HUD 预算条满格基准，后续接 get_settings 后改为真实值。 */
-export const BUDGET_CAP_USD = 30;

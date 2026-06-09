@@ -28,6 +28,30 @@ export type TaskStatus = 'queued' | 'running' | 'verifying' | 'verified' | 'done
 /** 运行模式(§4.2):simulate=免费 fake-claude 默认,real=真 claude。Rust 侧小写序列化。 */
 export type RunMode = 'simulate' | 'real';
 
+/** 应用设置(get_settings,camelCase)。 */
+export interface Settings {
+  defaultMode: string;
+  model: string;
+  maxWorkers: number;
+  monthlyCreditCapUsd: number | null;
+  /** 今夜硬暂停的美元预算(§10)。null = 未设(不因预算挡)。 */
+  nightlyBudgetUsd: number | null;
+  agentBinOverride: string | null;
+  fakeDelayMs: number;
+  theme: string;
+  uiScale: number;
+  verifyCommand: string;
+}
+
+/** 设置增量补丁(update_settings):字段都可选,只改给到的。 */
+export interface SettingsPatch {
+  maxWorkers?: number;
+  nightlyBudgetUsd?: number | null;
+  verifyCommand?: string;
+  defaultMode?: string;
+  model?: string;
+}
+
 /**
  * 启动包(get_initial_state)。本刀只用 `lastProject`(调它的副作用是让后端设好当前项目,
  * 派活才有目标仓库);recentProjects / history 的完整类型待项目选择器切片再补。

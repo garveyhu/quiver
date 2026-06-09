@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { getStats, listTasks } from '@/services/commands';
 import { subscribe } from '@/services/ipc';
 import type { Stats } from '@/services/wire';
-import { BUDGET_CAP_USD } from '@/theme/palette';
 
 /** HUD 要展示的实时口径(已从后端口径折算成展示口径)。 */
 export interface HudData {
@@ -15,8 +14,6 @@ export interface HudData {
   verified: number;
   /** 今夜(滚动 24h)花费,对齐预算闸 */
   spentUsd: number;
-  /** 预算上限 */
-  budgetCapUsd: number;
 }
 
 /**
@@ -59,6 +56,5 @@ export function useHud(): HudData {
     running,
     verified: stats?.verified ?? 0,
     spentUsd: stats?.spentDay ?? 0,
-    budgetCapUsd: BUDGET_CAP_USD,
   };
 }

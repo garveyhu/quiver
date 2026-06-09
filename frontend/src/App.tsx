@@ -6,6 +6,7 @@ import { useEpisodes } from '@/hooks/useEpisodes';
 import { useHud } from '@/hooks/useHud';
 import { useMetrics } from '@/hooks/useMetrics';
 import { useMorningReport } from '@/hooks/useMorningReport';
+import { useSettings } from '@/hooks/useSettings';
 import { Office } from '@/office/Office';
 import { enqueueTask, getInitialState } from '@/services/commands';
 import { Atmosphere } from '@/shell/Atmosphere';
@@ -30,6 +31,8 @@ type Overlay = 'none' | 'cmdk' | 'report' | 'brief' | 'trust' | 'timeline';
 /** 应用根:等距办公室舞台 + 叠层 + 画面后期。叠层开合、派活握手、状态条文案在此编排。 */
 export function App() {
   const hud = useHud();
+  const settings = useSettings();
+  const budgetCap = settings?.nightlyBudgetUsd ?? null;
   const [overlay, setOverlay] = useState<Overlay>('none');
   const [caption, setCaption] = useState(DEFAULT_CAPTION);
   const [briefGoal, setBriefGoal] = useState(GOALS[0]);
@@ -113,7 +116,7 @@ export function App() {
       <div id="stage" className="stage">
         <Office />
       </div>
-      <Hud data={hud} />
+      <Hud data={hud} budgetCap={budgetCap} />
       <Ctrls onCmdk={() => setOverlay('cmdk')} onReport={() => setOverlay('report')} onGoal={openBrief} />
       <Caption text={caption} />
       <div className={`scrim${overlay !== 'none' ? ' on' : ''}`} onClick={() => setOverlay('none')} />
@@ -122,7 +125,7 @@ export function App() {
       <BriefCard open={overlay === 'brief'} defaultGoal={briefGoal} onClose={() => setOverlay('none')} onConfirm={confirmBrief} />
       <TrustCard open={overlay === 'trust'} metrics={metrics} onClose={() => setOverlay('none')} />
       <Timeline open={overlay === 'timeline'} episodes={episodes} onClose={() => setOverlay('none')} />
-      <Atmosphere spentUsd={hud.spentUsd} budgetCapUsd={hud.budgetCapUsd} />
+      <Atmosphere spentUsd={hud.spentUsd} budgetCapUsd={budgetCap} />
       <div id="vignette" />
       <div id="grain" />
     </>

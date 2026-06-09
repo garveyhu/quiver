@@ -1,5 +1,16 @@
 import { call } from '@/services/ipc';
-import type { EpisodeRecord, InitialState, ManagerPreview, MetricsDto, RunMode, Stats, TaskRecord, TaskStatus } from '@/services/wire';
+import type {
+  EpisodeRecord,
+  InitialState,
+  ManagerPreview,
+  MetricsDto,
+  RunMode,
+  Settings,
+  SettingsPatch,
+  Stats,
+  TaskRecord,
+  TaskStatus,
+} from '@/services/wire';
 
 /**
  * 具名后端命令封装 —— 每条 IPC 命令一个有类型的函数。hook/服务层调这里，
@@ -28,3 +39,9 @@ export const getMetrics = (): Promise<MetricsDto> => call<MetricsDto>('get_metri
 
 /** 当前项目近期 episode(过夜交付记录,§6.2),时间线用。 */
 export const getEpisodes = (limit = 12): Promise<EpisodeRecord[]> => call<EpisodeRecord[]>('get_episodes', { limit });
+
+/** 读应用设置(默认模式/模型/并发上限/预算/verify 命令…)。 */
+export const getSettings = (): Promise<Settings> => call<Settings>('get_settings');
+
+/** 应用设置补丁,返回更新后的完整设置。 */
+export const updateSettings = (patch: SettingsPatch): Promise<Settings> => call<Settings>('update_settings', { patch });
