@@ -6,6 +6,30 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-10 · ⏸ 暂停 loop — 前端从零重写实质完成(等用户定下一步)
+**为什么停**:照 redesign-iso-directions.html 的前端从零重写已实质完成 —— loop.md §8 的 6 个阶段
+全过、后端读/写 IPC 近乎全接、原型的全套交互/面板/特效都搬齐并真窗口验证。剩下的活要么**复杂高风险、
+难自动验**(走廊寻路 + 工人交质检/发货走位的动画状态机,要和很快的任务生命周期同步),要么是**原型里
+没有、需你定方向的新增**(看板列表+拖排/设置写面板/项目选择器)。按「绝不空转」红线 + 后端 loop 在边界
+主动暂停的先例,在此干净收尾,删 cron 44932e0c。
+
+**这一程交付了什么(21 刀,全在 feat/game-first,tsc 全过 + 真窗口逐刀验,未 push)**
+- 🎨 **等距像素办公室**(全代码生成,零图片):iso 投影/层序 + 7 房间 + 满家具(休息室/工位区/质检台/
+  领导区/运维/发货 + 工人精灵)+ 氛围后期(夜空循环/预算染色/浮尘/暗角/颗粒)。
+- 🔌 **后端 IPC 近全接**:get_initial_state · get_stats · get_metrics · list_tasks · manager_preview ·
+  get_episodes · get_settings · get_task_events(读)+ enqueue_task_cmd · update_settings · cancel_task_cmd(写)
+  + agent-event · task-updated(事件)。wire 类型全部以 lib.rs/各 crate 为准核对 camelCase。
+- 🕹 **交互/面板齐**:HUD 实时统计 + 真实预算条 · 命令栏 ⌘K · Brief 派活握手(manager_preview)·
+  晨报(get_stats+近期任务)· 信任卡(get_metrics)· 时间线(get_episodes)· 连续语义缩放(滚轮 + 点小人
+  下钻 worksurf 看 get_task_events 真实事件流)· 急停(批量 cancel + 冻结)· 交付特效(质检台闪 + 发货飞箱)。
+- 🏃 **真实闭环**:CEO 下目标 → Brief 握手 → 入队 simulate → fake-claude 跑 → 工人滑到工位敲键
+  (气泡显示真实 agent 工具活动)→ 验收 → 交付特效 + HUD 实时刷新 → 工人归位。
+
+**▶ 你回来挑(任一)**:① 推这一程的提交上 origin/feat/game-first 给你 review;② 接剩余打磨(走廊寻路/
+工人交质检·发货走位动画 —— 我起真窗口你看着调);③ 加原型外但实用的(项目选择器 onboarding / 设置写面板 /
+看板列表拖排);④ 接真 LLM 经理/真模式(花钱,要你在场)。重发 /loop 可再拉起,也可指一个方向。
+**注**:本程测试在 dev 项目累了若干 simulate 任务/episode(免费 fake-claude 测试数据,无害)。
+
 ### 2026-06-10 · 📦 前端重写 · 第 21 刀:交付世界特效 — 质检台一闪 + 发货口飞箱
 - `7c94ef7` feat(office): 把第 20 刀的全屏脉冲升级为原型的局部交付终局(随相机缩放)。
   - `office/WorldFx`:验收那刻质检台亮绿(通过)/红(打回),通过时从发货口飞出一只货箱(shipout)。
