@@ -8,7 +8,7 @@ import { useMetrics } from '@/hooks/useMetrics';
 import { useMorningReport } from '@/hooks/useMorningReport';
 import { useSettings } from '@/hooks/useSettings';
 import { Office } from '@/office/Office';
-import { enqueueTask, getInitialState } from '@/services/commands';
+import { cancelActiveTasks, enqueueTask, getInitialState } from '@/services/commands';
 import { Atmosphere } from '@/shell/Atmosphere';
 import { BriefCard } from '@/shell/BriefCard';
 import { Caption } from '@/shell/Caption';
@@ -35,6 +35,7 @@ export function App() {
   const budgetCap = settings?.nightlyBudgetUsd ?? null;
   const [overlay, setOverlay] = useState<Overlay>('none');
   const [caption, setCaption] = useState(DEFAULT_CAPTION);
+  const [frozen, setFrozen] = useState(false);
   const [briefGoal, setBriefGoal] = useState(GOALS[0]);
   const report = useMorningReport(overlay === 'report');
   const metrics = useMetrics(overlay === 'trust');
@@ -81,6 +82,18 @@ export function App() {
     [enqueueGoal],
   );
 
+  const estop = useCallback(async () => {
+    setOverlay('none');
+    setFrozen(true);
+    window.setTimeout(() => setFrozen(false), 2200);
+    try {
+      const n = await cancelActiveTasks();
+      setCaption(`急停 — 全公司冻结，main 安全。已收回 ${n} 个在途委托的工具权。`);
+    } catch (e) {
+      setCaption(`急停遇到问题:${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, []);
+
   const runCommand = useCallback(
     (cmd: QuiverCommand) => {
       if (cmd.id === 'report') {
@@ -99,6 +112,10 @@ export function App() {
         setOverlay('timeline');
         return;
       }
+      if (cmd.id === 'estop') {
+        void estop();
+        return;
+      }
       setOverlay('none');
       if (cmd.id === 'dispatch') {
         // 「派活」走快通道:不开 Brief,直接让经理开一个示例任务。
@@ -108,12 +125,12 @@ export function App() {
       // 其余命令的真实动作随对应面板/流程建好再接;先给状态条反馈,不留死按钮。
       setCaption(`「${cmd.label}」即将接入 —— 对应面板 / 流程建设中。`);
     },
-    [openBrief, enqueueGoal],
+    [openBrief, enqueueGoal, estop],
   );
 
   return (
     <>
-      <div id="stage" className="stage">
+      <div id="stage" className={`stage${frozen ? ' frozen' : ''}`}>
         <Office />
       </div>
       <Hud data={hud} budgetCap={budgetCap} />

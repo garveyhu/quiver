@@ -32,6 +32,17 @@ export const getInitialState = (): Promise<InitialState> => call<InitialState>('
 export const enqueueTask = (prompt: string, mode: RunMode = 'simulate'): Promise<TaskRecord> =>
   call<TaskRecord>('enqueue_task_cmd', { prompt, mode });
 
+/** 取消一个任务(queued 删除 / running·verifying 杀进程 / 已结束报错)。 */
+export const cancelTask = (id: string): Promise<void> => call<void>('cancel_task_cmd', { id });
+
+/** 取消所有在途/排队任务(急停用)。返回成功取消的条数。 */
+export async function cancelActiveTasks(): Promise<number> {
+  const tasks = await call<TaskRecord[]>('list_tasks', {});
+  const active = tasks.filter(t => t.status === 'running' || t.status === 'verifying' || t.status === 'queued');
+  const results = await Promise.allSettled(active.map(t => cancelTask(t.id)));
+  return results.filter(r => r.status === 'fulfilled').length;
+}
+
 /** AI 经理在此刻真实局面下会做的决策(只看不动,不 spawn/不花钱)。 */
 export const managerPreview = (): Promise<ManagerPreview> => call<ManagerPreview>('manager_preview');
 
