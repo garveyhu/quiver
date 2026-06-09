@@ -6,6 +6,14 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 集成阶段 · 第 6 刀:get_episodes IPC
+- `20cecca` feat(app): get_episodes(limit) —— 当前项目近期 episode(§6.2),供时间轴/档案。
+  只读。真跑 invoke 返回有效空数组(无报错;episode 随记忆接入后的任务累积,老任务无)。
+- **集成进度**:get_metrics · 观测精确化 · 审计动态半 · manager_preview · audit_task ·
+  get_episodes —— 后端机制正一块块接进 app IPC 并真跑验。这些都是重写后前端要消费的契约。
+- **▶ 剩下的大件需用户在场**:真接调度(manager→真派活,$)、verify gate 接审计(高风险核心路径)。
+  安全只读 IPC 也接近做完(metrics/manager/audit/episodes/brief/stats 都有了)。cron 06a96c93 在跑。
+
 ### 2026-06-09 · 集成阶段 · 第 5 刀:audit_task IPC(独立审计接进 app)
 - `6d354f2` feat(app): audit_task —— 用户可对任务触发 §8 独立审计(克隆成果分支到干净副本
   重跑 verify);无分支/没配 verify 命令则短路。不碰 gate。验证:check+build;真窗口
