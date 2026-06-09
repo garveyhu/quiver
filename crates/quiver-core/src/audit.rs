@@ -4,6 +4,67 @@
 //! 本模块是审计的**静态半**:扫 worker 产出的 unified diff,揪出测试削弱信号。**动态半**
 //! (在干净克隆里重跑测试、对比通过集,防 worker 在自己 worktree 里动手脚)是后续集成刀。
 
+use std::path::Path;
+use std::process::Command;
+
+use anyhow::Context;
+
+use crate::verify::VerifyCommand;
+
+/// §8 动态审计:把 `source_repo` 在 `commit` 处**完整克隆**到干净目录 `dest`(worker 碰不到的
+/// 独立副本),在那里跑 `verify`,返回是否通过。在独立副本里重跑测试,挫败 worker 在自己
+/// worktree 里对测试动的手脚(源里未提交的改动 / 工作树篡改都不会被 clone 带过来)。
+/// `dest` 须不存在(由 `git clone` 创建)。与 [`scan_test_tampering`](静态半)互补。
+pub fn clean_clone_verify(
+    source_repo: &Path,
+    commit: &str,
+    verify: &VerifyCommand,
+    dest: &Path,
+) -> anyhow::Result<bool> {
+    let src = source_repo
+        .to_str()
+        .ok_or_else(|| anyhow::anyhow!("源仓库路径非 UTF-8"))?;
+    let dst = dest.to_str().ok_or_else(|| anyhow::anyhow!("目标路径非 UTF-8"))?;
+    // 1. 本地完整克隆(独立于源工作树)。
+    run_git(&["clone", "--quiet", src, dst])?;
+    // 2. 检出目标 commit(detached HEAD)。
+    run_git_in(dest, &["checkout", "--quiet", commit])?;
+    // 3. 在干净副本里跑 verify。
+    let (program, args) = verify
+        .argv()
+        .split_first()
+        .ok_or_else(|| anyhow::anyhow!("verify argv 为空"))?;
+    let status = Command::new(program)
+        .args(args)
+        .current_dir(dest)
+        .status()
+        .with_context(|| format!("跑 verify 失败:{program}"))?;
+    Ok(status.success())
+}
+
+fn run_git(args: &[&str]) -> anyhow::Result<()> {
+    let out = Command::new("git")
+        .args(args)
+        .output()
+        .with_context(|| format!("git {args:?} 启动失败"))?;
+    if !out.status.success() {
+        anyhow::bail!("git {:?} 退出非 0:{}", args, String::from_utf8_lossy(&out.stderr));
+    }
+    Ok(())
+}
+
+fn run_git_in(dir: &Path, args: &[&str]) -> anyhow::Result<()> {
+    let out = Command::new("git")
+        .current_dir(dir)
+        .args(args)
+        .output()
+        .with_context(|| format!("git -C {} {args:?} 启动失败", dir.display()))?;
+    if !out.status.success() {
+        anyhow::bail!("git {:?} 退出非 0:{}", args, String::from_utf8_lossy(&out.stderr));
+    }
+    Ok(())
+}
+
 /// 一次篡改扫描结果。`signals` 非空 = 测试疑似被改弱,审计应拦下 / 降信任 / 转人审。
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct TamperScan {
@@ -110,5 +171,47 @@ mod tests {
     fn clean_test_edit_has_no_signals() {
         let diff = "+++ b/tests/api_test.rs\n+    assert_eq!(resp.status, 200);\n";
         assert!(scan_test_tampering(diff).is_clean());
+    }
+
+    #[test]
+    fn clean_clone_verify_runs_in_isolated_copy() {
+        use crate::verify::VerifyCommand;
+        use tempfile::TempDir;
+
+        // 造一个有提交的源仓库(committed marker.txt)。
+        let src = TempDir::new().unwrap();
+        let p = src.path();
+        let git = |args: &[&str]| {
+            let o = Command::new("git").current_dir(p).args(args).output().unwrap();
+            assert!(o.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&o.stderr));
+        };
+        git(&["init", "--quiet"]);
+        git(&["config", "user.email", "t@t"]);
+        git(&["config", "user.name", "t"]);
+        std::fs::write(p.join("marker.txt"), "ok").unwrap();
+        git(&["add", "."]);
+        git(&["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "init"]);
+
+        // 克隆到干净副本跑 verify:marker 在 → 通过。
+        let d1 = TempDir::new().unwrap();
+        let pass = clean_clone_verify(
+            p,
+            "HEAD",
+            &VerifyCommand::shell("test -f marker.txt"),
+            &d1.path().join("clone"),
+        )
+        .unwrap();
+        assert!(pass, "干净副本里 marker 在,verify 通过");
+
+        // verify 失败 → false。
+        let d2 = TempDir::new().unwrap();
+        let fail = clean_clone_verify(
+            p,
+            "HEAD",
+            &VerifyCommand::shell("test -f nope.txt"),
+            &d2.path().join("clone"),
+        )
+        .unwrap();
+        assert!(!fail, "verify 失败返回 false");
     }
 }
