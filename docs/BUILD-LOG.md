@@ -6,6 +6,13 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 48 轮(后端收尾 · P4 价值闸 + 配额)
+- `d0725b2` feat(orchestrator): ValueGate —— 派活前过闸(付得起/值不值/配额满没),
+  GateVerdict Admit/Defer/Reject。验证:quiver-orchestrator 21 过 + 无警告。
+- **▶ 下一步(P4 收尾)**:子经理(递归,§5.7):经理可 spawn 一个子经理管一组相关任务,
+  子经理有自己的(更小)预算/在途上限,向父经理汇总 —— 纯结构层先建(父子预算分配 + 层级
+  上报)。P4 后 → **P5 乙部**(观测/指标、验收台、回滚/还原点、人事、MCP 自管记忆)。
+
 ### 2026-06-09 · 第 47 轮(后端收尾 · P4 升级阶梯 + 只减预算)
 - `943dd8e` feat(orchestrator): EscalationLadder(重试→同级→升级给人)+ Budget(决策税/花费
   只减不增、夹 0、can_afford 价值闸)。验证:quiver-orchestrator 17 过 + 无警告。
