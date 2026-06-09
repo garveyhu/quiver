@@ -6,6 +6,15 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 43 轮(后端收尾 · P3 安全开张:沙箱策略)
+- `e941252` feat(core): SandboxPolicy(默认拒绝/显式放行,最小权能)+ to_seatbelt
+  (渲染 macOS sandbox-exec profile,deny default 打底、subpath 限子树、网络显式)。
+  验证:quiver-core sandbox 4 过 + workspace 无警告。
+- **▶ 下一步(P3 续)**:① 沙箱集成:spawn worker 前用 sandbox-exec + profile 包住进程
+  (在 runner/supervisor 的 base_command 前面套;§23 "克隆前就位");② 独立审计(变异式:
+  干净克隆重跑测试 + 查测试是否被改弱);③ 权能分权(Rule of Two);④ 熔断。
+  ⚠ 沙箱具体 profile 细则属 §24 待你拍板(先收紧默认)。
+
 ### 2026-06-09 · 第 42 轮(后端收尾 · 千问实现去重到 quiver-llm)
 - `a09be94` refactor(memory): memory 的 QwenEmbedder/QwenJudge 迁到共享 quiver-llm,
   删两处重复的凭证加载/HTTP/extract_json_object;memory 不再依赖 reqwest。
