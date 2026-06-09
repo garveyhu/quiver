@@ -3,7 +3,7 @@
 //! (`invalid_at IS NULL`); the supersede/invalidate machinery (§6.4) is P2 — so
 //! this slice exposes write + current-read only.
 
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
 
 use crate::MemoryStore;
 
@@ -49,6 +49,8 @@ pub struct FactRecord {
     pub kind: String,
     pub text: String,
     pub entities: Option<String>,
+    /// Scalar entity (§6.4) — set for `kind='状态'` facts, else `None`.
+    pub entity: Option<String>,
     pub importance: i64,
     pub valid_at: Option<i64>,
     pub invalid_at: Option<i64>,
@@ -199,7 +201,7 @@ impl MemoryStore {
         let conn = self.conn.lock().expect("memory store lock");
         let mut stmt = conn.prepare(
             "SELECT id, project, scope, kind, text, entities, importance,
-                    valid_at, invalid_at, recorded_at, trust
+                    valid_at, invalid_at, recorded_at, trust, entity
              FROM memory_fact
              WHERE project = ?1 AND invalid_at IS NULL
              ORDER BY importance DESC, recorded_at DESC, id DESC",
@@ -218,6 +220,7 @@ impl MemoryStore {
                     invalid_at: row.get(8)?,
                     recorded_at: row.get(9)?,
                     trust: row.get(10)?,
+                    entity: row.get(11)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -233,7 +236,8 @@ impl MemoryStore {
         let conn = self.conn.lock().expect("memory store lock");
         let mut stmt = conn.prepare(
             "SELECT mf.id, mf.project, mf.scope, mf.kind, mf.text, mf.entities,
-                    mf.importance, mf.valid_at, mf.invalid_at, mf.recorded_at, mf.trust
+                    mf.importance, mf.valid_at, mf.invalid_at, mf.recorded_at, mf.trust,
+                    mf.entity
              FROM memory_fact_fts
              JOIN memory_fact mf ON mf.id = memory_fact_fts.rowid
              WHERE memory_fact_fts MATCH ?1
@@ -255,10 +259,44 @@ impl MemoryStore {
                     invalid_at: row.get(8)?,
                     recorded_at: row.get(9)?,
                     trust: row.get(10)?,
+                    entity: row.get(11)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
+    }
+
+    /// The current 状态 fact for `(project, entity)` — "这个模块现在是什么状态"
+    /// (§6.4 内容态,供经理理解代码;绝不进派活决策)。`None` if none recorded.
+    /// At most one exists by the §6.4 partial-unique index.
+    pub fn current_state(&self, project: &str, entity: &str) -> anyhow::Result<Option<FactRecord>> {
+        let conn = self.conn.lock().expect("memory store lock");
+        let row = conn
+            .query_row(
+                "SELECT id, project, scope, kind, text, entities, importance,
+                        valid_at, invalid_at, recorded_at, trust, entity
+                 FROM memory_fact
+                 WHERE project = ?1 AND entity = ?2 AND kind = '状态' AND invalid_at IS NULL",
+                params![project, entity],
+                |row| {
+                    Ok(FactRecord {
+                        id: row.get(0)?,
+                        project: row.get(1)?,
+                        scope: row.get(2)?,
+                        kind: row.get(3)?,
+                        text: row.get(4)?,
+                        entities: row.get(5)?,
+                        importance: row.get(6)?,
+                        valid_at: row.get(7)?,
+                        invalid_at: row.get(8)?,
+                        recorded_at: row.get(9)?,
+                        trust: row.get(10)?,
+                        entity: row.get(11)?,
+                    })
+                },
+            )
+            .optional()?;
+        Ok(row)
     }
 
     /// §6.7 recall: rank current-truth facts for `project` by a fixed-weight blend
@@ -642,5 +680,23 @@ mod tests {
             .map(|f| f.text)
             .collect();
         assert_eq!(current, vec!["uses smol"], "only the new 状态 is current after supersede");
+    }
+
+    #[test]
+    fn current_state_reads_entity_status_and_follows_supersede() {
+        let store = MemoryStore::open_in_memory().unwrap();
+        assert!(store.current_state("/r", "moduleA").unwrap().is_none());
+        store.insert_fact(&state_fact("/r", "moduleA", "uses tokio")).unwrap();
+        let s = store.current_state("/r", "moduleA").unwrap().expect("has a current state");
+        assert_eq!(s.text, "uses tokio");
+        assert_eq!(s.entity.as_deref(), Some("moduleA"), "entity is now readable on FactRecord");
+        assert_eq!(s.kind, "状态");
+        assert!(store.current_state("/r", "moduleZ").unwrap().is_none());
+        // After supersede, current_state reflects the new status.
+        store.supersede_fact(s.id, &state_fact("/r", "moduleA", "uses smol"), 50).unwrap();
+        assert_eq!(
+            store.current_state("/r", "moduleA").unwrap().unwrap().text,
+            "uses smol"
+        );
     }
 }

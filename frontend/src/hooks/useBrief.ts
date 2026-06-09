@@ -13,6 +13,8 @@ export interface FactRecord {
   kind: string;
   text: string;
   entities: string | null;
+  /** 标量实体(§6.4),仅 kind='状态' 的事实有,其余为 null。 */
+  entity: string | null;
   importance: number;
   validAt: number | null;
   invalidAt: number | null;
