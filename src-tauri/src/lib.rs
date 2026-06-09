@@ -31,7 +31,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
-use quiver_memory::{Brief, MemoryStore};
+use quiver_memory::{Brief, EpisodeRecord, MemoryStore};
 use quiver_store::{
     InitialState, MetricSample, NewTask, Settings, SettingsPatch, Store, StoredEvent, TaskRecord,
 };
@@ -402,6 +402,17 @@ fn get_brief(state: State<'_, AppState>) -> Result<Brief, String> {
         .map_err(|e| format!("{e:#}"))
 }
 
+/// 当前项目近期 episode(DESIGN §6.2,最新在前,默认上限 50),供时间轴 / 档案 UI 回放
+/// "发生过什么"。只读;记忆未初始化或项目未选时报错(由 UI 兜成空)。
+#[tauri::command]
+fn get_episodes(state: State<'_, AppState>, limit: Option<i64>) -> Result<Vec<EpisodeRecord>, String> {
+    let project = current_project(&state)?.display().to_string();
+    let memory = state.memory()?;
+    memory
+        .episodes_for_project(&project, limit.unwrap_or(50))
+        .map_err(|e| format!("{e:#}"))
+}
+
 /// Suggest a verify-gate command (DESIGN §7) by sniffing the current project for
 /// well-known build/test markers. Read-only; returns "" when nothing is
 /// recognized or no project is selected, so the UI just shows no hint. Purely a
@@ -740,6 +751,7 @@ pub fn run() {
         manager_preview,
         audit_task,
         get_brief,
+        get_episodes,
         suggest_verify_command,
         reorder_task,
         cancel_task_cmd,
@@ -764,6 +776,7 @@ pub fn run() {
         manager_preview,
         audit_task,
         get_brief,
+        get_episodes,
         suggest_verify_command,
         reorder_task,
         cancel_task_cmd,
