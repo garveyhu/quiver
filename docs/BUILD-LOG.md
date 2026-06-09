@@ -6,6 +6,15 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 53 轮(后端收尾 · 沙箱→命令纯桥 wrap)
+- `522f8dc` feat(core): SandboxPolicy::wrap(命令包成 sandbox-exec 调用)+ is_supported。
+  沙箱集成的纯半。验证:quiver-core sandbox 6 过 + 无警告。
+- ⚠ **纯逻辑机制层确已收口**:再往下都是集成(沙箱套 spawn、审计动态半、编排接调度、
+  metrics/acceptance 接账本+IPC、MCP 自管记忆),都需触 app/runner/runtime,自治盲跑易破
+  fake-claude 测试或属 app 级改动 —— **强烈建议这些刀用户在场一起做**。本地领先 origin
+  46 个提交未 push,到了 review+推一波的好节点。
+- **▶ 待用户定**:继续 loop(只剩集成,风险升高)/ 暂停等在场 / 先推代码。
+
 ### 2026-06-09 · 第 52 轮(后端收尾 · P5 回滚/还原点)
 - `1e5f68b` feat(core): RestoreLog —— 合并记还原点(merge_seq+commit),"回到 seq N" 解析
   目标 commit + 被撤销点;record 强制单调。验证:quiver-core rollback 4 过 + 无警告。
