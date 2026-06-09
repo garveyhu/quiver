@@ -6,6 +6,16 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 34 轮(后端收尾 · P2 向量 — 真跑验证)
+- `c79ebce` test(memory): 千问 embedding smoke 示例,真跑验证 API。
+  🎉 **真调 DashScope 成功**:2 条文本 ~409ms、model=text-embedding-v2、**dim=1536**
+  (符合蓝图)、不同文本不同向量。整条 P2 向量管线(QwenEmbedder→回填→vector/hybrid)
+  端到端打通。费用可忽略。验证:workspace check + 真跑。
+- **▶ 下一步**:① 把 embedding 接进 app 事实记录路径(app 层组装 Embedder:simulate→Fake
+  / 真→Qwen,默认维度 1536);② 在 quiver-memory 暴露 hybrid_recall 给 app/IPC(经理简报/
+  召回用)。**P2 向量闭环 ✅** → 转 **P2 图书管理员**(挑候选→AI 判矛盾→supersede,AI 走
+  可注入接口)→ §5 AI 经理编排 → P3 安全 → P4 → P5。
+
 ### 2026-06-09 · 第 33 轮(后端收尾 · P2 向量续)
 - `30d1ac6` feat(memory): 写入/回填用注入 Embedder 生成向量(embed_fact + embed_unembedded)。
   验证:quiver-memory 30 过 + workspace check + `--features qwen` 能编。
