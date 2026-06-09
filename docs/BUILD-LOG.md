@@ -6,6 +6,14 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 33 轮(后端收尾 · P2 向量续)
+- `30d1ac6` feat(memory): 写入/回填用注入 Embedder 生成向量(embed_fact + embed_unembedded)。
+  验证:quiver-memory 30 过 + workspace check + `--features qwen` 能编。
+- **▶ 下一步**:① 加 qwen smoke 示例(examples,--features qwen)真跑一次千问 embedding
+  验证 API 形状/维度/耗时(花钱,标结果到这里);② 把 embedding 接进 app 的事实记录路径
+  (app 层组装 Embedder:simulate→Fake / 真→Qwen)。**P2 向量基本闭环后** → P2 图书管理员
+  (AI 判矛盾作废)→ §5 AI 经理编排 → P3 安全 → P4 → P5。
+
 ### 2026-06-09 · 第 32 轮(后端收尾 · P2 向量续)
 - `cca6381` feat(memory): 混合检索 hybrid_recall(RRF 融合 FTS+向量+§6.7 内在三腿)。
   验证:quiver-memory 29 过 + workspace check。
