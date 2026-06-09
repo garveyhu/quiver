@@ -6,6 +6,40 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 13 轮
+
+**落了什么**
+- `adaef26` feat(memory): 经理简报 brief（P1 §6）
+- `79e490a` feat(memory): §6.7 混合召回排序 recall（importance+trust+recency）
+
+**这轮做了什么(两刀,都纯函数可测)**
+- brief:`MemoryStore::brief(project, fact_limit, episode_limit)` 组装记忆快照
+  (当前真相事实 + 近期 episode,capped)+ `Brief::to_text` 渲染上下文文本(§6 简报)。
+- recall:`MemoryStore::recall(project, query, now_ms, limit)` —— 带 query 走 FTS5、
+  无 query 取全部当前真相,按固定权重 score=1·importance+2·trust+3·recency(14d 半衰)
+  排序取 top(§6.7;向量腿留 P2)。
+
+**验证过的**
+- `cargo test -p quiver-memory` ✅(15 过,新增 brief 2 + recall 3)+ `cargo check --workspace` ✅
+
+**各阶段进度**
+- 🎉 后端 P0 全部完成;前端 ✅ 落定+运行验证+IPC 完整。
+- **P1 记忆:schema(episode/fact/FTS5)+ 读写 + recall(§6.7)+ brief(§6)+ 已接进 app
+  (完成记 episode)**。P1 后端面基本齐,剩:e2e 验证、episode 补 git 细节、把
+  brief/recall 经 IPC 接到 UI(经理"简报书"面)、会话重开不失忆串起来。
+
+**今天该接哪**(优先级从上到下)
+1. **一次重建,合并验证多项**(避免每次都重建二进制):`agent-debug.sh up` 重建+起 app
+   → ① e2e 验证记忆接线(跑 simulate 任务→查 memory.sqlite 有 episode)② 顺带视觉
+   对照原型截图。**这是积累的 runtime 验证债,值得一次性还掉。**
+2. **episode 补 git 细节**:让 supervisor 在 cleanup 前把 commit_sha(attempt 分支 HEAD)
+   + diff_stat(`git diff --shortstat`)带进 RunOutcome,run.rs 填进 episode(§6.2 机械绑 git)。
+3. **brief/recall 接 IPC + UI**:加 `get_brief` 命令(返回 Brief 文本/结构)→ 前端经理
+   区"简报书"展示。做成纵向切片。
+4. 前端视觉对照原型查缺补漏(并入 #1 的截图)。
+
+---
+
 ### 2026-06-09 · 第 12 轮
 
 **落了什么**
@@ -527,6 +561,11 @@
 ---
 
 ## 📜 历轮记录
+
+### 第 13 轮(2026-06-09)
+- P1 brief:MemoryStore::brief + Brief::to_text 组装经理简报(`adaef26`)。
+- P1 §6.7 recall:importance+trust+recency 固定权重排序,带 query 走 FTS(`79e490a`)。
+- 验证:cargo test -p quiver-memory(15 过)+ cargo check --workspace。
 
 ### 第 12 轮(2026-06-09)
 - P1 记忆接进 app:src-tauri 依赖 + AppState.memory + setup 开 memory.sqlite +
