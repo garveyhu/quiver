@@ -6,6 +6,46 @@
 
 ## ☀️ 晨报（最新在最上）
 
+### 2026-06-09 · 第 16 轮
+
+**落了什么**
+- `dc614d4` feat(memory): episode 绑 commit_sha（§6.2 机械绑 git)
+
+**这轮做了什么**
+- episode 绑提交(§6.2):`GitGuard::head_sha(worktree)` → `RunOutcome.commit_sha`
+  (drain 后、cleanup 前捕获一次,填 4 个构造点)→ `RunSummary.commit_sha` →
+  `record_episode` 写进 episode。链路打通,run 级失败记 None。diff_stat 仍留后续。
+
+**验证过的**
+- `cargo check --workspace` 无警告 + `cargo test --workspace` 全绿 0 失败
+  (quiver-core 43 含新 run_records_worktree_commit_sha / quiver-memory 15 / quiver-app 19+1)。
+
+**各阶段进度 —— P0 ✅、P1 基本完整、前端 ✅**
+- 🎉 后端 P0 全完成(#1–#5)。
+- **P1 记忆地基对照 §23 基本完整**:SQLite+FTS5 ✅、episode 机械绑 git(commit_sha/
+  verify_result)✅、双时间事实 schema ✅、recall(§6.7)✅、简报 brief+UI ✅、接进 app ✅。
+  "会话重开不失忆"结构上已具备(session_id 持久 + --resume + brief 可取),真正"重开时
+  注入记忆"属 AI 经理职责(P0 用 Rust 策略,留后)。diff_stat 是 P1 内唯一小尾巴。
+- 前端 ✅ 落定 + 运行验证 + IPC 完整 + 记忆书 UI。
+
+**⚠ 需要你拍板 / 处理**
+- **(处理)runtime 验证债**:你的 live dev 实例(`target/debug/Quiver` pid 34558,旧二进制)
+  仍在跑,占 :1420。关掉它我下轮就能重建 + 一次性 e2e 验证(记忆 episode 落库 +
+  BriefPanel 真数据 + 截图视觉对照)。
+- **(拍板)是否开 P2**:P0/P1 基本收口,下一大阶段是 **P2**(向量 sqlite-vec + 混合检索 +
+  图书管理员作废/状态派生 + 待审/隔离/信任档升级,§23 P2)。这是大阶段,建议你早上定
+  方向:开 P2,还是先把前端原型交互补全(连续缩放/时间轴/信任卡/晨报/命令栏)+ 还清
+  runtime 验证债。
+
+**今天该接哪**(优先级从上到下)
+1. (你关掉 live 实例后)合并 runtime 验证:重建 → 跑任务 → 验 episode/BriefPanel + 视觉对照。
+2. P1 收尾 diff_stat:supervisor 在 cleanup 前 `git diff --shortstat <base>..HEAD` 带进
+   RunOutcome → episode(纯后端 cargo 可测,不被阻塞)。base sha 在 worktree create 时记下。
+3. 前端原型交互补全(纯前端、tsc + HMR 可验):对照 redesign-iso 把缺的交互逐个搬。
+4. (待你拍板)P2 起步。
+
+---
+
 ### 2026-06-09 · 第 15 轮
 
 **落了什么**
@@ -632,6 +672,11 @@
 ---
 
 ## 📜 历轮记录
+
+### 第 16 轮(2026-06-09)
+- episode 绑 commit_sha:GitGuard::head_sha → RunOutcome → RunSummary → episode
+  (§6.2 机械绑 git)(`dc614d4`)。
+- 验证:cargo test --workspace 全绿(quiver-core 43)。P1 记忆地基基本完整。
 
 ### 第 15 轮(2026-06-09)
 - BriefPanel UI:经理记忆书·简报 Rail 面板接 useBrief(`3073b14`)。brief 纵向切片
