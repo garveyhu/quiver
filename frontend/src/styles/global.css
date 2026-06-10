@@ -83,9 +83,9 @@ body {
 .buildmark { position: absolute; width: var(--tw); height: var(--th); margin-left: calc(var(--tw)/-2); margin-top: calc(var(--th)/-2);
   clip-path: polygon(50% 0,100% 50%,50% 100%,0 50%); background: repeating-linear-gradient(45deg, transparent 0 5px, rgba(255,210,122,.10) 5px 7px); display: grid; place-items: center; }
 .buildmark b { color: #7c89ad; font-size: 13px; font-weight: 400; }
-/* 房间标签反向缩放(scale(var(--inv-s)))抵消 stage 缩放 → 文字净缩放 1:1,DPR=1 非 retina
-   屏也锐利清晰(不再随等距相机缩放发糊)。--inv-s 由 useCamera 注入。 */
-.roomlabel { position: absolute; transform: translate(-50%,-50%) scale(var(--inv-s, 1)); font-size: 10.5px; letter-spacing: 1.2px; color: var(--tx-2); background: rgba(10,14,26,.72);
+/* world 不再放大(fit 上限 1),房间标签随 world 1:1 渲染即清晰,无需 counter-scale(它反而
+   让标签在 world 纹理里更小再放大、更糊)。 */
+.roomlabel { position: absolute; transform: translate(-50%,-50%); font-size: 10.5px; letter-spacing: 1.2px; color: var(--tx-2); background: rgba(10,14,26,.72);
   padding: 3px 9px; border-radius: var(--r-1); white-space: nowrap; pointer-events: none; border: 1px solid var(--bd-soft); }
 .poly { position: absolute; inset: 0; pointer-events: none; transition: background .3s; }
 .rect { position: absolute; pointer-events: none; transition: background .3s; }

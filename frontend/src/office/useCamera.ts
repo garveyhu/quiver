@@ -26,7 +26,10 @@ const DIVE = 6;
 
 /** 把整张办公室收进视口的基准缩放(留 0.4 下限)。 */
 function computeFit(worldW: number, worldH: number): number {
-  return Math.max(0.4, Math.min(window.innerWidth / worldW, window.innerHeight / worldH));
+  // 上限 1:**绝不放大世界**。world 用 transform:scale,放大(>1)会把整个 world 栅格化成纹理
+  // 再 GPU 上采样 → 文字/像素发糊(控制条不在 world 里所以一直清晰)。世界比窗口小就 1:1 居中
+  // 显示、周围留深色空白(沉浸),想看近景自己滚轮放大(用户主动,糊也认了)。
+  return Math.max(0.4, Math.min(1, window.innerWidth / worldW, window.innerHeight / worldH));
 }
 
 /**
@@ -111,9 +114,7 @@ export function useCamera(worldW: number, worldH: number): Camera {
       transform: `translate(${tx}px,${ty}px) scale(${cam.s.toFixed(3)})`,
       transition,
       transformOrigin: 'center',
-      // 反向缩放系数:世界内文字标签用它抵消 stage 缩放,净缩放=1 → 文字 1:1 渲染、DPR=1 也清晰。
-      ['--inv-s' as string]: (1 / cam.s).toFixed(3),
-    } as CSSProperties,
+    },
     zoomed: cam.s > fitRef.current * 1.02,
     diveTo,
     reset,
