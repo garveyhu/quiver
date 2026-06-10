@@ -64,6 +64,27 @@ impl MemoryStore {
     /// Append a fact; returns its new row id. Append-only (§6.3 — never UPDATE/DELETE
     /// a fact's truth; P2 supersede inserts a new row + retires the old in one txn).
     pub fn insert_fact(&self, f: &NewFact) -> anyhow::Result<i64> {
+        // §6.4 状态自我演化:状态事实((project,entity) 当前唯一)插新前,自动作废同主题的旧状态 ——
+        // 「用 SQLite」被「用 PostgreSQL」取代时旧的退场,brief 只见当前真相、记忆不堆矛盾。
+        // 非状态事实(约定/教训/提炼)正常并存、不消解(它们不是互斥的单一真相)。
+        if f.kind == "状态" {
+            if let Some(ent) = f.entity.as_deref().map(str::trim).filter(|e| !e.is_empty()) {
+                let old: Option<i64> = {
+                    let conn = self.conn.lock().expect("memory store lock");
+                    conn.query_row(
+                        "SELECT id FROM memory_fact WHERE project = ?1 AND entity = ?2 \
+                         AND kind = '状态' AND invalid_at IS NULL ORDER BY recorded_at DESC LIMIT 1",
+                        params![f.project, ent],
+                        |r| r.get::<_, i64>(0),
+                    )
+                    .optional()?
+                };
+                if let Some(old_id) = old {
+                    // 失效旧状态 + 插新状态,一个事务原子(reader 永不见两个当前版本)。
+                    return self.supersede_fact(old_id, f, f.recorded_at);
+                }
+            }
+        }
         let scope = f.scope.as_deref().unwrap_or(DEFAULT_SCOPE);
         let importance = f.importance.unwrap_or(DEFAULT_IMPORTANCE);
         let conn = self.conn.lock().expect("memory store lock");
@@ -616,6 +637,40 @@ mod tests {
         assert_eq!(facts[0].invalid_at, None, "fresh fact is current truth");
     }
 
+    /// 一条状态事实(kind='状态' + entity),用于测自我演化消解。
+    fn state(project: &str, entity: &str, text: &str, recorded_at: i64) -> NewFact {
+        NewFact { kind: "状态".into(), entity: Some(entity.into()), ..fact(project, text, 7, recorded_at) }
+    }
+
+    #[test]
+    fn state_fact_self_supersedes_same_entity_but_conventions_coexist() {
+        let s = MemoryStore::open_in_memory().unwrap();
+        // §6.4 自我演化:同主题(数据库)状态,新的作废旧的 —— 只剩一个当前真相。
+        s.insert_fact(&state("/r", "数据库", "用 SQLite", 100)).unwrap();
+        s.insert_fact(&state("/r", "数据库", "用 PostgreSQL", 200)).unwrap();
+        let db: Vec<_> = s
+            .current_facts("/r")
+            .unwrap()
+            .into_iter()
+            .filter(|f| f.entity.as_deref() == Some("数据库"))
+            .collect();
+        assert_eq!(db.len(), 1, "同主题状态只剩一个当前真相");
+        assert!(db[0].text.contains("PostgreSQL"), "当前是最新状态");
+        // 不同主题(部署)互不影响。
+        s.insert_fact(&state("/r", "部署", "用 Docker", 300)).unwrap();
+        assert_eq!(s.current_facts("/r").unwrap().len(), 2, "数据库 + 部署 两个当前状态");
+        // 非状态(约定)不互斥 → 多条并存,不消解。
+        s.insert_fact(&fact("/r", "约定:函数加 q_ 前缀", 8, 400)).unwrap();
+        s.insert_fact(&fact("/r", "约定:用 4 空格缩进", 8, 500)).unwrap();
+        let convs: Vec<_> = s
+            .current_facts("/r")
+            .unwrap()
+            .into_iter()
+            .filter(|f| f.kind == "decision")
+            .collect();
+        assert_eq!(convs.len(), 2, "非状态事实并存,不消解");
+    }
+
     #[test]
     fn search_facts_matches_keyword_filtered_by_project() {
         let store = MemoryStore::open_in_memory().unwrap();
@@ -862,12 +917,18 @@ mod tests {
     fn current_state_unique_per_project_entity() {
         let store = MemoryStore::open_in_memory().unwrap();
         store.insert_fact(&state_fact("/r", "moduleA", "uses tokio")).unwrap();
-        // A second CURRENT 状态 fact for the same (project, entity) is rejected (§6.4).
-        assert!(
-            store.insert_fact(&state_fact("/r", "moduleA", "uses async-std")).is_err(),
-            "two current 状态 facts for same (project,entity) must be rejected by the DB"
-        );
-        // A different entity — and a non-状态 fact on the same entity — are fine.
+        // §6.4 自我演化:同 (project,entity) 插第二个当前状态 → insert_fact 自动作废旧的(不再靠
+        // DB 唯一约束拒绝、要人手动 supersede),成功;当前只剩最新那个 —— 记忆自动跟上现实变化。
+        assert!(store.insert_fact(&state_fact("/r", "moduleA", "uses async-std")).is_ok());
+        let a: Vec<_> = store
+            .current_facts("/r")
+            .unwrap()
+            .into_iter()
+            .filter(|f| f.entity.as_deref() == Some("moduleA"))
+            .collect();
+        assert_eq!(a.len(), 1, "同主题状态唯一当前真相");
+        assert!(a[0].text.contains("async-std"), "当前是最新状态、旧的已失效");
+        // 不同 entity、非状态事实正常。
         assert!(store.insert_fact(&state_fact("/r", "moduleB", "uses sqlite")).is_ok());
         assert!(store.insert_fact(&fact("/r", "moduleA note", 5, 1)).is_ok());
     }
