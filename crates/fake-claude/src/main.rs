@@ -274,6 +274,13 @@ fn decide_from_prompt(prompt: &str) -> String {
     }
     // 否则看队首任务:列举多个子目标(用「、」分隔)→ 拆活分工(§5 协作);单个 → 原样派活。
     if let Some(task) = extract_next_task(prompt) {
+        // 把 CEO 录入的权威事实(记忆)注入派给员工的活 —— 单任务、拆出的子任务都带上公司约定
+        // ("记忆 → 决策 → 执行",simulate 也看得见;真 claude 会智能选最相关事实,这里桩选第一条)。
+        let memo = extract_authoritative_fact(prompt);
+        let inject = |s: &str| match &memo {
+            Some(m) => format!("{s}(公司约定:{m})"),
+            None => s.to_string(),
+        };
         let parts: Vec<String> = task
             .split(['、', '，'])
             .map(|s| s.trim())
@@ -283,18 +290,12 @@ fn decide_from_prompt(prompt: &str) -> String {
         if parts.len() > 1 {
             let arr = parts
                 .iter()
-                .map(|p| format!("\"{}\"", json_escape(p)))
+                .map(|p| format!("\"{}\"", json_escape(&inject(p))))
                 .collect::<Vec<_>>()
                 .join(",");
             return format!(r#"{{"action":"plan","subtasks":[{arr}]}}"#);
         }
-        // 单任务:把 CEO 录入的权威事实(记忆)注入派给员工的活 —— "记忆 → 决策 → 执行"在
-        // simulate 也看得见(真 claude 会智能选相关事实,这里桩选第一条权威)。
-        let work = match extract_authoritative_fact(prompt) {
-            Some(memo) => format!("{task}(公司约定:{memo})"),
-            None => task,
-        };
-        return format!(r#"{{"action":"spawn","prompt":"{}"}}"#, json_escape(&work));
+        return format!(r#"{{"action":"spawn","prompt":"{}"}}"#, json_escape(&inject(&task)));
     }
     r#"{"action":"noop"}"#.to_string()
 }
