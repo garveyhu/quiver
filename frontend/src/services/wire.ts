@@ -230,4 +230,6 @@ export interface TaskRecord {
   position: number;
   createdAt: number;
   updatedAt: number;
+  /** 派给哪个员工(角色名,§14 按人追溯);null = 没记录(旧任务)。 */
+  workerRole: string | null;
 }

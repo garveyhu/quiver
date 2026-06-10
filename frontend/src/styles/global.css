@@ -290,6 +290,8 @@ body {
 .trc-chip.on { background: var(--accent); color: #1a1407; border-color: var(--accent); font-weight: 600; }
 .trc-chip-sep { width: 1px; height: 15px; background: var(--bd); margin: 0 4px; }
 .trc-count { font-size: 11px; color: var(--tx-3); padding: 0 0 8px; }
+.trc-worker-sel { padding: 4px 8px; }
+.trc-by { font-size: 11px; color: #d9a86c; flex: none; white-space: nowrap; }
 .panel h2 { font-size: 15px; font-weight: 650; letter-spacing: .1px; padding: 18px 20px 2px; }
 .panel .sub { padding: 0 20px 12px; color: var(--tx-3); font-size: 12px; line-height: 1.55; letter-spacing: .1px; }
 .panel .body { padding: 4px 20px 16px; }

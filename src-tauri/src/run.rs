@@ -228,6 +228,13 @@ pub async fn run_streaming(
         VerifyCommand::shell(settings.verify_command.clone())
     };
 
+    // §14 按人追溯:对**所有模式**都定下派给哪个员工(同 task_id 稳定分配),记到任务行 ——
+    // 追溯室/员工工作台据此显示"由员工X干"。real 分支复用它的模型/预算/轮数配置。
+    let worker_role = store.and_then(|s| pick_worker_role(s, &task_id, &prompt));
+    if let (Some(s), Some(role)) = (store, worker_role.as_ref()) {
+        let _ = s.set_task_worker_role(&task_id, &role.name, crate::now_ms());
+    }
+
     let (agent_bin, mut options) = match mode {
         RunMode::Simulate => {
             // Make `fakeDelayMs` take effect: the runner forwards
@@ -242,10 +249,8 @@ pub async fn run_streaming(
         RunMode::Real => {
             let bin = resolve_agent_bin(&settings, mode)?;
             assert_subscription_env()?;
-            // 人事部员工角色配置接到真实 run(§14,配置不是摆设):**每个员工独立配置**——
-            // 在所有 kind='worker' 角色间按 task_id 稳定分配(同任务总是同一个员工,不同任务
-            // 散开到不同员工),用那个员工的模型/预算/轮数。回退:无员工角色 → 全局 settings。
-            let worker_role = store.and_then(|s| pick_worker_role(s, &task_id, &prompt));
+            // 人事部员工角色配置接到真实 run(§14,配置不是摆设):用上面已定的那个员工
+            // (worker_role,同 task_id 稳定分配)的模型/预算/轮数。回退:无员工角色 → 全局 settings。
             let model = worker_role
                 .as_ref()
                 .map(|r| r.model.clone())

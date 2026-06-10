@@ -130,6 +130,8 @@ pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
     // (无则 get_metrics 退回墙钟代理 / 0)。
     add_column_if_absent(conn, "task", "tokens", "INTEGER")?;
     add_column_if_absent(conn, "task", "duration_ms", "INTEGER")?;
+    // §14 按人追溯:派给哪个员工(角色名)跑的,run 时记录,追溯室/工作台据此显示"由员工X干"。
+    add_column_if_absent(conn, "task", "worker_role", "TEXT")?;
 
     // 决策日志(DESIGN §20 decision_log 裁剪/§10 复盘室):经理每拍真实决策一行,只追加。
     conn.execute_batch(

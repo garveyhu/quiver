@@ -160,6 +160,7 @@ export function TraceRoom({ open, onClose }: TraceRoomProps) {
   const [query, setQuery] = useState('');
   const [modeF, setModeF] = useState<ModeFilter>('all');
   const [statusF, setStatusF] = useState<StatusFilter>('all');
+  const [workerF, setWorkerF] = useState<string>('all');
 
   useEffect(() => {
     if (!open) return;
@@ -181,15 +182,23 @@ export function TraceRoom({ open, onClose }: TraceRoomProps) {
     return m;
   }, [decisions]);
 
+  // 派过活的员工名单(从任务的 workerRole 去重),给"按人追溯"做筛选。
+  const workers = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of tasks) if (t.workerRole) set.add(t.workerRole);
+    return [...set].sort();
+  }, [tasks]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return tasks.filter(t => {
       if (q && !t.prompt.toLowerCase().includes(q)) return false;
       if (modeF !== 'all' && t.mode !== modeF) return false;
       if (statusF !== 'all' && !STATUS_BUCKETS[statusF].includes(t.status)) return false;
+      if (workerF !== 'all' && t.workerRole !== workerF) return false;
       return true;
     });
-  }, [tasks, query, modeF, statusF]);
+  }, [tasks, query, modeF, statusF, workerF]);
 
   const shown = filtered.slice(0, RENDER_CAP);
 
@@ -226,6 +235,23 @@ export function TraceRoom({ open, onClose }: TraceRoomProps) {
               {s === 'all' ? '全部' : s === 'merged' ? '已合并' : s === 'pending' ? '进行中' : '失败'}
             </button>
           ))}
+          {workers.length > 0 && (
+            <>
+              <span className="trc-chip-sep" />
+              <select
+                className="trc-chip trc-worker-sel"
+                value={workerF}
+                onChange={e => setWorkerF(e.target.value)}
+              >
+                <option value="all">全部员工</option>
+                {workers.map(w => (
+                  <option key={w} value={w}>
+                    {w}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
         </div>
       </div>
       <div className="body">
@@ -249,6 +275,7 @@ export function TraceRoom({ open, onClose }: TraceRoomProps) {
                 >
                   <span className="trc-arrow">{selected === t.id ? '▾' : '▸'}</span>
                   <span className="grow">{t.prompt}</span>
+                  {t.workerRole && <span className="trc-by">{t.workerRole}</span>}
                   <span className={statusClass(t.status)}>{STATUS_CN[t.status] ?? t.status}</span>
                   <span className="st-meta">
                     {t.mode === 'real' ? '真实' : '模拟'}

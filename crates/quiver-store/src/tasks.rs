@@ -41,6 +41,8 @@ pub struct TaskRecord {
     pub position: i64,
     pub created_at: i64,
     pub updated_at: i64,
+    /// 派给哪个员工(角色名)跑的(§14 按人追溯);`None` = 没记录(旧任务/未派)。
+    pub worker_role: Option<String>,
 }
 
 /// A per-task observability sample (§10-12), independent of the board-facing
@@ -122,7 +124,7 @@ impl Store {
         // predicates → at most two bound params, kept positional for clarity.
         let mut sql = String::from(
             "SELECT id, project, prompt, mode, status, cost_usd, branch,
-                    position, created_at, updated_at
+                    position, created_at, updated_at, worker_role
              FROM task",
         );
         let mut clauses: Vec<&str> = Vec::new();
@@ -162,6 +164,7 @@ impl Store {
                     position: row.get(7)?,
                     created_at: row.get(8)?,
                     updated_at: row.get(9)?,
+                    worker_role: row.get(10)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -335,6 +338,16 @@ impl Store {
         Ok(())
     }
 
+    /// 记录任务派给了哪个员工(角色名,§14 按人追溯)。run 启动时调一次。
+    pub fn set_task_worker_role(&self, id: &str, role_name: &str, updated_at: i64) -> anyhow::Result<()> {
+        let conn = self.conn.lock().expect("store lock");
+        conn.execute(
+            "UPDATE task SET worker_role = ?2, updated_at = ?3 WHERE id = ?1",
+            params![id, role_name, updated_at],
+        )?;
+        Ok(())
+    }
+
     /// Read back a task's persisted session handle, or `None` if the task is gone
     /// or never reported one. The reconcile path reads this to resume in-flight
     /// workers (DESIGN §23 P0).
@@ -405,7 +418,7 @@ impl Store {
         let conn = self.conn.lock().expect("store lock");
         conn.query_row(
             "SELECT id, project, prompt, mode, status, cost_usd, branch,
-                    position, created_at, updated_at
+                    position, created_at, updated_at, worker_role
              FROM task WHERE id = ?1",
             params![id],
             |row| {
@@ -420,6 +433,7 @@ impl Store {
                     position: row.get(7)?,
                     created_at: row.get(8)?,
                     updated_at: row.get(9)?,
+                    worker_role: row.get(10)?,
                 })
             },
         )
@@ -447,7 +461,7 @@ impl Store {
         let candidate: Option<TaskRecord> = tx
             .query_row(
                 "SELECT id, project, prompt, mode, status, cost_usd, branch,
-                        position, created_at, updated_at
+                        position, created_at, updated_at, worker_role
                  FROM task
                  WHERE project = ?1 AND status = 'queued'
                  ORDER BY position ASC, created_at ASC
@@ -465,6 +479,7 @@ impl Store {
                         position: row.get(7)?,
                         created_at: row.get(8)?,
                         updated_at: row.get(9)?,
+                    worker_role: row.get(10)?,
                     })
                 },
             )
