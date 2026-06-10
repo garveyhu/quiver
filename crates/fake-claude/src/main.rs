@@ -281,6 +281,11 @@ fn decide_from_prompt(prompt: &str) -> String {
             Some(m) => format!("{s}(公司约定:{m})"),
             None => s.to_string(),
         };
+        // 用了记忆 → 决策理由也标出来,CEO 在决策流就能看到"经理在遵循公司约定"。
+        let reason = memo
+            .as_ref()
+            .map(|m| format!(r#","reason":"遵循公司约定:{}""#, json_escape(m)))
+            .unwrap_or_default();
         let parts: Vec<String> = task
             .split(['、', '，'])
             .map(|s| s.trim())
@@ -293,9 +298,9 @@ fn decide_from_prompt(prompt: &str) -> String {
                 .map(|p| format!("\"{}\"", json_escape(&inject(p))))
                 .collect::<Vec<_>>()
                 .join(",");
-            return format!(r#"{{"action":"plan","subtasks":[{arr}]}}"#);
+            return format!(r#"{{"action":"plan","subtasks":[{arr}]{reason}}}"#);
         }
-        return format!(r#"{{"action":"spawn","prompt":"{}"}}"#, json_escape(&inject(&task)));
+        return format!(r#"{{"action":"spawn","prompt":"{}"{reason}}}"#, json_escape(&inject(&task)));
     }
     r#"{"action":"noop"}"#.to_string()
 }
