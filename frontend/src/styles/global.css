@@ -470,3 +470,6 @@ body {
 .worker.mgr .body { bottom: 0; }
 .worker.mgr .robe { top: 23px; height: 11px; }
 .worker.mgr .stack { animation: none; }
+
+/* 菜单入口分组:按职责(看公司/配公司)用竖分隔线分块,不再一长条平铺 → 有层级、不繁琐。 */
+.ctrl-div { width: 1px; height: 16px; background: var(--bd-strong); margin: 0 3px; flex: none; opacity: .6; }
