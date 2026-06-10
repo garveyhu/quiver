@@ -34,7 +34,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
-use quiver_memory::{Brief, EpisodeRecord, MemoryStore, NewFact};
+use quiver_memory::{Brief, EpisodeRecord, FactRecord, MemoryStore, NewFact};
 use quiver_store::{
     InitialState, MetricSample, NewTask, Settings, SettingsPatch, Store, StoredEvent, TaskRecord,
 };
@@ -512,6 +512,23 @@ fn add_authoritative_fact(
     if entity.is_some() {
         let _ = mem.supersede_lower_same_entity(new_id, now);
     }
+    Ok(())
+}
+
+/// 记忆库:当前项目所有**当前事实**(§6,未失效),供 CEO 浏览管理。
+#[tauri::command]
+fn get_memory_facts(state: State<'_, AppState>) -> Result<Vec<FactRecord>, String> {
+    let project = current_project(&state)?.display().to_string();
+    let mem = state.memory()?;
+    mem.current_facts(&project).map_err(|e| format!("{e:#}"))
+}
+
+/// CEO 手动作废一条记错 / 过时的事实(§6)。失效不删,可追溯。
+#[tauri::command]
+fn retire_fact_cmd(state: State<'_, AppState>, fact_id: i64) -> Result<(), String> {
+    let mem = state.memory()?;
+    mem.invalidate_fact(fact_id, now_ms())
+        .map_err(|e| format!("{e:#}"))?;
     Ok(())
 }
 
@@ -1015,6 +1032,8 @@ pub fn run() {
         hire_worker,
         fire_worker,
         add_authoritative_fact,
+        get_memory_facts,
+        retire_fact_cmd,
         get_decisions,
         list_tasks,
         get_stats,
@@ -1048,6 +1067,8 @@ pub fn run() {
         hire_worker,
         fire_worker,
         add_authoritative_fact,
+        get_memory_facts,
+        retire_fact_cmd,
         get_decisions,
         list_tasks,
         get_stats,

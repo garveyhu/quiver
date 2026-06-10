@@ -217,6 +217,24 @@ export interface ManagerDecision {
 }
 
 /** 看板任务行(list_tasks)。 */
+/** 一条记忆事实(§6,当前未失效)。记忆库浏览用。 */
+export interface FactRecord {
+  id: number;
+  project: string;
+  scope: string;
+  kind: string;
+  text: string;
+  entities: string | null;
+  /** 主题/模块(§6.4),矛盾消解的实体键。 */
+  entity: string | null;
+  importance: number;
+  validAt: number | null;
+  invalidAt: number | null;
+  recordedAt: number;
+  /** 可信度档:权威/已验证·机械/已验证·印证/员工汇报/不可信。 */
+  trust: string;
+}
+
 export interface TaskRecord {
   id: string;
   project: string;

@@ -3,6 +3,7 @@ import type {
   AgentRole,
   Brief,
   EpisodeRecord,
+  FactRecord,
   InitialState,
   ManagerDecision,
   ManagerPreview,
@@ -84,6 +85,13 @@ export const getBrief = (): Promise<Brief> => call<Brief>('get_brief');
  * `topic`(可选):同主题的旧低档事实会被这条机械作废(§6.4 矛盾消解)。 */
 export const addAuthoritativeFact = (text: string, topic?: string): Promise<void> =>
   call<void>('add_authoritative_fact', { text, topic });
+
+/** 记忆库:当前项目所有当前事实(§6),CEO 浏览管理用。 */
+export const getMemoryFacts = (): Promise<FactRecord[]> => call<FactRecord[]>('get_memory_facts');
+
+/** CEO 作废一条记错/过时的事实(§6),失效不删可追溯。 */
+export const retireFact = (factId: number): Promise<void> =>
+  call<void>('retire_fact_cmd', { factId });
 
 /** 人事部:全部角色配置(经理在前,§14)。 */
 export const listRoles = (): Promise<AgentRole[]> => call<AgentRole[]>('list_roles');

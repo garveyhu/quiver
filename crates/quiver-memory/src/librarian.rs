@@ -64,6 +64,18 @@ impl MemoryStore {
         Ok(n == 1)
     }
 
+    /// CEO 手动作废一条事实(§6:记错了 / 过时了 / 不该记):设 `invalid_at`,无替代者
+    /// (`superseded_by` 保持 NULL)。失效不删(双时间可追溯)。返回是否命中一条当前事实。
+    pub fn invalidate_fact(&self, fact_id: i64, at_ms: i64) -> anyhow::Result<bool> {
+        let conn = self.conn.lock().expect("memory store lock");
+        let n = conn.execute(
+            "UPDATE memory_fact SET invalid_at = ?2, retired_at = ?2
+             WHERE id = ?1 AND invalid_at IS NULL",
+            params![fact_id, at_ms],
+        )?;
+        Ok(n == 1)
+    }
+
     /// 记忆官核对(§6.4):新事实 `new_id` 对一组候选旧事实逐一过 `judge`,凡裁为
     /// [`Verdict::IncomingSupersedes`] 的旧事实即作废(`superseded_by = new_id`)。返回被
     /// 作废的 id。候选由调用方挑(同实体 / hybrid_recall 邻居);AI 判断注入,绝不改信任档。
