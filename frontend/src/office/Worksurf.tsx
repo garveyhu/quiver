@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { MarkdownLite } from '@/components/MarkdownLite';
+import { TaskJourney } from '@/components/TaskJourney';
 import type { AgentRole, StoredEvent } from '@/services/wire';
 import type { PlacedWorker } from '@/office/workers';
 
@@ -182,6 +183,9 @@ export function Worksurf({ worker, events, roles, managerThinking, onClose, onOp
                 </div>
               )}
             </div>
+          )}
+          {worker.taskId && !isMgr && worker.taskStatus && (
+            <TaskJourney status={worker.taskStatus} />
           )}
           {hasTrace && !isMgr && (
             <div className="ws-events trc-events">

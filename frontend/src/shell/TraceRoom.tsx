@@ -3,6 +3,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useTaskEvents } from '@/hooks/useTaskEvents';
 import { getDecisions, listTasks } from '@/services/commands';
 import { MarkdownLite } from '@/components/MarkdownLite';
+import { TaskJourney } from '@/components/TaskJourney';
 import type { ManagerDecision, StoredEvent, TaskRecord } from '@/services/wire';
 
 interface TraceRoomProps {
@@ -313,6 +314,7 @@ export function TraceRoom({ open, onClose }: TraceRoomProps) {
                 </button>
                 {selected === t.id && (
                   <div className="trc-events">
+                    <TaskJourney status={t.status} />
                     {t.question &&
                       (t.status === 'escalated' ? (
                         <div className="trc-ask">

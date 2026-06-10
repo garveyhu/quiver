@@ -413,3 +413,18 @@ body {
 /* 经理在用 claude 思考:头顶冒思考点(复用 thinkpulse)+ 王冠轻浮动 —— 不点开也看得到 AI 在决策。 */
 .worker.thinking .think { opacity: 1; animation: thinkpulse 1.4s ease-in-out infinite; }
 .worker.mgr.thinking .stack { animation: bob 1.7s ease-in-out infinite alternate; }
+
+/* 任务链路条(TaskJourney):入队→执行→验证→交付,当前阶段脉动、已过点亮、失败标红。无 emoji,纯点+线。 */
+.tj { display: flex; align-items: center; margin: 2px 0 10px; padding: 2px 0; }
+.tj-step { display: flex; align-items: center; }
+.tj-dot { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--bd-strong); background: var(--s-2); flex: none; }
+.tj-line { width: 26px; height: 2px; background: var(--bd-soft); margin: 0 5px; }
+.tj-label { color: var(--tx-3); font-size: 11px; margin-left: 5px; letter-spacing: .2px; }
+.tj-done .tj-dot { background: var(--ok); border-color: var(--ok); }
+.tj-done .tj-label { color: var(--tx-2); }
+.tj-done .tj-line { background: var(--ok); opacity: .55; }
+.tj-active .tj-dot { background: var(--accent); border-color: var(--accent); animation: tjpulse 1.5s ease-in-out infinite; }
+.tj-active .tj-label { color: var(--tx-1); font-weight: 600; }
+.tj-fail .tj-dot { background: var(--bad); border-color: var(--bad); }
+.tj-fail .tj-label { color: var(--bad); font-weight: 600; }
+@keyframes tjpulse { 0%,100%{ box-shadow: 0 0 0 0 rgba(120,170,230,.5); } 50%{ box-shadow: 0 0 0 4px rgba(120,170,230,0); } }
