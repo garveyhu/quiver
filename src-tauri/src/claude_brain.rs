@@ -138,7 +138,8 @@ fn build_prompt(ctx: &ManagerContext, system_prompt: &str) -> String {
          不要任何解释、不要修改任何文件。\n\
          局面:在途 {}/{},排队 {} 个任务,预算剩余 ${:.2}。\n项目简报:\n{brief}{team}{reviews}{next}\n\n\
          输出一个 JSON,action 取其一:\n\
-         - {{\"action\":\"spawn\",\"prompt\":\"给新 worker 的任务描述\"}} —— 派新活(仅当在途未满且有预算)\n\
+         - {{\"action\":\"spawn\",\"prompt\":\"给新 worker 的任务描述\"}} —— 派新活(仅当在途未满、\
+           有预算、**且排队>0**;排队为 0 时没有新活可派,别 spawn,用 noop 或先处理待复核)\n\
          - {{\"action\":\"plan\",\"subtasks\":[\"子任务1\",\"子任务2\"]}} —— **拆活分工**:当队首任务\
            包含多件可独立完成的事时,把它拆成若干子任务,各自入队、分给多个 worker 并行协作;\
            每条 subtask 写成给 worker 的完整任务描述(同样可点明所需专长词)\n\

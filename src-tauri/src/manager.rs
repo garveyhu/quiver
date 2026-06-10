@@ -230,18 +230,16 @@ async fn manager_loop(app: AppHandle, store: Arc<Store>, pm: Arc<ProjectManager>
         let step = pm.orch.lock().await.apply(decision);
 
         // 3. 执行 effect(真起 worker / 交付 / 拦下 …)并把这一拍 emit 给前端工作台。
-        execute_effect(&app, &store, &pm, &step, &project_key, ctx.budget_remaining_usd).await;
+        //    返回**这拍是否真推进了局面** —— spawn 但队列空(claim None)算没推进,避免空转。
+        let progressed =
+            execute_effect(&app, &store, &pm, &step, &project_key, ctx.budget_remaining_usd).await;
 
         // 4. 终止/等待。只有**真正改变局面**的 effect(派了活/处置了节点)才立刻下一拍
-        //    (可能继续派满名额)。Nothing/Escalate/Refresh 不改变局面 —— 立即重 tick 必然
-        //    同样结果,只会空转(真大脑还每拍烧钱,就是 §5.8 说的升级风暴),所以一律等:
+        //    (可能继续派满名额)。Nothing/Escalate/Refresh、以及"想 spawn 但没活可派"都不算
+        //    推进 —— 立即重 tick 必然同样结果,只会空转(真大脑还每拍烧钱,§5.8 升级风暴),所以一律等:
         //    - 无在途 → 局面不会自己变(没有 worker 会完成来翻盘),退出循环;
         //      enqueue / 调预算(resume_all)会重启。
         //    - 有在途 → 等某个 worker 完成唤醒(或超时兜底)再 tick。
-        let progressed = matches!(
-            step.effect,
-            Effect::Spawn { .. } | Effect::Plan { .. } | Effect::Continue { .. } | Effect::Deliver { .. } | Effect::Block { .. }
-        );
         if !progressed {
             if pm.orch.lock().await.inflight_len() == 0 {
                 // 竞态兜底:这拍的 ctx 是快照,期间可能有 worker 刚完工入了复核队
@@ -271,10 +269,20 @@ async fn execute_effect(
     step: &Step,
     project_key: &str,
     budget_remaining_usd: f64,
-) {
+) -> bool {
     let mut node_id_out: Option<String> = None;
     let mut task_id_out: Option<String> = None;
     let mut task_prompt_out: Option<String> = None;
+    // 这一拍是否真推进了局面(派成活 / 处置了节点)。Spawn 认领到任务才算;队列空(claim None)
+    // 不算 —— 否则经理立即重 tick、claude 每拍空 spawn 烧钱,直到风暴熔断才停。
+    let mut progressed = matches!(
+        step.effect,
+        Effect::Spawn { .. }
+            | Effect::Plan { .. }
+            | Effect::Continue { .. }
+            | Effect::Deliver { .. }
+            | Effect::Block { .. }
+    );
 
     match &step.effect {
         Effect::Spawn { node_id, fence, prompt } => {
@@ -299,8 +307,10 @@ async fn execute_effect(
                     spawn_worker(app, store, pm, node_id.clone(), *fence, task.id, work_prompt, RunMode::from_label(&task.mode), project_key.to_string());
                 }
                 _ => {
-                    // ctx 快照说有排队、认领时却空了(竞态) → 回滚刚 admit 的名额,免得泄漏。
+                    // ctx 快照说有排队、认领时却空了(竞态/已被拆) → 回滚刚 admit 的名额,免得泄漏。
+                    // 这拍没真派活 → 不算推进,别让经理立即重 tick 空转(真大脑每拍烧钱)。
                     pm.orch.lock().await.on_complete(node_id, *fence);
+                    progressed = false;
                 }
             }
         }
@@ -402,6 +412,8 @@ async fn execute_effect(
         budget_remaining_usd, pm,
     )
     .await;
+
+    progressed
 }
 
 /// 把一拍真落地的决策写成记忆 episode(§6 C1)。best-effort:记忆是加性依赖,写失败
