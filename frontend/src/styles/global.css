@@ -193,9 +193,17 @@ body {
 @keyframes shaft { 0%,100%{ opacity: .34; transform: skewX(-3deg) scaleX(.96); } 50%{ opacity: .6; transform: skewX(0deg) scaleX(1.04); } }
 
 /* ===== 顶部 HUD ===== */
-.hud { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 18px; padding: 0 18px; height: 42px;
+/* 顶栏:一个 flex 容器,HUD 居左、控件居右,中间自适应留白 —— 从结构上杜绝两者重叠。
+   容器本身不挡办公室点击(pointer-events:none),只有 HUD/控件本体可点。 */
+.topbar { position: fixed; top: 14px; left: 16px; right: 16px; z-index: 9000;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; pointer-events: none; }
+.topbar > * { pointer-events: auto; }
+.topbar .hud, .topbar .ctrls { flex: none; }
+.topbar .ctrls { flex-wrap: wrap; justify-content: flex-end; }
+
+.hud { display: flex; align-items: center; gap: 18px; padding: 0 18px; height: 42px; min-width: 0;
   background: var(--s-0); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); border: 1px solid var(--bd); border-radius: var(--r-3);
-  box-shadow: var(--sh-1), inset 0 1px 0 var(--hairline-top); font-size: 12.5px; z-index: 9000; }
+  box-shadow: var(--sh-1), inset 0 1px 0 var(--hairline-top); font-size: 12.5px; }
 .hud .brand { font-weight: 650; letter-spacing: .6px; color: var(--accent); font-size: 12px; }
 .hud .brand small { color: var(--tx-3); font-weight: 400; letter-spacing: .2px; margin-left: 6px; }
 .hud .stat { color: var(--tx-2); font-size: 11.5px; letter-spacing: .15px; display: inline-flex; align-items: baseline; gap: 5px; }
@@ -203,8 +211,8 @@ body {
 .hud .bar { width: 92px; height: 6px; background: var(--s-inset); border-radius: var(--r-pill); overflow: hidden; box-shadow: inset 0 0 0 1px var(--bd-soft); }
 .hud .bar i { display: block; height: 100%; width: 0; border-radius: var(--r-pill); background: linear-gradient(90deg,#6cc47a,var(--accent)); box-shadow: 0 0 10px rgba(255,210,122,.35); transition: width .4s var(--ease); }
 
-/* ===== 右上控件 ===== */
-.ctrls { position: fixed; top: 14px; right: 16px; display: flex; gap: 8px; z-index: 9000; }
+/* ===== 右上控件(收进 .topbar,不再独立 fixed) ===== */
+.ctrls { display: flex; gap: 8px; }
 .ctrls button { font-family: var(--ui); font-size: 12.5px; font-weight: 500; letter-spacing: .15px; cursor: pointer; border-radius: var(--r-2); padding: 9px 14px;
   border: 1px solid var(--bd); display: inline-flex; align-items: center; gap: 7px; transition: background var(--t-fast), border-color var(--t-fast), transform var(--t-fast), box-shadow var(--t-fast); }
 .ctrls button:active { transform: translateY(1px) scale(.985); }

@@ -226,16 +226,18 @@ export function App() {
       <div id="stage" className={`stage${frozen ? ' frozen' : ''}`}>
         <Office completionFx={completionFx} />
       </div>
-      <Hud data={hud} budgetCap={budgetCap} />
-      <Ctrls
-        onCmdk={() => setOverlay('cmdk')}
-        onReport={() => setOverlay('report')}
-        onGoal={openBrief}
-        onManager={() => setOverlay('manager')}
-        onPersonnel={() => setOverlay('personnel')}
-        onSettings={() => setOverlay('settings')}
-        mode={runMode}
-      />
+      <div className="topbar">
+        <Hud data={hud} budgetCap={budgetCap} />
+        <Ctrls
+          onCmdk={() => setOverlay('cmdk')}
+          onReport={() => setOverlay('report')}
+          onGoal={openBrief}
+          onManager={() => setOverlay('manager')}
+          onPersonnel={() => setOverlay('personnel')}
+          onSettings={() => setOverlay('settings')}
+          mode={runMode}
+        />
+      </div>
       <Caption text={caption} />
       <div className={`scrim${overlay !== 'none' ? ' on' : ''}`} onClick={() => setOverlay('none')} />
       <CommandPalette open={overlay === 'cmdk'} onRun={runCommand} />
