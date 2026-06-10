@@ -291,6 +291,16 @@ async fn execute_effect(
     );
 
     match &step.effect {
+        // §9 烧钱红线硬闸:预算耗尽就**绝不派新活**(不只靠 claude prompt 自觉 —— claude 可能
+        // 误判)。**实时重算**预算,不用 ctx.budget_remaining 那个快照 —— 快照在这拍开头算、而
+        // claude 想了几秒,期间前一个 worker 才跑完记账,用快照会漏判一拍、烧超(实测 $0.3 cap
+        // 烧到 $0.51)。回滚 admit 的名额、这拍不推进 → 经理停下等 CEO 加预算(resume_all 重启)。
+        Effect::Spawn { node_id, fence, .. }
+            if budget_remaining(store, store.get_settings().ok().as_ref()) <= 0.0 =>
+        {
+            pm.orch.lock().await.on_complete(node_id, *fence);
+            progressed = false;
+        }
         Effect::Spawn { node_id, fence, prompt } => {
             // 经理"派活"=从队列原子认领下一个待办,交给一个 worker 跑到底。
             match store.claim_next_queued(project_key, crate::now_ms()) {
