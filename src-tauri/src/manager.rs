@@ -619,11 +619,18 @@ fn spawn_worker(
             .unwrap_or_else(|| "failed".to_string());
         // §5 协作汇总:子任务完成后,若它所属协作目标的所有子任务都完成了 → 标父目标「协作完成」。
         maybe_complete_parent_goal(&store, &project_key, &task_id);
+        // §5 双向协作(worker→经理):worker 主动请示(needs_input)→ 带上它的问题给经理看。
+        let question = if status == "needs_input" {
+            store.task_question(&task_id).ok().flatten()
+        } else {
+            None
+        };
         pm.reviews.lock().await.push(PendingReview {
             node_id: node_id.clone(),
             task_id,
             status,
             round, // §5 双向协作:这是第几轮(首跑 0,经理每 continue 一次 +1)
+            question,
         });
         // 回流(§5.5 栅栏对账):栅栏匹配才释放名额,挡掉过期/重复。
         pm.orch.lock().await.on_complete(&node_id, fence);

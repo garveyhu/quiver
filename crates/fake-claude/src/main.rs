@@ -60,6 +60,23 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
+    // §5 双向协作验证(worker→经理):任务含「[请示验证]」且**首轮**(没收到 --resume)→ 跑一段
+    // 后在产出末尾写 NEEDS_INPUT 模拟卡住请示;经理回答(continue)后 --resume 进来则正常完成。
+    // 让 simulate 免费看到 worker→经理 的求助闭环。
+    if prompt.contains("[请示验证]") && parse_resume(args.iter().cloned()).is_none() {
+        // 请示在 result **之前** emit(worker 工作中卡住请示)—— result 之后的输出 runner 可能
+        // 已不收(result 是终止信号)。真 claude 也是在产出过程里写 NEEDS_INPUT、然后才收尾。
+        emit_init(&session, delay);
+        emit_text(
+            &session,
+            "ask",
+            "实现到一半遇到一个取舍拿不准。\nNEEDS_INPUT: 排序要稳定排序还是性能优先?",
+            delay,
+        );
+        emit_result_ok(&session, delay);
+        return ExitCode::SUCCESS;
+    }
+
     match scenario.as_str() {
         // Permanently-failed run (DESIGN §8.4): emit the init line so a worker
         // appears, then die non-zero with NO clean `result` line. Exercises the
@@ -424,9 +441,16 @@ fn emit_happy(session: &str, prompt: &str, delay: Duration) {
 
     // 5. report + result/success (cost, turns, usage).
     emit_text(session, "fake_0007", &reply, delay);
+    emit_result_ok(session, delay);
+}
+
+/// 发一条 success result 行(worker 收尾)。双向协作请示场景:worker 先 emit NEEDS_INPUT(在
+/// result 之前,否则 runner 收不到),再用它收尾这一轮。
+fn emit_result_ok(session: &str, delay: Duration) {
+    let reply = "Simulated run. (No real agent ran.)";
     emit_line(
         &format!(
-            r#"{{"type":"result","subtype":"success","is_error":false,"session_id":"{session}","total_cost_usd":0.01,"num_turns":5,"duration_ms":6234,"duration_api_ms":5200,"result":"{reply}","usage":{{"input_tokens":480,"output_tokens":160,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}}"#
+            r#"{{"type":"result","subtype":"success","is_error":false,"session_id":"{session}","total_cost_usd":0.01,"num_turns":3,"duration_ms":3000,"duration_api_ms":2500,"result":"{reply}","usage":{{"input_tokens":300,"output_tokens":80,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}}"#
         ),
         delay,
     );

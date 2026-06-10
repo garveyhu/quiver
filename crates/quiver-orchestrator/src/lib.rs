@@ -68,6 +68,10 @@ pub struct PendingReview {
     /// 该收手还是再给一轮指导 —— 也是防"反复 continue 救不动"的依据。
     #[serde(default)]
     pub round: u32,
+    /// worker 主动请示的问题(§5 双向协作 worker→经理):终态 needs_input 时带上,经理看到后
+    /// continue 回答它。普通完工 → None。
+    #[serde(default)]
+    pub question: Option<String>,
 }
 
 /// 经理这一拍看到的、已压扁的局面(§5)。随阶段增长(在途明细、最近 episode、风险信号…)。
@@ -215,7 +219,7 @@ mod tests {
             pending_reviews: vec![PendingReview {
                 node_id: "n1".into(),
                 task_id: "t1".into(),
-                status: "verified".into(), round: 0,
+                status: "verified".into(), round: 0, question: None,
             }],
             ..ManagerContext::default()
         };
@@ -228,7 +232,7 @@ mod tests {
             pending_reviews: vec![PendingReview {
                 node_id: "n2".into(),
                 task_id: "t2".into(),
-                status: "failed".into(), round: 0,
+                status: "failed".into(), round: 0, question: None,
             }],
             ..ctx.clone()
         };

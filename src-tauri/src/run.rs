@@ -282,6 +282,13 @@ pub async fn run_streaming(
         }
     };
 
+    // §5 双向协作(worker→经理):告诉 worker 卡住别硬猜 —— 遇到该上级拍板的点写 NEEDS_INPUT,
+    // 经理会给指示;能自己合理决定的正常做完,不必事事请示。
+    let prompt = format!(
+        "{prompt}\n\n[协作约定] 遇到需要上级拍板的点(架构选择、模糊或缺失的需求、重大取舍),\
+         或缺关键信息做不下去时,别擅自硬做或瞎猜 —— 在输出末尾单独起一行写 \
+         `NEEDS_INPUT: <你的具体问题>`,经理看到会给你指示后你再继续。能自己合理决定的就正常做完。"
+    );
     let task = TaskSpec {
         id: task_id,
         prompt,
@@ -366,7 +373,15 @@ pub async fn run_streaming(
         Cleanup::PreservedBranch => Some(outcome.branch.clone()),
         _ => None,
     };
-    let status_label = finish_status_label(outcome.status).to_string();
+    let mut status_label = finish_status_label(outcome.status).to_string();
+    // §5 双向协作(worker→经理):worker 在产出里写了 `NEEDS_INPUT: <问题>` → 它卡住要请示,
+    // 覆盖终态为 needs_input、把问题存进 task,经理看到会 continue 给指示(而非当普通完工裁决)。
+    if let Some(q) = extract_needs_input(&outcome.events) {
+        status_label = "needs_input".to_string();
+        if let Some(store) = store {
+            let _ = store.set_task_question(&outcome.task_id, &q, crate::now_ms());
+        }
+    }
     // Only surface the verify output when the gate is what failed (so the UI can
     // show why); for passed/other outcomes it's noise.
     let verify_output = if matches!(outcome.status, FinishStatus::VerifyFailed) {
@@ -442,6 +457,28 @@ fn finish_status_label(status: FinishStatus) -> &'static str {
         FinishStatus::Failed => "failed",
         FinishStatus::NeedsRebase => "needs_rebase",
     }
+}
+
+/// 从 worker 的事件流里找它主动写的 `NEEDS_INPUT: <问题>`(§5 双向协作 worker→经理)。取最后
+/// 一处(worker 可能边做边改主意,最后那次请示最准),问题取该标记后的同一行。没有 → None。
+fn extract_needs_input(events: &[AgentEvent]) -> Option<String> {
+    const TAG: &str = "NEEDS_INPUT:";
+    let mut found = None;
+    for ev in events {
+        if let AgentEventPayload::OutputChunk { text } = &ev.payload {
+            // 只认**单独起一行**的 NEEDS_INPUT(worker 真请示) —— 不误匹配注入的协作约定里那句
+            // 行内示例「写 `NEEDS_INPUT: <你的具体问题>`」(它行首是别的字),占位 <...> 也排除。
+            for line in text.lines() {
+                if let Some(q) = line.trim().strip_prefix(TAG) {
+                    let q = q.trim();
+                    if !q.is_empty() && !q.starts_with('<') {
+                        found = Some(q.to_string());
+                    }
+                }
+            }
+        }
+    }
+    found
 }
 
 /// §9.3 pre-spawn guard: assert NONE of the API-key/Bedrock/Vertex env vars are
@@ -644,6 +681,29 @@ fn is_executable(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use quiver_core::event::RunnerKind;
+
+    fn chunk(text: &str) -> AgentEvent {
+        AgentEvent {
+            task_id: "t".into(),
+            seq: 0,
+            ts_ms: 0,
+            runner: RunnerKind::ClaudeCli,
+            payload: AgentEventPayload::OutputChunk { text: text.into() },
+        }
+    }
+
+    #[test]
+    fn extract_needs_input_only_real_single_line_asks() {
+        // §5 双向协作:worker 单独一行写的 NEEDS_INPUT 才算真请示 → 提取问题。
+        let asked = [chunk("做了一半,有个取舍。\nNEEDS_INPUT: 用方案 A 还是 B?")];
+        assert_eq!(extract_needs_input(&asked).as_deref(), Some("用方案 A 还是 B?"));
+        // 注入的协作约定里那句行内示例(行首是别的字)+ 占位 <...> → **不**误判成请示。
+        let convention = [chunk("在末尾单独起一行写 `NEEDS_INPUT: <你的具体问题>`,经理会回")];
+        assert_eq!(extract_needs_input(&convention), None);
+        // 正常完成、没请示 → None。
+        assert_eq!(extract_needs_input(&[chunk("已完成排序函数并通过测试")]), None);
+    }
 
     fn worker(id: &str, specialty: &str) -> quiver_store::AgentRole {
         quiver_store::AgentRole {

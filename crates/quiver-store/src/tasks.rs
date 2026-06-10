@@ -366,6 +366,29 @@ impl Store {
         Ok(rows)
     }
 
+    /// 记录 worker 主动请示的问题(§5 双向协作 worker→经理);传空串则清掉(经理已回答续跑)。
+    pub fn set_task_question(&self, id: &str, question: &str, updated_at: i64) -> anyhow::Result<()> {
+        let conn = self.conn.lock().expect("store lock");
+        let q: Option<&str> = if question.is_empty() { None } else { Some(question) };
+        conn.execute(
+            "UPDATE task SET question = ?2, updated_at = ?3 WHERE id = ?1",
+            params![id, q, updated_at],
+        )?;
+        Ok(())
+    }
+
+    /// 读 worker 请示的问题(没请示 → None)。spawn_worker 据此给 PendingReview 带上问题给经理看。
+    pub fn task_question(&self, id: &str) -> anyhow::Result<Option<String>> {
+        let conn = self.conn.lock().expect("store lock");
+        let q = conn
+            .query_row("SELECT question FROM task WHERE id = ?1", params![id], |r| {
+                r.get::<_, Option<String>>(0)
+            })
+            .optional()?
+            .flatten();
+        Ok(q)
+    }
+
     /// 记录子任务属于哪个父目标(§5 协作:经理拆活时,子任务标上原目标文本,追溯室画协作树)。
     pub fn set_task_parent_goal(&self, id: &str, goal: &str, updated_at: i64) -> anyhow::Result<()> {
         let conn = self.conn.lock().expect("store lock");

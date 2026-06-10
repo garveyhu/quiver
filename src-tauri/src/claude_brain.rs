@@ -120,7 +120,12 @@ fn build_prompt(ctx: &ManagerContext, system_prompt: &str) -> String {
                 } else {
                     String::new()
                 };
-                format!("- 节点 {} 完工,终态 {}(任务 {}{})\n", r.node_id, r.status, r.task_id, round)
+                // §5 双向协作:worker 主动请示了 → 醒目列出问题,引导经理用 continue 回答它。
+                let ask = match &r.question {
+                    Some(q) => format!(" —— ⚠ worker 卡住请示:「{q}」(用 continue,prompt 写你的解答)"),
+                    None => String::new(),
+                };
+                format!("- 节点 {} 完工,终态 {}(任务 {}{}){}\n", r.node_id, r.status, r.task_id, round, ask)
             })
             .collect();
         format!("\n完工待你复核裁决(deliver 交付 / continue 给指导再跑一轮改进 / block 拦下):\n{lines}")
@@ -209,7 +214,7 @@ mod tests {
             pending_reviews: vec![PendingReview {
                 node_id: "node-7".into(),
                 task_id: "task-1".into(),
-                status: "verified".into(), round: 0,
+                status: "verified".into(), round: 0, question: None,
             }],
             team: vec!["员工 2 · 测试".into(), "员工 3 · 前端".into()],
             ..ManagerContext::default()

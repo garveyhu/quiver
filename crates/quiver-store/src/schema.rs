@@ -139,6 +139,9 @@ pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
     // worker_pid:running 任务的 claude 子进程 PID,持久化(不只内存 running_pids)→ 崩溃重启后
     // reconcile 能据此 kill 上个会话遗留的孤儿 worker 进程(§23 崩溃恢复卫生)。
     add_column_if_absent(conn, "task", "worker_pid", "INTEGER")?;
+    // question:worker 干活卡住、主动请示上级的问题(§5 双向协作 worker→经理)。worker 在产出
+    // 里写 `NEEDS_INPUT: <问题>` → 终态 needs_input、问题存这里,经理看到后 continue 给指示。
+    add_column_if_absent(conn, "task", "question", "TEXT")?;
 
     // 决策日志(DESIGN §20 decision_log 裁剪/§10 复盘室):经理每拍真实决策一行,只追加。
     conn.execute_batch(
