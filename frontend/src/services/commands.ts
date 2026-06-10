@@ -48,6 +48,10 @@ export const mergeTask = (taskId: string): Promise<string> =>
 /** 取消一个任务(queued 删除 / running·verifying 杀进程 / 已结束报错)。 */
 export const cancelTask = (id: string): Promise<void> => call<void>('cancel_task_cmd', { id });
 
+/** 调整任务在看板的位置(越小越靠前,经理/调度器按 position 认领)。 */
+export const reorderTask = (id: string, position: number): Promise<void> =>
+  call<void>('reorder_task', { id, position });
+
 /** 取消所有在途/排队任务(急停用)。返回成功取消的条数。 */
 export async function cancelActiveTasks(): Promise<number> {
   const tasks = await call<TaskRecord[]>('list_tasks', {});

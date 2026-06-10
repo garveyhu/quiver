@@ -14,6 +14,7 @@ export const COMMANDS: QuiverCommand[] = [
   { id: 'settings', label: '系统设置', hint: '模式 / 模型 / 并发 / 预算 / 验证命令' },
   { id: 'trace', label: '追溯室', hint: '每个任务每一步 · claude 思考/工具/花费/结果' },
   { id: 'memory', label: '记忆库', hint: '公司记住的事实 · 录入 / 作废' },
+  { id: 'board', label: '调度台', hint: '工作队列 · 调优先级 / 取消' },
   { id: 'report', label: '晨报 / 验收', hint: '看昨晚结果' },
   { id: 'trust', label: '信任设置', hint: '调某个经理的规划自由度' },
   { id: 'dispatch', label: '派活', hint: '让经理开一个任务' },

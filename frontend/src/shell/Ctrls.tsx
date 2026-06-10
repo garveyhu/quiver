@@ -12,12 +12,14 @@ interface CtrlsProps {
   onTrace: () => void;
   /** 打开记忆库(公司记住的事实,录入/作废)。 */
   onMemory: () => void;
+  /** 打开调度台(工作队列,调优先级/取消)。 */
+  onBoard: () => void;
   /** 当前运行模式,在「CEO 下目标」上标出来 —— 一眼知道派活是免费模拟还是真烧钱。 */
   mode: 'simulate' | 'real';
 }
 
 /** 右上角控件栏:常用面板直达入口 + CEO 下目标(标当前模式)。功能不再只藏在 ⌘K 里。 */
-export function Ctrls({ onCmdk, onReport, onGoal, onManager, onPersonnel, onSettings, onTrace, onMemory, mode }: CtrlsProps) {
+export function Ctrls({ onCmdk, onReport, onGoal, onManager, onPersonnel, onSettings, onTrace, onMemory, onBoard, mode }: CtrlsProps) {
   return (
     <div className="ctrls">
       <button className="b-gh" type="button" onClick={onCmdk}>
@@ -25,6 +27,9 @@ export function Ctrls({ onCmdk, onReport, onGoal, onManager, onPersonnel, onSett
       </button>
       <button className="b-gh" type="button" onClick={onManager} title="经理工作台:决策流 / 自治 / 记忆">
         经理
+      </button>
+      <button className="b-gh" type="button" onClick={onBoard} title="调度台:工作队列 / 调优先级 / 取消">
+        队列
       </button>
       <button className="b-gh" type="button" onClick={onPersonnel} title="人事部:配置 / 专长 / 雇人">
         人事部
