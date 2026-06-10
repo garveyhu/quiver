@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { getBrief, getDecisions, getSettings, managerPreview, updateSettings } from '@/services/commands';
+import {
+  addAuthoritativeFact,
+  getBrief,
+  getDecisions,
+  getSettings,
+  managerPreview,
+  updateSettings,
+} from '@/services/commands';
 import { subscribe } from '@/services/ipc';
 import type { Brief, ManagerDecision, ManagerPreview } from '@/services/wire';
 
@@ -18,6 +25,8 @@ export interface ManagerDeskState {
   autonomous: boolean;
   /** 翻自治开关(写回 settings;经理循环据此接管/退场)。 */
   toggleAutonomous: (on: boolean) => void;
+  /** CEO 录入一条权威事实,成功后刷新简报让它立刻出现在「经理在想什么」。 */
+  addFact: (text: string) => Promise<void>;
 }
 
 /**
@@ -95,5 +104,11 @@ export function useManagerDesk(
       .catch(() => setAutonomous(!on));
   }, []);
 
-  return { decisions, preview, brief, autonomous, toggleAutonomous };
+  const addFact = useCallback(async (text: string) => {
+    await addAuthoritativeFact(text);
+    const b = await getBrief(); // 录入后刷新,新事实立刻出现在简报里
+    setBrief(b);
+  }, []);
+
+  return { decisions, preview, brief, autonomous, toggleAutonomous, addFact };
 }

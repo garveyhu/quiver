@@ -210,6 +210,12 @@ export function App() {
         brief={managerDesk.brief}
         autonomous={managerDesk.autonomous}
         onToggleAutonomous={managerDesk.toggleAutonomous}
+        onAddFact={text =>
+          void managerDesk
+            .addFact(text)
+            .then(() => setCaption(`已录入权威事实:「${text}」—— 进了经理简报,会影响后续决策。`))
+            .catch(e => setCaption(`录入失败:${e instanceof Error ? e.message : String(e)}`))
+        }
         onRequeue={onRequeue}
         onClose={() => setOverlay('none')}
       />

@@ -9,6 +9,8 @@ interface ManagerDeskProps {
   brief: Brief | null;
   autonomous: boolean;
   onToggleAutonomous: (on: boolean) => void;
+  /** CEO 录入一条权威事实给公司。 */
+  onAddFact: (text: string) => void;
   /** §12 回流:把被拦下/升级的任务打回重做(新任务入队,经理带记忆再派)。 */
   onRequeue: (taskId: string) => void;
   onClose: () => void;
@@ -60,7 +62,7 @@ function situation(d: ManagerDecision): string {
  * 让 CEO **亲眼看到经理在自治、在基于决策调动员工**(派活/交付/拦下/升级),而不是黑箱跑。
  * 顶部是当前局面 + 自治开关(关=旧无脑流水线,开=经理驱动)。
  */
-export function ManagerDesk({ open, decisions, preview, brief, autonomous, onToggleAutonomous, onRequeue, onClose }: ManagerDeskProps) {
+export function ManagerDesk({ open, decisions, preview, brief, autonomous, onToggleAutonomous, onAddFact, onRequeue, onClose }: ManagerDeskProps) {
   const [showBrief, setShowBrief] = useState(false);
   const briefCount = (brief?.facts.length ?? 0) + (brief?.recentEpisodes.length ?? 0);
   return (
@@ -92,6 +94,27 @@ export function ManagerDesk({ open, decisions, preview, brief, autonomous, onTog
             <button className="pbtn" type="button" onClick={() => setShowBrief(s => !s)}>
               {showBrief ? '收起简报 ▴' : `经理在想什么 ▾ (${briefCount} 条)`}
             </button>
+          </span>
+        </div>
+        <div className="kv">
+          <b>注入知识</b>
+          <span>
+            <input
+              className="field"
+              placeholder="告诉公司一条事实(如:数据库用 SQLite),回车录入"
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  const v = (e.target as HTMLInputElement).value.trim();
+                  if (v) {
+                    onAddFact(v);
+                    (e.target as HTMLInputElement).value = '';
+                  }
+                }
+              }}
+            />
+            <span className="st-meta" style={{ marginLeft: 8 }}>
+              权威档,进经理简报、影响决策
+            </span>
           </span>
         </div>
         {showBrief &&

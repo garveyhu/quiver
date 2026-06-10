@@ -34,7 +34,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
-use quiver_memory::{Brief, EpisodeRecord, MemoryStore};
+use quiver_memory::{Brief, EpisodeRecord, MemoryStore, NewFact};
 use quiver_store::{
     InitialState, MetricSample, NewTask, Settings, SettingsPatch, Store, StoredEvent, TaskRecord,
 };
@@ -473,6 +473,39 @@ const BRIEF_FACT_LIMIT: usize = 20;
 const BRIEF_EPISODE_LIMIT: usize = 10;
 
 /// The current project's memory brief (DESIGN §6): current-truth facts + recent
+/// CEO 给公司注入一条**权威事实**(§6.2 权威档):项目约束 / 已定方案 / 领域知识。存进
+/// 记忆,注入经理简报 —— claude 经理决策时读得到(记忆 → 决策)。空文本拒绝。
+#[tauri::command]
+fn add_authoritative_fact(
+    state: State<'_, AppState>,
+    text: String,
+    importance: Option<i64>,
+) -> Result<(), String> {
+    let text = text.trim().to_string();
+    if text.is_empty() {
+        return Err("事实内容不能为空".to_string());
+    }
+    let project = current_project(&state)?.display().to_string();
+    let mem = state.memory()?;
+    mem.insert_fact(&NewFact {
+        project,
+        scope: None,
+        kind: "知识".to_string(),
+        text,
+        entities: None,
+        entity: None,
+        importance: Some(importance.unwrap_or(9).clamp(1, 9)),
+        valid_at: None,
+        recorded_at: now_ms(),
+        provenance: Some("CEO".to_string()),
+        trust: "权威".to_string(),
+        source_commit: None,
+        source_episode_id: None,
+    })
+    .map_err(|e| format!("{e:#}"))?;
+    Ok(())
+}
+
 /// episodes, for the manager "简报书" panel. Empty (not an error) before any
 /// memory is recorded — a fresh project simply has nothing yet.
 #[tauri::command]
@@ -922,6 +955,7 @@ pub fn run() {
         update_role,
         hire_worker,
         fire_worker,
+        add_authoritative_fact,
         get_decisions,
         list_tasks,
         get_stats,
@@ -953,6 +987,7 @@ pub fn run() {
         update_role,
         hire_worker,
         fire_worker,
+        add_authoritative_fact,
         get_decisions,
         list_tasks,
         get_stats,
