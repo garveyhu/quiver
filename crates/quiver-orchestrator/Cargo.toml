@@ -6,11 +6,12 @@ description = "Quiver — AI 经理编排(决策模型/saga/栅栏/有界在途,
 
 [dependencies]
 anyhow = "1"
-# 经理决策的 §21 结构化 schema:既是 LLM 的 json-schema 输出形,也是 IPC wire 形。
+# 经理决策的 §21 结构化 schema:既是 claude 引擎大脑的 json-schema 输出形,也是 IPC wire 形。
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# 真 LLM 经理大脑(QwenBrain)只在 `qwen` feature 下启用,默认构建不拉 HTTP/reqwest。
-quiver-llm = { path = "../quiver-llm", optional = true }
+# ManagerBrain 真实现(ClaudeBrain)要调 claude 引擎(异步 IO),故 decide/tick 走 async。
+async-trait = "0.1"
 
-[features]
-qwen = ["dep:quiver-llm"]
+[dev-dependencies]
+# 单测用 #[tokio::test] 驱动 async 的 tick/decide。
+tokio = { version = "1", features = ["rt", "macros"] }

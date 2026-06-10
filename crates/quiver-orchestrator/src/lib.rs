@@ -1,23 +1,20 @@
 //! AI 经理编排(DESIGN §5 / §21)。
 //!
 //! 经理每"拍"看一眼 [`ManagerContext`](在途/排队/预算/记忆简报),产出一个
-//! [`Decision`](§21 结构化决策)。决策由可注入的 [`ManagerBrain`] 给出 —— 测试用确定性
-//! [`FakeBrain`](免费),真跑用 LLM(§21 `--json-schema`,后续刀)。saga 去重钥匙 /
-//! 栅栏令牌对账 / 有界在途状态机 在此之上,也是后续刀。
+//! [`Decision`](§21 结构化决策)。决策由可注入的 [`ManagerBrain`] 给出 —— 测试/演示用
+//! 确定性 [`FakeBrain`]/[`RuleBrain`](免费),真自治用 **claude 引擎大脑**
+//! (§0/§4「思考全程用 claude」,`ClaudeBrain`,后续刀)。saga 去重钥匙 / 栅栏令牌对账 /
+//! 有界在途状态机 在此之上,也是后续刀。
 //!
 //! 本 crate 是**纯逻辑**:不碰 tauri,也还不直接依赖 runner/store/memory —— 经理拿到的
 //! 是已经压扁的 [`ManagerContext`],产出的 [`Decision`] 由上层(app/core)去执行。
 
-#[cfg(feature = "qwen")]
-mod brain;
 mod engine;
 mod flow;
 mod gate;
 mod ladder;
 mod personnel;
 mod submanager;
-#[cfg(feature = "qwen")]
-pub use brain::QwenBrain;
 pub use engine::{Effect, Orchestrator, Step};
 pub use flow::{Fence, InFlight, SagaLedger};
 pub use gate::{GateVerdict, ValueGate};
@@ -52,6 +49,16 @@ pub enum Decision {
     Noop,
 }
 
+/// 一个等经理复核的完工 worker(§5 复核裁决):谁(node)、跑的哪个活(task)、终态如何。
+/// 执行层在 worker 完成时入队;经理看到后出 Deliver/Block 裁决,裁决时出队。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PendingReview {
+    pub node_id: String,
+    pub task_id: String,
+    /// worker 终态标签:verified / failed / needs_rebase / done …
+    pub status: String,
+}
+
 /// 经理这一拍看到的、已压扁的局面(§5)。随阶段增长(在途明细、最近 episode、风险信号…)。
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ManagerContext {
@@ -65,33 +72,61 @@ pub struct ManagerContext {
     pub budget_remaining_usd: f64,
     /// 记忆简报文本(§6),给经理理解项目现状。
     pub brief: String,
+    /// 完工待经理复核裁决的 worker(§5):经理应**先裁后派**。
+    #[serde(default)]
+    pub pending_reviews: Vec<PendingReview>,
+    /// 队列下一个任务的原文(§5 A2 拆活):真经理派活时可见,可原样派、也可结合记忆
+    /// 改写/细化(spawn.prompt 即给 worker 的最终任务描述)。`None`=队列空。
+    #[serde(default)]
+    pub next_task: Option<String>,
 }
 
-/// 经理大脑:看局面产出一个决策。真实现调 LLM(§21);测试用 [`FakeBrain`]。
-pub trait ManagerBrain {
-    fn decide(&self, ctx: &ManagerContext) -> anyhow::Result<Decision>;
+/// [`RuleBrain`] spawn 决策的占位 prompt:表示"原样认领队列下一个任务"(执行层据此用
+/// 任务原文跑)。真经理给出**非**占位的 prompt 时,执行层用经理改写后的文本派工(§5 A2)。
+pub const QUEUE_NEXT_PLACEHOLDER: &str = "(从队列取下一个任务)";
+
+/// 经理大脑:看局面产出一个决策。真自治用 claude 引擎([`ClaudeBrain`],§4 异步 IO);
+/// 测试/演示用 [`FakeBrain`]/[`RuleBrain`]。`decide` 是 async —— 真大脑要等 claude 想完。
+#[async_trait::async_trait]
+pub trait ManagerBrain: Send + Sync {
+    async fn decide(&self, ctx: &ManagerContext) -> anyhow::Result<Decision>;
 }
 
 /// 确定性大脑(测试 / simulate):永远返回构造时给定的决策。
 pub struct FakeBrain(pub Decision);
 
+#[async_trait::async_trait]
 impl ManagerBrain for FakeBrain {
-    fn decide(&self, _ctx: &ManagerContext) -> anyhow::Result<Decision> {
+    async fn decide(&self, _ctx: &ManagerContext) -> anyhow::Result<Decision> {
         Ok(self.0.clone())
     }
 }
 
-/// 极简 Rust 策略大脑(P0 风格,无 AI):有预算 + 在途未满 + 有排队 → 派活;否则不动。
+/// 极简 Rust 策略大脑(P0 风格,无 AI):**先裁后派** —— 有完工待复核的先出裁决
+/// (verified→交付,其余→拦下);然后 有预算 + 在途未满 + 有排队 → 派活;否则不动。
 /// 在 AI 经理上线前兜底,也是 [`ManagerBrain`] 注入缝的最小可用实现。
 pub struct RuleBrain;
 
+#[async_trait::async_trait]
 impl ManagerBrain for RuleBrain {
-    fn decide(&self, ctx: &ManagerContext) -> anyhow::Result<Decision> {
+    async fn decide(&self, ctx: &ManagerContext) -> anyhow::Result<Decision> {
+        // 复核优先(§5 裁决):完工的 worker 等着裁,比派新活急 —— 这是"经理替你回
+        // 其他 AI 的决策"的核心动作:看产物终态,拍交付还是拦下。
+        if let Some(r) = ctx.pending_reviews.first() {
+            return Ok(if r.status == "verified" || r.status == "done" {
+                Decision::Deliver { node_id: r.node_id.clone() }
+            } else {
+                Decision::Block {
+                    node_id: r.node_id.clone(),
+                    reason: format!("终态 {} 未达交付标准,留产物等人工", r.status),
+                }
+            });
+        }
         let has_budget = ctx.budget_remaining_usd > 0.0;
         let has_capacity = ctx.inflight < ctx.max_inflight;
         if has_budget && has_capacity && ctx.queued > 0 {
             Ok(Decision::Spawn {
-                prompt: "(从队列取下一个任务)".to_string(),
+                prompt: QUEUE_NEXT_PLACEHOLDER.to_string(),
                 reason: Some("有预算、在途未满、有排队".to_string()),
             })
         } else {
@@ -132,14 +167,51 @@ mod tests {
         }
     }
 
-    #[test]
-    fn fake_brain_returns_fixed_decision() {
+    #[tokio::test]
+    async fn fake_brain_returns_fixed_decision() {
         let brain = FakeBrain(Decision::Noop);
-        assert_eq!(brain.decide(&ManagerContext::default()).unwrap(), Decision::Noop);
+        assert_eq!(brain.decide(&ManagerContext::default()).await.unwrap(), Decision::Noop);
     }
 
-    #[test]
-    fn rule_brain_spawns_only_with_budget_capacity_and_queue() {
+    #[tokio::test]
+    async fn rule_brain_reviews_before_spawning() {
+        let brain = RuleBrain;
+        // 有排队也有预算,但有完工待复核 → 先裁不派:verified → 交付。
+        let ctx = ManagerContext {
+            queued: 3,
+            max_inflight: 4,
+            budget_remaining_usd: 5.0,
+            pending_reviews: vec![PendingReview {
+                node_id: "n1".into(),
+                task_id: "t1".into(),
+                status: "verified".into(),
+            }],
+            ..ManagerContext::default()
+        };
+        assert_eq!(
+            brain.decide(&ctx).await.unwrap(),
+            Decision::Deliver { node_id: "n1".into() }
+        );
+        // failed → 拦下,带原因。
+        let failed = ManagerContext {
+            pending_reviews: vec![PendingReview {
+                node_id: "n2".into(),
+                task_id: "t2".into(),
+                status: "failed".into(),
+            }],
+            ..ctx.clone()
+        };
+        match brain.decide(&failed).await.unwrap() {
+            Decision::Block { node_id, reason } => {
+                assert_eq!(node_id, "n2");
+                assert!(reason.contains("failed"));
+            }
+            other => panic!("expected Block, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn rule_brain_spawns_only_with_budget_capacity_and_queue() {
         let brain = RuleBrain;
         // 有预算 + 在途未满 + 有排队 → 派活
         let ctx = ManagerContext {
@@ -148,16 +220,18 @@ mod tests {
             max_inflight: 4,
             budget_remaining_usd: 5.0,
             brief: String::new(),
+            pending_reviews: vec![],
+            next_task: None,
         };
-        assert!(matches!(brain.decide(&ctx).unwrap(), Decision::Spawn { .. }));
+        assert!(matches!(brain.decide(&ctx).await.unwrap(), Decision::Spawn { .. }));
         // 在途已满 → 不动
         let full = ManagerContext { inflight: 4, ..ctx.clone() };
-        assert_eq!(brain.decide(&full).unwrap(), Decision::Noop);
+        assert_eq!(brain.decide(&full).await.unwrap(), Decision::Noop);
         // 没排队 → 不动
         let empty = ManagerContext { queued: 0, ..ctx.clone() };
-        assert_eq!(brain.decide(&empty).unwrap(), Decision::Noop);
+        assert_eq!(brain.decide(&empty).await.unwrap(), Decision::Noop);
         // 没预算 → 不动
         let broke = ManagerContext { budget_remaining_usd: 0.0, ..ctx };
-        assert_eq!(brain.decide(&broke).unwrap(), Decision::Noop);
+        assert_eq!(brain.decide(&broke).await.unwrap(), Decision::Noop);
     }
 }

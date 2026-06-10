@@ -31,6 +31,13 @@ impl InFlight {
         self.nodes.len()
     }
 
+    /// 改在途上限(§7 自治旋钮实时生效):人事部/设置改 max_workers 后,经理循环每拍同步进来,
+    /// 不必重建。已在途的不受影响(只影响后续 admit 是否放行);缩小到低于当前在途也安全 ——
+    /// 现有节点跑完正常 complete,只是暂不再 admit 新的,直到降回上限内。
+    pub fn set_max(&mut self, max: usize) {
+        self.max = max;
+    }
+
     pub fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
@@ -81,6 +88,15 @@ pub struct SagaLedger {
 impl SagaLedger {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// 从 `start` 续编决策序号(§5.2):重启后从持久化日志的 max(seq)+1 接着编,
+    /// 序号全局单调 —— 去重钥匙(节点+序号)跨重启不回卷、不撞旧号。
+    pub fn starting_at(start: u64) -> Self {
+        Self {
+            next_seq: start,
+            applied: HashSet::new(),
+        }
     }
 
     /// 下一个决策序号(单调递增,从 0 起)= 这条决策的去重钥匙。

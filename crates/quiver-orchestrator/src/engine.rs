@@ -45,9 +45,15 @@ pub struct Orchestrator {
 
 impl Orchestrator {
     pub fn new(max_inflight: usize) -> Self {
+        Self::with_seq_start(max_inflight, 0)
+    }
+
+    /// 决策序号从 `seq_start` 续编(§5.2):上层把持久化决策日志的 max(seq)+1 传进来,
+    /// 重启后序号单调不回卷(去重钥匙=节点+序号,撞旧号会让重放误判)。
+    pub fn with_seq_start(max_inflight: usize, seq_start: u64) -> Self {
         Self {
             inflight: InFlight::new(max_inflight),
-            saga: SagaLedger::new(),
+            saga: SagaLedger::starting_at(seq_start),
             node_counter: 0,
         }
     }
@@ -57,15 +63,29 @@ impl Orchestrator {
         self.inflight.len()
     }
 
-    /// 跑一拍:经理看 `ctx` 出决策,按编排状态校验/分配,产出 [`Step`]。每拍消耗一个决策序号;
-    /// 真正落地的决策(产出非 Nothing 的 effect)记进 saga 账本(幂等)。
-    pub fn tick(
+    /// 实时改在途上限(§7):经理循环每拍把当前 settings.max_workers 同步进来,改设置即生效。
+    pub fn set_max_inflight(&mut self, max: usize) {
+        self.inflight.set_max(max);
+    }
+
+    /// 跑一拍:经理看 `ctx` 出决策,按编排状态校验/分配,产出 [`Step`]。`async` —— 真大脑
+    /// ([`ClaudeBrain`](crate)) 要等 claude 引擎想完。便利方法 = [`decide`] + [`apply`];
+    /// 经理控制循环为避免持 orch 锁跨 claude IO,会分两步调(先不持锁 decide、再持锁 apply)。
+    pub async fn tick(
         &mut self,
         brain: &dyn ManagerBrain,
         ctx: &ManagerContext,
     ) -> anyhow::Result<Step> {
+        let decision = brain.decide(ctx).await?;
+        Ok(self.apply(decision))
+    }
+
+    /// 把一个已产出的 [`Decision`] 按编排状态校验/分配成 [`Step`](纯同步状态机,不碰 brain)。
+    /// 每拍消耗一个决策序号;真正落地的决策(产出非 Nothing 的 effect)记进 saga 账本(幂等)。
+    /// 拆出来是为了让控制循环**不持 orch 锁**地调 [`ManagerBrain::decide`](等 claude),只在
+    /// 这一步(瞬间)持锁分配 node/fence/seq —— 否则真经理想几秒会把 worker 回流(on_complete)堵死。
+    pub fn apply(&mut self, decision: Decision) -> Step {
         let seq = self.saga.next_seq();
-        let decision = brain.decide(ctx)?;
         let effect = match &decision {
             Decision::Spawn { prompt, .. } => {
                 let node_id = format!("node-{}", self.node_counter);
@@ -95,7 +115,7 @@ impl Orchestrator {
         if effect != Effect::Nothing {
             self.saga.mark_applied(seq);
         }
-        Ok(Step { seq, decision, effect })
+        Step { seq, decision, effect }
     }
 
     /// Worker 完成回流:栅栏匹配则释放在途名额(§5.5 对账)。返回是否被接受
@@ -114,11 +134,11 @@ mod tests {
         ManagerContext::default()
     }
 
-    #[test]
-    fn tick_spawn_admits_and_assigns_node_and_fence() {
+    #[tokio::test]
+    async fn tick_spawn_admits_and_assigns_node_and_fence() {
         let mut o = Orchestrator::new(2);
         let brain = FakeBrain(Decision::Spawn { prompt: "读 README".into(), reason: None });
-        let step = o.tick(&brain, &ctx()).unwrap();
+        let step = o.tick(&brain, &ctx()).await.unwrap();
         assert_eq!(step.seq, 0);
         match step.effect {
             Effect::Spawn { node_id, fence, prompt } => {
@@ -131,42 +151,42 @@ mod tests {
         assert_eq!(o.inflight_len(), 1);
     }
 
-    #[test]
-    fn tick_spawn_rejected_when_full() {
+    #[tokio::test]
+    async fn tick_spawn_rejected_when_full() {
         let mut o = Orchestrator::new(1);
         let brain = FakeBrain(Decision::Spawn { prompt: "x".into(), reason: None });
-        assert!(matches!(o.tick(&brain, &ctx()).unwrap().effect, Effect::Spawn { .. }));
+        assert!(matches!(o.tick(&brain, &ctx()).await.unwrap().effect, Effect::Spawn { .. }));
         // 满载 → 第二拍 Spawn 被拒为 Nothing。
-        assert_eq!(o.tick(&brain, &ctx()).unwrap().effect, Effect::Nothing);
+        assert_eq!(o.tick(&brain, &ctx()).await.unwrap().effect, Effect::Nothing);
         assert_eq!(o.inflight_len(), 1);
     }
 
-    #[test]
-    fn on_complete_frees_slot_for_next_spawn() {
+    #[tokio::test]
+    async fn on_complete_frees_slot_for_next_spawn() {
         let mut o = Orchestrator::new(1);
         let brain = FakeBrain(Decision::Spawn { prompt: "x".into(), reason: None });
-        let Effect::Spawn { node_id, fence, .. } = o.tick(&brain, &ctx()).unwrap().effect else {
+        let Effect::Spawn { node_id, fence, .. } = o.tick(&brain, &ctx()).await.unwrap().effect else {
             panic!("expected Spawn");
         };
         assert!(o.on_complete(&node_id, fence), "正确栅栏释放名额");
         assert_eq!(o.inflight_len(), 0);
         // 名额释放后能再 Spawn。
-        assert!(matches!(o.tick(&brain, &ctx()).unwrap().effect, Effect::Spawn { .. }));
+        assert!(matches!(o.tick(&brain, &ctx()).await.unwrap().effect, Effect::Spawn { .. }));
     }
 
-    #[test]
-    fn tick_continue_unknown_node_is_rejected() {
+    #[tokio::test]
+    async fn tick_continue_unknown_node_is_rejected() {
         let mut o = Orchestrator::new(2);
         let brain = FakeBrain(Decision::Continue { node_id: "ghost".into(), prompt: "go".into() });
-        assert_eq!(o.tick(&brain, &ctx()).unwrap().effect, Effect::Nothing);
+        assert_eq!(o.tick(&brain, &ctx()).await.unwrap().effect, Effect::Nothing);
     }
 
-    #[test]
-    fn tick_noop_does_nothing_but_consumes_seq() {
+    #[tokio::test]
+    async fn tick_noop_does_nothing_but_consumes_seq() {
         let mut o = Orchestrator::new(2);
         let brain = FakeBrain(Decision::Noop);
-        let s0 = o.tick(&brain, &ctx()).unwrap();
-        let s1 = o.tick(&brain, &ctx()).unwrap();
+        let s0 = o.tick(&brain, &ctx()).await.unwrap();
+        let s1 = o.tick(&brain, &ctx()).await.unwrap();
         assert_eq!(s0.effect, Effect::Nothing);
         assert_eq!(s0.seq, 0);
         assert_eq!(s1.seq, 1, "每拍消耗一个决策序号");
