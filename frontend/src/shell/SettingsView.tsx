@@ -1,3 +1,4 @@
+import { useManagerBrain } from '@/hooks/useManagerBrain';
 import type { Settings, SettingsPatch } from '@/services/wire';
 
 interface SettingsViewProps {
@@ -22,17 +23,25 @@ function num(raw: string): number | null | undefined {
  */
 export function SettingsView({ open, settings, onPatch, onClose }: SettingsViewProps) {
   const s = settings;
+  const { brain, setBrain } = useManagerBrain();
+  const fullyReal = s?.defaultMode === 'real' && brain === 'claude';
   return (
     <div className={`panel${open ? ' on' : ''}`}>
       <h2>系统设置</h2>
-      <div className="sub">全局配置,改动立即生效。运行模式决定 CEO 下目标是免费模拟还是真 claude 干活。</div>
+      <div className="sub">全局配置,改动立即生效。「聪明的自治」=经理用 claude 思考 + 员工真干活,两个开关都在这。</div>
       <div className="body">
         {!s ? (
           <div className="rev">读取中…</div>
         ) : (
           <>
+            {fullyReal && (
+              <div className="rev" style={{ marginBottom: 8 }}>
+                <span className="st-ok">● 完整真实自治已就绪</span>
+                <span className="st-meta">经理用 claude 决策、员工真 claude 干活 —— 会持续消耗订阅额度。</span>
+              </div>
+            )}
             <div className="kv">
-              <b>运行模式</b>
+              <b>员工干活</b>
               <span>
                 <button
                   className={`pbtn${s.defaultMode === 'simulate' ? ' go' : ''}`}
@@ -51,7 +60,36 @@ export function SettingsView({ open, settings, onPatch, onClose }: SettingsViewP
                 </button>
                 {s.defaultMode === 'real' && (
                   <span className="st-bad" style={{ marginLeft: 8 }}>
-                    会烧 headless 额度,产物留分支(无沙箱前不自动合 main)
+                    会烧 headless 额度,产物留分支
+                  </span>
+                )}
+              </span>
+            </div>
+            <div className="kv">
+              <b>经理大脑</b>
+              <span>
+                <button
+                  className={`pbtn${brain === 'rule' ? ' go' : ''}`}
+                  type="button"
+                  onClick={() => void setBrain('rule')}
+                >
+                  规则 · 免费
+                </button>
+                <button
+                  className={`pbtn${brain === 'claude' ? ' go' : ''}`}
+                  type="button"
+                  style={{ marginLeft: 6 }}
+                  onClick={() => void setBrain('claude')}
+                >
+                  claude · 真思考
+                </button>
+                {brain === 'claude' ? (
+                  <span className="st-bad" style={{ marginLeft: 8 }}>
+                    经理每拍决策烧 claude 额度
+                  </span>
+                ) : (
+                  <span className="st-meta" style={{ marginLeft: 8 }}>
+                    要「聪明」地拆活/按专长派人就切 claude;只看免费演示留规则
                   </span>
                 )}
               </span>
