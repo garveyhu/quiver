@@ -52,7 +52,7 @@ export function App() {
   const episodes = useEpisodes(overlay === 'timeline');
   // 经理升级给人 → 状态条立刻喊人(§12「等你拍板」可感);M 打开工作台看详情。
   const onEscalate = useCallback((reason: string) => {
-    setCaption(`⚠ 经理升级等你拍板:${reason} —— 按 M 打开经理工作台处理。`);
+    setCaption(`经理升级等你拍板:${reason} —— 按 M 打开经理工作台处理。`);
   }, []);
   const managerDesk = useManagerDesk(overlay === 'manager', onEscalate);
   const personnel = useRoles(overlay === 'personnel');
@@ -67,7 +67,7 @@ export function App() {
   const onMerge = useCallback((taskId: string) => {
     setCaption('正在合并进 main(冲突 / 重验红会自动护栏还原)…');
     void mergeTask(taskId)
-      .then(msg => setCaption(`✓ ${msg} —— 产物已进主干。`))
+      .then(msg => setCaption(`${msg} —— 产物已进主干。`))
       .catch(e => setCaption(`合并未成:${e instanceof Error ? e.message : String(e)}`));
   }, []);
   const goalIdx = useRef(0);

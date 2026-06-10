@@ -84,7 +84,7 @@ export function MemoryRoom({ open, onClose, onToast }: MemoryRoomProps) {
                       .catch(e => onToast(`作废失败:${e instanceof Error ? e.message : String(e)}`))
                   }
                 >
-                  作废 ✕
+                  作废
                 </button>
               </div>
             ))}

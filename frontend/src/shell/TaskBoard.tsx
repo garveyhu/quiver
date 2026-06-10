@@ -69,7 +69,7 @@ export function TaskBoard({ open, onClose }: TaskBoardProps) {
                     title={queued ? '从队列移除' : '叫停在跑的活'}
                     onClick={() => void cancel(t.id)}
                   >
-                    {queued ? '移除 ✕' : '叫停 ✕'}
+                    {queued ? '移除' : '叫停'}
                   </button>
                 </div>
               );

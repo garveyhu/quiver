@@ -397,3 +397,15 @@ body {
   background-image: repeating-radial-gradient(rgba(255,255,255,.6) 0 1px,transparent 1px 2px),repeating-radial-gradient(rgba(0,0,0,.5) 0 1px,transparent 1px 3px);
   background-size: 3px 3px,4px 4px; animation: grain .5s steps(4) infinite; }
 @keyframes grain { 0%{ transform: translate(0,0); } 25%{ transform: translate(-3%,2%); } 50%{ transform: translate(2%,-3%); } 75%{ transform: translate(-2%,-2%); } 100%{ transform: translate(3%,3%); } }
+
+/* 轻量 markdown 渲染(MarkdownLite):AI 思考/产出里的代码块、行内码、加粗、标题、列表 —— 易读化。 */
+.md { line-height: 1.55; }
+.md-p { margin: 2px 0; }
+.md-h { font-weight: 650; margin: 6px 0 3px; color: var(--tx-1); }
+.md-li { display: flex; gap: 6px; margin: 1px 0; padding-left: 2px; }
+.md-li > span:last-child { flex: 1; }
+.md-bullet { color: var(--tx-3); flex: none; }
+.md-sp { height: 5px; }
+.md-code { background: var(--s-inset); border: 1px solid var(--bd-soft); border-radius: 6px; padding: 8px 10px; margin: 5px 0; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; line-height: 1.5; white-space: pre; color: var(--tx-1); }
+.md-code code { font-family: inherit; background: none; border: none; padding: 0; }
+.md-inline { background: var(--tint-hi); border: 1px solid var(--bd-soft); border-radius: 4px; padding: 0 4px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; }

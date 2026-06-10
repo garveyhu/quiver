@@ -27,7 +27,7 @@ function brainLabel(brain: string | null, mode: 'simulate' | 'real'): string {
 
 const ACTION_CN: Record<Decision['action'], string> = {
   spawn: '派活 ▸',
-  plan: '拆活分工 ⑃',
+  plan: '拆活分工',
   continue: '续跑',
   deliver: '交付',
   block: '拦下',

@@ -45,7 +45,7 @@ export function MorningReport({ open, data, onRequeue, onMerge, onClose }: Morni
         {collabGoals.length > 0 && (
           <>
             <div className="kv">
-              <b className="st-ok">⑃ 协作成果</b>
+              <b className="st-ok">协作成果</b>
               <span className="st-meta">经理拆解大目标、多员工分工完成的</span>
             </div>
             {collabGoals.map(g => {
@@ -54,7 +54,7 @@ export function MorningReport({ open, data, onRequeue, onMerge, onClose }: Morni
                 <div className="rev" key={g.goal.id}>
                   <span className="grow">{g.goal.prompt}</span>
                   <span className={allDone ? 'st-ok' : 'st-bad'}>
-                    {allDone ? '协作完成 ✓' : g.goal.status === 'planned' ? '分工中' : '部分失败'}
+                    {allDone ? '协作完成' : g.goal.status === 'planned' ? '分工中' : '部分失败'}
                   </span>
                   <span className="st-meta">{g.done}/{g.total} 子任务</span>
                 </div>
@@ -66,7 +66,7 @@ export function MorningReport({ open, data, onRequeue, onMerge, onClose }: Morni
         {escalations.length > 0 && (
           <>
             <div className="kv">
-              <b className="st-bad">⚠ 升级等你拍板</b>
+              <b className="st-bad">升级等你拍板</b>
               <span className="st-meta">超出经理自治能力,等你决定</span>
             </div>
             {escalations.map(d => (
@@ -105,7 +105,7 @@ export function MorningReport({ open, data, onRequeue, onMerge, onClose }: Morni
         {mergedToMain.length > 0 && (
           <>
             <div className="kv">
-              <b className="st-ok">✓ 合进 main</b>
+              <b className="st-ok">合进 main</b>
               <span className="st-meta">公司昨晚真正推进了项目的部分</span>
             </div>
             {mergedToMain.map(t => (
@@ -121,7 +121,7 @@ export function MorningReport({ open, data, onRequeue, onMerge, onClose }: Morni
         {lessons.length > 0 && (
           <>
             <div className="kv">
-              <b className="st-ok">📓 学到的教训</b>
+              <b className="st-ok">学到的教训</b>
               <span className="st-meta">公司从失败里学到、下次会避开的 —— 越用越聪明</span>
             </div>
             {lessons.map(f => (
@@ -149,7 +149,7 @@ export function MorningReport({ open, data, onRequeue, onMerge, onClose }: Morni
                   <span className="st-meta">{cost(t)}</span>
                   {mergeable && (
                     <button className="pbtn go" type="button" onClick={() => onMerge(t.id)}>
-                      合进 main ✓
+                      合进 main
                     </button>
                   )}
                 </div>

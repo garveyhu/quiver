@@ -1,7 +1,17 @@
 import { useState } from 'react';
 
+import { MarkdownLite } from '@/components/MarkdownLite';
 import type { AgentRole, StoredEvent } from '@/services/wire';
 import type { PlacedWorker } from '@/office/workers';
+
+/** 经理思考流里剥掉决策 JSON 对象(原生难读;决策已在「— 决策 —」分隔处人话显示),
+ *  只留自然语言思路。决策 JSON 是单层的({"action":...}),非贪婪匹配到第一个 } 即够。 */
+function stripDecisionJson(raw: string): string {
+  return raw
+    .replace(/\{[\s\S]*?"action"[\s\S]*?\}/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
 
 interface WorksurfProps {
   worker: PlacedWorker | null;
@@ -58,9 +68,11 @@ function ThinkText({ text }: { text: string }) {
   const long = text.length > 120;
   return (
     <div className="trc-ev">
-      <span className="trc-k think">💭 思考</span>
+      <span className="trc-k think">思考</span>
       <div className="trc-t think">
-        <div className={`trc-think-body${open || !long ? ' open' : ''}`}>{text}</div>
+        <div className={`trc-think-body${open || !long ? ' open' : ''}`}>
+          <MarkdownLite text={text} />
+        </div>
         {long && (
           <button className="trc-more" type="button" onClick={() => setOpen(o => !o)}>
             {open ? '收起 ▴' : '展开 ▾'}
@@ -78,14 +90,14 @@ function EventRow({ ev }: { ev: StoredEvent }) {
     case 'worker_started':
       return (
         <div className="trc-ev">
-          <span className="trc-k start">▶ 开工</span>
+          <span className="trc-k start">开工</span>
           <span className="trc-t">模型 {str(p.model) || '?'}</span>
         </div>
       );
     case 'tool_use':
       return (
         <div className="trc-ev">
-          <span className="trc-k tool">🔧 {str(p.tool) || '工具'}</span>
+          <span className="trc-k tool">{str(p.tool) || '工具'}</span>
           <span className="trc-t">{str(p.summary)}</span>
         </div>
       );
@@ -96,7 +108,7 @@ function EventRow({ ev }: { ev: StoredEvent }) {
     case 'result':
       return (
         <div className="trc-ev">
-          <span className="trc-k done">✓ 跑完</span>
+          <span className="trc-k done">跑完</span>
           <span className="trc-t">
             {num(p.numTurns)} 轮 · ${num(p.costUsd).toFixed(4)} · {Math.round(num(p.durationMs) / 1000)}s
           </span>
@@ -105,14 +117,14 @@ function EventRow({ ev }: { ev: StoredEvent }) {
     case 'error':
       return (
         <div className="trc-ev">
-          <span className="trc-k err">✗ 错误</span>
+          <span className="trc-k err">错误</span>
           <span className="trc-t st-bad">{str(p.message) || str(p.code)}</span>
         </div>
       );
     case 'finished':
       return (
         <div className="trc-ev">
-          <span className="trc-k fin">● 终态</span>
+          <span className="trc-k fin">终态</span>
           <span className="trc-t">{str(p.status)}</span>
         </div>
       );
@@ -129,8 +141,9 @@ export function Worksurf({ worker, events, roles, managerThinking, onClose, onOp
   const hasTrace = !!worker?.taskId && events.length > 0;
   const specialty = worker ? specialtyOf(worker, roles) : undefined;
   // 经理:点开看实时思考流(claude 决策过程),而非任务事件 —— 经理不绑单个任务。
+  // 剥掉难读的决策 JSON,只留自然语言思路(规则经理/fake 只吐 JSON → 滤后为空,显示提示)。
   const isMgr = worker?.role === 'mgr';
-  const thinking = (managerThinking ?? '').trim();
+  const thinking = stripDecisionJson(managerThinking ?? '');
   return (
     <div className={`worksurf${worker ? ' on' : ''}`}>
       {worker && (
@@ -155,15 +168,17 @@ export function Worksurf({ worker, events, roles, managerThinking, onClose, onOp
             <div className="ws-events trc-events">
               {thinking ? (
                 <div className="trc-ev">
-                  <span className="trc-k think">💭 经理思考</span>
+                  <span className="trc-k think">经理思考</span>
                   <div className="trc-t think">
-                    <div className="trc-think-body open">{thinking}</div>
+                    <div className="trc-think-body open">
+                      <MarkdownLite text={thinking} />
+                    </div>
                   </div>
                 </div>
               ) : (
                 <div className="trc-ev st-meta">
-                  经理空闲中,或经理大脑还是「规则」(免费、不思考)。去人事部把经理大脑切成 claude,
-                  它决策时这里就会实时流出思考。
+                  经理空闲中,或经理大脑还是「规则」(免费、按固定策略走、不用 claude 思考)。
+                  去人事部把经理大脑切成 claude,它决策时这里就会实时流出思路。
                 </div>
               )}
             </div>

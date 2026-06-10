@@ -71,14 +71,14 @@ function shortLabel(prompt: string): string {
 /** 刚完工、在工位驻留收尾的任务(D1:不瞬移,气泡报结果几秒再走)。 */
 export interface LingeringTask {
   task: TaskRecord;
-  /** 终态是否验收通过(✓/✗ 气泡)。 */
+  /** 终态是否验收通过(/气泡)。 */
   ok: boolean;
 }
 
 /**
  * 按在途任务摆工人(移植原型 build() 的三类工人 + 派活落工位):
  * 休息室 EMP_COUNT 个员工,有几件在途任务就把前几个移到工位敲键(其余在休息室待命,末一个待命时冒思考点);
- * 刚完工的在工位**驻留收尾**(不敲键,气泡报 ✓/✗,几秒后才回休息室,D1);
+ * 刚完工的在工位**驻留收尾**(不敲键,气泡报/,几秒后才回休息室,D1);
  * 领导区 1 个经理 + 质检台 1 个独立审计常驻。
  * 员工 id 稳定(emp0..),React 复用同一 DOM → 位置变化由 .worker 的 left/top 过渡平滑滑行。
  * 在途优先占工位,驻留用剩余工位(不够就直接回休息室,绝不挤新活)。
@@ -116,7 +116,7 @@ export function placeWorkers(
         y: p.y,
         z: zidx(dc, dr) + 5,
         hood,
-        label: linger.ok ? '✓ 验收通过' : '✗ 没过验收',
+        label: linger.ok ? '验收通过' : '没过验收',
         taskId: linger.task.id,
         workerRole: linger.task.workerRole ?? undefined,
       });

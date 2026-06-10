@@ -46,12 +46,12 @@ export function SettingsView({ open, settings, onPatch, onClose }: SettingsViewP
           <>
             {fullyReal ? (
               <div className="rev" style={{ marginBottom: 8 }}>
-                <span className="st-ok">● 完整真实自治已就绪</span>
+                <span className="st-ok">完整真实自治已就绪</span>
                 <span className="st-meta">经理用 claude 决策、员工真 claude 干活 —— 会持续消耗订阅额度。</span>
               </div>
             ) : previewMgr && autonomousOn ? (
               <div className="rev" style={{ marginBottom: 8 }}>
-                <span className="st-ok">● claude 经理预演中 · 免费</span>
+                <span className="st-ok">claude 经理预演中 · 免费</span>
                 <span className="st-meta">
                   经理走真决策路径(spawn 进程 / parse 决策 JSON),桩决策预览完整流程,不烧钱。要真智能,把「员工干活」切「真实」。
                 </span>
@@ -63,7 +63,7 @@ export function SettingsView({ open, settings, onPatch, onClose }: SettingsViewP
                   一键预演 claude 经理(免费)
                 </button>
                 {(s.defaultMode === 'real' || brain === 'claude') && !autonomousOn && (
-                  <span className="st-bad" style={{ marginLeft: 8 }}>⚠ 自治没开,经理不会决策</span>
+                  <span className="st-bad" style={{ marginLeft: 8 }}>自治没开,经理不会决策</span>
                 )}
               </div>
             )}

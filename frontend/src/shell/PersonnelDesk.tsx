@@ -54,7 +54,7 @@ export function PersonnelDesk({ open, roles, onPatch, onHire, onFire, onClose }:
                 {/* 只能裁员工,且至少留一个(不能裁到没人干活)。 */}
                 {r.kind === 'worker' && workerCount > 1 && (
                   <button className="pbtn fire" type="button" onClick={() => onFire(r.id)}>
-                    裁员 ✕
+                    裁员
                   </button>
                 )}
               </div>

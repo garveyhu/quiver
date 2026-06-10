@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 
 import { useTaskEvents } from '@/hooks/useTaskEvents';
 import { getDecisions, listTasks } from '@/services/commands';
+import { MarkdownLite } from '@/components/MarkdownLite';
 import type { ManagerDecision, StoredEvent, TaskRecord } from '@/services/wire';
 
 interface TraceRoomProps {
@@ -20,8 +21,8 @@ const STATUS_CN: Record<string, string> = {
   done: '完成',
   cancelled: '已取消',
   planned: '已拆解·分工中',
-  needs_input: '⚠ worker 请示中',
-  escalated: '⚠ 经理升级·等你',
+  needs_input: 'worker 请示中',
+  escalated: '经理升级·等你',
 };
 
 function statusClass(status: string): string {
@@ -62,9 +63,11 @@ function ThinkText({ text }: { text: string }) {
   const long = text.length > 180;
   return (
     <div className="trc-ev">
-      <span className="trc-k think">💭 思考</span>
+      <span className="trc-k think">思考</span>
       <div className="trc-t think">
-        <div className={`trc-think-body${expanded || !long ? ' open' : ''}`}>{text}</div>
+        <div className={`trc-think-body${expanded || !long ? ' open' : ''}`}>
+          <MarkdownLite text={text} />
+        </div>
         {long && (
           <button className="trc-more" type="button" onClick={() => setExpanded(e => !e)}>
             {expanded ? '收起 ▴' : '展开全文 ▾'}
@@ -82,14 +85,14 @@ function EventRow({ ev }: { ev: StoredEvent }) {
     case 'worker_started':
       return (
         <div className="trc-ev">
-          <span className="trc-k start">▶ 开工</span>
+          <span className="trc-k start">开工</span>
           <span className="trc-t">模型 {String(p.model ?? '?')} · {String(p.authMode ?? '')}</span>
         </div>
       );
     case 'tool_use':
       return (
         <div className="trc-ev">
-          <span className="trc-k tool">🔧 {String(p.tool ?? '工具')}</span>
+          <span className="trc-k tool">{String(p.tool ?? '工具')}</span>
           <span className="trc-t">{String(p.summary ?? '')}</span>
         </div>
       );
@@ -101,7 +104,7 @@ function EventRow({ ev }: { ev: StoredEvent }) {
     case 'result':
       return (
         <div className="trc-ev">
-          <span className="trc-k done">✓ 跑完</span>
+          <span className="trc-k done">跑完</span>
           <span className="trc-t">
             {Number(p.numTurns ?? 0)} 轮 · ${Number(p.costUsd ?? 0).toFixed(4)} ·{' '}
             {Math.round(Number(p.durationMs ?? 0) / 1000)}s
@@ -111,14 +114,14 @@ function EventRow({ ev }: { ev: StoredEvent }) {
     case 'error':
       return (
         <div className="trc-ev">
-          <span className="trc-k err">✗ 错误</span>
+          <span className="trc-k err">错误</span>
           <span className="trc-t st-bad">{String(p.message ?? p.code ?? '')}</span>
         </div>
       );
     case 'finished':
       return (
         <div className="trc-ev">
-          <span className="trc-k fin">● 终态</span>
+          <span className="trc-k fin">终态</span>
           <span className="trc-t">
             {STATUS_CN[String(p.status ?? '')] ?? String(p.status ?? '')}
             {p.branch ? ` · 分支 ${String(p.branch)}` : ''}
@@ -284,9 +287,9 @@ export function TraceRoom({ open, onClose }: TraceRoomProps) {
                 <Fragment key={t.id}>
                   {groupHead && (
                     <div className="trc-goal-head">
-                      ⑃ 协作目标：{t.parentGoal!.length > 22 ? `${t.parentGoal!.slice(0, 22)}…` : t.parentGoal} ·{' '}
+                      协作目标：{t.parentGoal!.length > 22 ? `${t.parentGoal!.slice(0, 22)}…` : t.parentGoal} ·{' '}
                       <span className={allDone ? 'st-ok' : 'st-meta'}>
-                        {sibDone}/{sibs.length} 完成{allDone ? ' ✓' : ''}
+                        {sibDone}/{sibs.length} 完成{allDone ? '' : ''}
                       </span>
                       {sibWorkers.length > 0 && (
                         <span className="trc-goal-team"> · {sibWorkers.join('、')} 分工</span>
@@ -313,11 +316,11 @@ export function TraceRoom({ open, onClose }: TraceRoomProps) {
                     {t.question &&
                       (t.status === 'escalated' ? (
                         <div className="trc-ask">
-                          ⚠ 经理升级给你:「{t.question}」 —— 补充信息后重派,经理就能继续
+                          经理升级给你:「{t.question}」 —— 补充信息后重派,经理就能继续
                         </div>
                       ) : (
                         <div className="trc-ask">
-                          ⚠ worker 卡住请示:「{t.question}」 —— 经理 continue 回答后,它带着答案继续
+                          worker 卡住请示:「{t.question}」 —— 经理 continue 回答后,它带着答案继续
                         </div>
                       ))}
                     {(decisionsByTask[t.id]?.length ?? 0) > 0 && (
@@ -325,7 +328,7 @@ export function TraceRoom({ open, onClose }: TraceRoomProps) {
                         <div className="trc-sec">经理</div>
                         {decisionsByTask[t.id].map(d => (
                           <div className="trc-ev" key={`d${d.seq}-${d.tsMs}`}>
-                            <span className="trc-k mgr">🧠 {DECISION_CN[d.action] ?? d.action}</span>
+                            <span className="trc-k mgr">{DECISION_CN[d.action] ?? d.action}</span>
                             <span className="trc-t">{d.reason || (d.taskPrompt ?? '')}</span>
                           </div>
                         ))}

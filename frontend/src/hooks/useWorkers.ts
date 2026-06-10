@@ -7,7 +7,7 @@ import { subscribe } from '@/services/ipc';
 import type { AgentEvent, TaskRecord } from '@/services/wire';
 
 const ACTIVE = new Set(['running', 'verifying']);
-/** 完工驻留时长(D1):小人在工位报完 ✓/✗ 再回休息室,不瞬移。 */
+/** 完工驻留时长(D1):小人在工位报完/再回休息室,不瞬移。 */
 const LINGER_MS = 4000;
 
 /** 短气泡:截断工具摘要。 */
