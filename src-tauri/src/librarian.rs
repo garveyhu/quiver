@@ -74,9 +74,11 @@ async fn try_distill(app: &AppHandle, store: &Arc<Store>, project: &str) -> anyh
         })
         .collect();
 
-    // 4. claude 提炼(订阅额度;角色配置的 model)。
+    // 4. claude 提炼(角色配置的 model)。bin 跟随运行模式(与经理大脑一致):simulate → fake-claude
+    // (免费预演整条提炼链路),real → 真 claude(真提炼)。守「simulate 全免费」红线 —— 记忆官
+    // claude 不该在 simulate 下偷烧 real 额度。
     let settings = store.get_settings()?;
-    let bin = crate::run::resolve_agent_bin(&settings, RunMode::Real)?;
+    let bin = crate::run::resolve_agent_bin(&settings, RunMode::from_label(&settings.default_mode))?;
     let prompt = format!(
         "你是项目记忆库的记忆官。下面是项目「{project}」最近的工作记录(含经理裁决)。\
          从中提炼最多 {MAX_FACTS_PER_DISTILL} 条**值得长期记住**的项目事实(模式、约定、反复出现的问题、\

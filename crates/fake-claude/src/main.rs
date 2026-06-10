@@ -52,6 +52,14 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
+    // 记忆官提炼调用(librarian distill)→ 输出一个 JSON 数组,不走工作弧。simulate 下记忆官也能
+    // 免费跑通提炼链路(spawn→收集→parse→写入)。桩保守输出 []:绝不瞎造假事实污染记忆库 ——
+    // 真模式提炼才由真 claude 从工作记录提真模式(无价值的流水它也会输出 [])。
+    if prompt.contains("项目记忆库的记忆官") {
+        emit_text(&session, "dis", "[]", delay);
+        return ExitCode::SUCCESS;
+    }
+
     match scenario.as_str() {
         // Permanently-failed run (DESIGN §8.4): emit the init line so a worker
         // appears, then die non-zero with NO clean `result` line. Exercises the
