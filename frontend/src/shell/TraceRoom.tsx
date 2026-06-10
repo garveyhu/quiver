@@ -19,6 +19,7 @@ const STATUS_CN: Record<string, string> = {
   failed: '失败',
   done: '完成',
   cancelled: '已取消',
+  planned: '已拆解·分工中',
 };
 
 function statusClass(status: string): string {

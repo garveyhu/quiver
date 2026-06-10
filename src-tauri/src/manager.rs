@@ -313,6 +313,11 @@ async fn execute_effect(
                 .claim_next_queued(project_key, crate::now_ms())
                 .ok()
                 .flatten();
+            // 父目标被拆了、没人直接干它 → 标「已拆解(planned)」终态,免得卡在 running 僵尸
+            // (HUD 运行计数虚高、调度台假装它在跑)。由子任务接力完成。
+            if let Some(p) = &parent {
+                let _ = store.update_task_status(&p.id, "planned", crate::now_ms());
+            }
             let parent_goal = parent.as_ref().map(|t| t.prompt.clone());
             let mode = parent
                 .as_ref()
