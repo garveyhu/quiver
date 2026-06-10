@@ -288,9 +288,31 @@ fn decide_from_prompt(prompt: &str) -> String {
                 .join(",");
             return format!(r#"{{"action":"plan","subtasks":[{arr}]}}"#);
         }
-        return format!(r#"{{"action":"spawn","prompt":"{}"}}"#, json_escape(&task));
+        // 单任务:把 CEO 录入的权威事实(记忆)注入派给员工的活 —— "记忆 → 决策 → 执行"在
+        // simulate 也看得见(真 claude 会智能选相关事实,这里桩选第一条权威)。
+        let work = match extract_authoritative_fact(prompt) {
+            Some(memo) => format!("{task}(公司约定:{memo})"),
+            None => task,
+        };
+        return format!(r#"{{"action":"spawn","prompt":"{}"}}"#, json_escape(&work));
     }
     r#"{"action":"noop"}"#.to_string()
+}
+
+/// 从决策 prompt 的记忆简报里抽第一条**权威**事实(CEO 录入的公司约定):brief 格式
+/// "- [权威|重要度N] 文本"。没有则 None。
+fn extract_authoritative_fact(prompt: &str) -> Option<String> {
+    for line in prompt.lines() {
+        if line.contains("[权威") {
+            if let Some(idx) = line.find("] ") {
+                let text = line[idx + "] ".len()..].trim();
+                if !text.is_empty() {
+                    return Some(text.to_string());
+                }
+            }
+        }
+    }
+    None
 }
 
 /// 从 "节点 {id} 完工" 抽出 node_id(到下一个空格/逗号止)。
