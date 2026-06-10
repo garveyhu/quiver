@@ -49,7 +49,9 @@ tauri-plugin-dialog = "2.7.1"
 # concurrently (one `tokio::spawn` per worker) with a `Semaphore` concurrency
 # cap. Tauri already pulls tokio in transitively; declared explicitly here so
 # the scheduler's use of `spawn` / `sync::Semaphore` is a first-class dep.
-tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "macros"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "macros", "time"] }
+# ClaudeBrain(claude 经理大脑)实现 async 的 ManagerBrain trait —— 经 async-trait 宏。
+async-trait = "0.1"
 
 # tauri-agent-tools dev bridge (debug-only; the `dev_bridge` module is gated
 # behind `#[cfg(debug_assertions)]` so the bridge — and its localhost HTTP

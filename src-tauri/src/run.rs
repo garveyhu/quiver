@@ -242,18 +242,34 @@ pub async fn run_streaming(
         RunMode::Real => {
             let bin = resolve_agent_bin(&settings, mode)?;
             assert_subscription_env()?;
+            // 人事部「员工」角色配置接到真实 run(§14,配置不是摆设):模型用角色的
+            // (回退全局 settings.model),预算/轮数上限有则真传给 claude 进程硬限。
+            let worker_role = store.and_then(|s| s.get_role("worker").ok().flatten());
+            let model = worker_role
+                .as_ref()
+                .map(|r| r.model.clone())
+                .unwrap_or_else(|| settings.model.clone());
+            let mut extra_args = vec![
+                "--permission-mode".to_string(),
+                "acceptEdits".to_string(),
+                "--model".to_string(),
+                model,
+            ];
+            if let Some(turns) = worker_role.as_ref().and_then(|r| r.max_turns) {
+                extra_args.push("--max-turns".to_string());
+                extra_args.push(turns.to_string());
+            }
+            if let Some(budget) = worker_role.as_ref().and_then(|r| r.budget_usd) {
+                extra_args.push("--max-budget-usd".to_string());
+                extra_args.push(format!("{budget}"));
+            }
             (
                 bin,
                 RunOptions {
                     // SAFETY: no sandbox yet (Phase 6). Never auto-merge a real
                     // agent's work into the user's `main` — leave it on a branch.
                     keep_branch: true,
-                    extra_args: vec![
-                        "--permission-mode".to_string(),
-                        "acceptEdits".to_string(),
-                        "--model".to_string(),
-                        settings.model.clone(),
-                    ],
+                    extra_args,
                     ..Default::default()
                 },
             )
@@ -446,7 +462,7 @@ fn assert_no_forbidden_env(is_present: impl Fn(&str) -> bool) -> anyhow::Result<
 
 /// Resolve the agent binary honoring the saved `agent_bin_override` (Phase B)
 /// before the per-mode auto-resolution.
-fn resolve_agent_bin(settings: &Settings, mode: RunMode) -> anyhow::Result<PathBuf> {
+pub(crate) fn resolve_agent_bin(settings: &Settings, mode: RunMode) -> anyhow::Result<PathBuf> {
     if let Some(override_path) = settings
         .agent_bin_override
         .as_deref()

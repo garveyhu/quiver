@@ -16,7 +16,10 @@
 //! - `list_tasks` / `reorder_task` / `cancel_task_cmd` — board management.
 //! - `get_task_events` — the §11 ordered event log for Logbook replay (Phase D).
 
+mod claude_brain;
 mod environment;
+mod librarian;
+mod manager;
 mod run;
 mod scheduler;
 
@@ -51,6 +54,9 @@ struct AppState {
     /// spawned queue workers can record episodes on completion. Installed in `setup`.
     memory: std::sync::OnceLock<Arc<MemoryStore>>,
     scheduler: Scheduler,
+    /// 自治经理编排运行时(DESIGN §5)。`settings.autonomous` 为真时,enqueue 走它而非
+    /// `scheduler`:经理控制循环基于决策驱动调动(spawn/deliver/…),而不是无脑流水线。
+    manager: manager::ManagerLoop,
     /// task_id → child PID of currently-running tasks. Populated when a task's
     /// agent spawns, removed when it ends. Read by `cancel_task_cmd` to stop a
     /// running task (kill the PID → stdout EOF → normal cleanup path).
@@ -150,8 +156,48 @@ async fn update_settings(
 ) -> Result<Settings, String> {
     let store = state.store()?;
     let settings = store.update_settings(&patch).map_err(|e| format!("{e:#}"))?;
-    state.scheduler.resume_all(app, store.clone()).await;
+    // 两条调度路径都重踢:旧 scheduler 总是;自治开着时经理循环也复活(调高/清预算后继续派活)。
+    // 经理循环复用各 project 首次注册时存的大脑,故这里无需再传。
+    state.scheduler.resume_all(app.clone(), store.clone()).await;
+    if settings.autonomous {
+        state.manager.resume_all(app, store.clone()).await;
+    }
     Ok(settings)
+}
+
+/// 当前项目最近的经理决策(decision_log,最新在前;§10 复盘)。工作台打开时回填决策流
+/// 历史 —— live 事件之前发生过什么,重启也不丢。
+#[tauri::command]
+fn get_decisions(
+    state: State<'_, AppState>,
+    limit: Option<i64>,
+) -> Result<Vec<quiver_store::DecisionRecord>, String> {
+    let project = current_project(&state)?.display().to_string();
+    let store = state.store()?;
+    store
+        .decisions_for_project(&project, limit.unwrap_or(40).clamp(1, 200))
+        .map_err(|e| format!("{e:#}"))
+}
+
+/// 人事部:全部角色配置(经理在前)。前端人事部 UI 的数据源(DESIGN §14)。
+#[tauri::command]
+fn list_roles(state: State<'_, AppState>) -> Result<Vec<quiver_store::AgentRole>, String> {
+    let store = state.store()?;
+    store.list_roles().map_err(|e| format!("{e:#}"))
+}
+
+/// 人事部:增量改一个角色(version+1),返回更新后的完整配置。改「经理」的 `brain` 字段
+/// 即切换经理大脑(rule 免费 / claude 真想)——下次经理循环启动时生效。
+#[tauri::command]
+fn update_role(
+    state: State<'_, AppState>,
+    id: String,
+    patch: quiver_store::RolePatch,
+) -> Result<quiver_store::AgentRole, String> {
+    let store = state.store()?;
+    store
+        .update_role(&id, &patch, now_ms())
+        .map_err(|e| format!("{e:#}"))
 }
 
 /// All persisted tasks for the bulletin-board UI (DESIGN §11, v1.0 module 5),
@@ -291,7 +337,7 @@ struct ManagerPreviewDto {
 }
 
 #[tauri::command]
-fn manager_preview(state: State<'_, AppState>) -> Result<ManagerPreviewDto, String> {
+async fn manager_preview(state: State<'_, AppState>) -> Result<ManagerPreviewDto, String> {
     use quiver_orchestrator::{ManagerBrain, ManagerContext, RuleBrain};
     let store = state.store()?;
     let running = store
@@ -316,8 +362,11 @@ fn manager_preview(state: State<'_, AppState>) -> Result<ManagerPreviewDto, Stri
         max_inflight: settings.max_workers.max(0) as usize,
         budget_remaining_usd: budget_remaining,
         brief: String::new(),
+        // 预览在经理循环之外,看不到(也无需看)循环私有的复核队列/队首细节。
+        pending_reviews: vec![],
+        next_task: None,
     };
-    let decision = RuleBrain.decide(&ctx).map_err(|e| format!("{e:#}"))?;
+    let decision = RuleBrain.decide(&ctx).await.map_err(|e| format!("{e:#}"))?;
     Ok(ManagerPreviewDto {
         inflight: ctx.inflight,
         queued: ctx.queued,
@@ -530,6 +579,30 @@ fn get_task_events(
     store.events_for_task(&task_id).map_err(|e| format!("{e:#}"))
 }
 
+/// 给某 project 的经理控制循环选大脑(DESIGN §5/§21/§14)。
+///
+/// **唯一的选脑依据是人事部「经理」角色的 `brain` 字段**(用户在人事部显式改,seed 为
+/// 免费 `rule`):`claude` → 真 claude 经理([`ClaudeBrain`](crate::claude_brain),用该角色
+/// 配置的 model,走 headless 额度);其余/读不到/二进制解析失败 → 免费 `RuleBrain`。
+///
+/// 教训(2026-06-10 实测,绝不回退):曾按 `default_mode=="real"` 自动选 ClaudeBrain,结果
+/// simulate 任务被真 claude 经理连环想、烧额度毫无感知。`default_mode` 是"任务跑什么
+/// 模式",不是"经理用什么脑"——烧钱的大脑只能由这个显式旋钮打开(蓝图 §7),
+/// 不搭任何其他设置的便车。
+fn manager_brain(
+    store: &Arc<Store>,
+    settings: &Settings,
+    cwd: PathBuf,
+) -> Arc<dyn quiver_orchestrator::ManagerBrain> {
+    let role = store.get_role("manager").ok().flatten();
+    if let Some(role) = role.filter(|r| r.brain == "claude") {
+        if let Ok(bin) = crate::run::resolve_agent_bin(settings, RunMode::Real) {
+            return Arc::new(claude_brain::ClaudeBrain::new(bin, cwd, role.model));
+        }
+    }
+    Arc::new(quiver_orchestrator::RuleBrain)
+}
+
 /// Pin a task to the bulletin board (status `queued`) and kick the concurrent
 /// scheduler, which will run it (and any other queued tasks) up to `maxWorkers`
 /// at a time. Returns the created [`TaskRecord`] so the UI can flash the new
@@ -558,16 +631,28 @@ async fn enqueue_task_cmd(
         })
         .map_err(|e| format!("{e:#}"))?;
 
-    // Read the live max-workers cap and kick the scheduler for this project.
-    let max_workers = store
-        .get_settings()
+    // Read the live settings: max-workers cap + the §5 autonomous switch.
+    let settings = store.get_settings().ok();
+    let max_workers = settings
+        .as_ref()
         .map(|s| s.max_workers as usize)
         .unwrap_or(1)
         .max(1);
-    state
-        .scheduler
-        .ensure_running(app.clone(), store.clone(), project, max_workers)
-        .await;
+    let autonomous = settings.as_ref().map(|s| s.autonomous).unwrap_or(false);
+    if autonomous {
+        // 自治模式:经理控制循环驱动调度 —— 经理拍决策、决策真的调动 worker(DESIGN §5)。
+        // 经理大脑由循环每拍按人事部配置现场选(rule 免费/claude 真想),这里不注入。
+        state
+            .manager
+            .ensure_running(app.clone(), store.clone(), project, max_workers)
+            .await;
+    } else {
+        // 旧模式:scheduler 无脑流水线(有名额+有排队就跑),作为可回退的默认。
+        state
+            .scheduler
+            .ensure_running(app.clone(), store.clone(), project, max_workers)
+            .await;
+    }
 
     // Flash the board + return the new card.
     let _ = app.emit_task_update();
@@ -575,6 +660,40 @@ async fn enqueue_task_cmd(
         .get_task(&task_id)
         .map_err(|e| format!("{e:#}"))?
         .ok_or_else(|| "任务刚入队却读不到，请重试".to_string())
+}
+
+/// §12 打回重做(组织回流):把一个已终结(失败/被经理拦下)的任务作为**新任务**重新入队。
+/// 新 task_id —— 事件日志主键是 (task_id,seq),复用老行重跑会撞 seq;老行保留作档案。
+/// **带上下文返工(§5.3/A5)**:老任务的会话句柄复制给新任务 → worker 经 `--resume` 在
+/// 原会话里续跑(记得自己改过什么、为什么没过),配上返工指引,不是裸重跑;经理简报里
+/// 还带着「经理·拦下(原因)」的 episode,记忆双保险。
+#[tauri::command]
+async fn requeue_task_cmd(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    task_id: String,
+) -> Result<TaskRecord, String> {
+    let store = state.store()?;
+    let old = store
+        .get_task(&task_id)
+        .map_err(|e| format!("{e:#}"))?
+        .ok_or_else(|| "任务不存在".to_string())?;
+    if matches!(old.status.as_str(), "queued" | "running" | "verifying") {
+        return Err("任务还在进行中,不能打回重做".to_string());
+    }
+    let old_session = store.task_session_id(&old.id).ok().flatten();
+    let prompt = if old_session.is_some() {
+        // 续会话返工:worker 记得上次的上下文,指引点明这次要干嘛。
+        format!("(返工)上次运行的成果未通过验收,请修复问题后重新交付。原任务:{}", old.prompt)
+    } else {
+        old.prompt
+    };
+    let new = enqueue_task_cmd(app, state, prompt, RunMode::from_label(&old.mode)).await?;
+    if let Some(sid) = old_session {
+        // 把老会话句柄挂到新任务行 → run_one_task 读到即走 runner.resume(已有链路)。
+        let _ = store.set_task_session_id(&new.id, &sid, now_ms());
+    }
+    Ok(new)
 }
 
 /// Run ONE task immediately against the picked repo and stream its events to the
@@ -610,13 +729,22 @@ async fn run_task_cmd(
 }
 
 /// The currently-picked project, or a clear "pick a project first" error.
+///
+/// 重启自愈:内存里没有当前项目(进程刚重启、前端还没调 get_initial_state)时,从持久化的
+/// `last_project` 恢复并回填内存 —— 否则自治公司一重启,IPC 全报"先选项目",enqueue 瘫痪。
+/// 持久化里也没有(全新安装)才真要用户去选。
 fn current_project(state: &AppState) -> Result<PathBuf, String> {
-    state
-        .project_path
-        .lock()
-        .expect("project_path lock")
-        .clone()
-        .ok_or_else(|| "请先选择一个项目——尚未选择 git 仓库。".to_string())
+    if let Some(p) = state.project_path.lock().expect("project_path lock").clone() {
+        return Ok(p);
+    }
+    if let Ok(store) = state.store() {
+        if let Ok(Some(last)) = store.last_project() {
+            let p = PathBuf::from(&last);
+            *state.project_path.lock().expect("project_path lock") = Some(p.clone());
+            return Ok(p);
+        }
+    }
+    Err("请先选择一个项目——尚未选择 git 仓库。".to_string())
 }
 
 /// Validate `path` is a git repo, store it as the picked project (in memory +
@@ -709,20 +837,31 @@ pub fn run() {
 
             // Crash recovery (DESIGN §23 P0): a prior session may have died mid-run,
             // leaving tasks stuck `running` and orphan worktrees behind. Requeue
-            // them, sweep the orphans, and restart their projects' dispatchers.
+            // them, sweep the orphans, and restart their projects' dispatchers —
+            // 按 §5 自治开关分流:自治开着由**经理循环**接管恢复(组织重启后仍由经理
+            // 驱动,不降级回无脑流水线),关着走旧 scheduler。
             // Spawned async so startup never blocks on git/db work.
             if let Some(store) = state.store.get().cloned() {
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
-                    let max_workers = store
-                        .get_settings()
+                    let settings = store.get_settings().ok();
+                    let max_workers = settings
+                        .as_ref()
                         .map(|s| s.max_workers as usize)
                         .unwrap_or(1);
-                    let n = handle
-                        .state::<AppState>()
-                        .scheduler
-                        .reconcile(handle.clone(), store, max_workers)
-                        .await;
+                    let autonomous = settings.as_ref().map(|s| s.autonomous).unwrap_or(false);
+                    let app_state = handle.state::<AppState>();
+                    let n = if autonomous {
+                        app_state
+                            .manager
+                            .reconcile(handle.clone(), store, max_workers)
+                            .await
+                    } else {
+                        app_state
+                            .scheduler
+                            .reconcile(handle.clone(), store, max_workers)
+                            .await
+                    };
                     if n > 0 {
                         eprintln!("reconcile: requeued {n} interrupted task(s) from a prior session");
                     }
@@ -743,8 +882,12 @@ pub fn run() {
         get_initial_state,
         run_task_cmd,
         enqueue_task_cmd,
+        requeue_task_cmd,
         get_settings,
         update_settings,
+        list_roles,
+        update_role,
+        get_decisions,
         list_tasks,
         get_stats,
         get_metrics,
@@ -768,8 +911,12 @@ pub fn run() {
         get_initial_state,
         run_task_cmd,
         enqueue_task_cmd,
+        requeue_task_cmd,
         get_settings,
         update_settings,
+        list_roles,
+        update_role,
+        get_decisions,
         list_tasks,
         get_stats,
         get_metrics,

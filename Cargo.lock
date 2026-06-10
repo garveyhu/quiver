@@ -2546,6 +2546,7 @@ name = "quiver-app"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "fix-path-env",
  "libc",
  "quiver-core",
@@ -2607,9 +2608,10 @@ name = "quiver-orchestrator"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "quiver-llm",
+ "async-trait",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
