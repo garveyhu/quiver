@@ -306,6 +306,19 @@ export function board(b: SceneBuilder, c: number, r: number): void {
   }
 }
 
+/** 经理的高背办公椅(金棕配色,配王冠袍子)。经理坐其上 → 「坐着办公」,不再站着。 */
+export function managerChair(b: SceneBuilder, c: number, r: number): void {
+  b.contactShadow(c + 0.18, r + 0.2, 24, 12);
+  // 椅座(深棕皮面)
+  b.isoBox(c, r, 0.38, 0.38, 6, { top: '#4a3a2c', l: '#2a2018', r: '#3a2c20' });
+  // 高椅背(经理范:金棕 + 顶部高光条)
+  b.isoBox(c + 0.05, r - 0.02, 0.3, 0.1, 30, { top: '#5a4632', l: '#322618', r: '#473628' });
+  b.chip(c + 0.07, r, 0.26, 0.05, 30, 34, { top: '#8a6e48', l: '#4a3a28', r: '#6a5238' });
+  // 扶手两侧
+  b.isoBox(c - 0.02, r + 0.28, 0.06, 0.1, 12, { top: '#3a2c20', l: '#221a12', r: '#2e221a' });
+  b.isoBox(c + 0.34, r + 0.28, 0.06, 0.1, 12, { top: '#3a2c20', l: '#221a12', r: '#2e221a' });
+}
+
 /** 经理的记忆书(桌 + 两本立书 + 翻开的金页)。 */
 export function memoryBook(b: SceneBuilder, c: number, r: number): void {
   b.isoBox(c - 0.2, r - 0.1, 0.5, 0.45, 10, WOOD2);

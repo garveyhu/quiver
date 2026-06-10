@@ -464,3 +464,9 @@ body {
 .ws-id-row > span { color: var(--tx-3); min-width: 38px; }
 .ws-id-row > b { color: var(--tx-1); font-weight: 500; }
 .ws-id-hint { margin-top: 6px; padding-top: 7px; border-top: 1px solid var(--bd-soft); color: var(--tx-3); font-size: 11.5px; line-height: 1.55; }
+
+/* 经理坐姿:整体下沉(从站立 -40 → 坐到椅上),身体压低、袍子下摆收短,看起来坐着办公而非站着。 */
+.worker.mgr { margin-top: -26px; }
+.worker.mgr .body { bottom: 0; }
+.worker.mgr .robe { top: 23px; height: 11px; }
+.worker.mgr .stack { animation: none; }

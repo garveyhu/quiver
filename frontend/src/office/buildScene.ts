@@ -8,6 +8,7 @@ import {
   crateStack,
   deskLamp,
   deskUnit,
+  managerChair,
   memoryBook,
   patternRug,
   plant,
@@ -106,8 +107,9 @@ function furnishRightColumn(b: SceneBuilder): void {
   plant(b, 12.8, 0.3);
   wallClock(b, 11.1, 0.2, 30);
   deskLamp(b, 11.0, 0.95);
-  // 领导区(经理 + 记忆书)
+  // 领导区(经理 + 记忆书):给经理一把高背椅,让 ta 坐着办公(经理 sprite 在 11.5,3.3,椅子对齐)。
   board(b, 11.2, 2.4);
+  managerChair(b, 11.42, 3.18);
   memoryBook(b, 12.6, 2.6);
   plant(b, 12.9, 3.5);
   wallPoster(b, 11.05, 2.0, 1.0, ['#3a2e1a', '#e6bd6c', '#ffd27a']);
