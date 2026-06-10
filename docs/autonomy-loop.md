@@ -360,3 +360,15 @@ simulate 能做的核心全做透、可见性全覆盖、安全护栏有测试�
 真交付/真拆活协作/真记忆决策/真自愈+main永不坏/空转修复/过夜多目标/真冲突护栏/.quiver污染/
 崩溃恢复+孤儿清理。**正常+异常+工作流+冲突+崩溃全部真 claude 端到端验证**。8 轮挖出 6 个
 simulate 发现不了的真 bug(交付/拆活/空转/.quiver/孤儿worktree + 崩溃恢复粗糙)。
+
+## 轮 83:崩溃恢复孤儿进程清理(2026-06-10)
+
+- **孤儿 worker 进程 kill(修)** — 上轮留的最后一块:app 强杀时 claude 子进程成孤儿、续跑烧额度。
+  PID 原只在内存(崩溃即丢)。修:worker_pid 持久化进 task 表;reconcile 读 running_task_pids、
+  ps 验证确是 claude 再 kill(防 PID 复用误杀),再 requeue 清 PID。真跑实测:worker PID 52268
+  写进 DB→强杀 app 孤儿续跑→重启 reconcile 清掉它+崩溃任务自动重试 merged。
+  至此崩溃恢复卫生闭合:任务不丢 + 孤儿 worktree 清 + 孤儿进程 kill。
+
+### 9 轮真跑(75-83)闭合
+真交付/拆活协作/记忆决策/自愈+main永不坏/空转/过夜多目标/真冲突/.quiver污染/崩溃恢复(任务恢复
++孤儿worktree+孤儿进程)。**正常+异常+工作流+冲突+崩溃全链路真 claude 验证 + 卫生闭合**。
