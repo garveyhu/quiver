@@ -451,7 +451,20 @@ async fn execute_effect(
                 progressed = false;
             }
         }
-        Effect::Escalate { .. } | Effect::Refresh | Effect::Nothing => {}
+        Effect::Escalate { reason } => {
+            // §12 经理升级给 CEO。队首通常卡着一个 escalate 的诱因(缺只有 CEO 有的信息/超出自治
+            // 能力)→ claim 它、标 `escalated` 移出队列,免得经理每拍重看同一个、反复 escalate
+            // (熔断才停);升级原因存进 question 给 CEO 看。CEO 在晨报看到、补信息后重派。无队首
+            // (纯局面级升级)→ 只记决策、不动任务。
+            if let Ok(Some(task)) = store.claim_next_queued(project_key, crate::now_ms()) {
+                let _ = store.update_task_status(&task.id, "escalated", crate::now_ms());
+                let _ = store.set_task_question(&task.id, reason, crate::now_ms());
+                task_id_out = Some(task.id.clone());
+                let _ = app.emit(TASK_EVENT_CHANNEL, project_key);
+                progressed = true; // 挂起了一个任务,局面变了 → 继续看队列下一个
+            }
+        }
+        Effect::Refresh | Effect::Nothing => {}
     }
 
     // §6 决策留痕回记忆(C1):真落地的组织动作(派活/交付/拦下/升级)写成 episode ——

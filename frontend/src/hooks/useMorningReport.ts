@@ -25,7 +25,7 @@ export interface MorningReportData {
 }
 
 const DONE = new Set(['verified', 'done']);
-const NEEDS_YOU = new Set(['needs_rebase', 'failed']);
+const NEEDS_YOU = new Set(['needs_rebase', 'failed', 'escalated']);
 /** 协作父目标的可见状态:拆解中 / 协作完成 / 部分失败。 */
 const COLLAB = new Set(['planned', 'done', 'needs_rebase']);
 

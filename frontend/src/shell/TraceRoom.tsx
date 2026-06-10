@@ -21,12 +21,14 @@ const STATUS_CN: Record<string, string> = {
   cancelled: '已取消',
   planned: '已拆解·分工中',
   needs_input: '⚠ worker 请示中',
+  escalated: '⚠ 经理升级·等你',
 };
 
 function statusClass(status: string): string {
   if (status === 'merged' || status === 'verified' || status === 'done') return 'st-ok';
   if (status === 'failed' || status === 'needs_rebase' || status === 'cancelled') return 'st-bad';
   if (status === 'needs_input') return 'st-warn'; // worker 请示中,等经理回答 → 警示橙
+  if (status === 'escalated') return 'st-warn';
   return 'st-meta';
 }
 
@@ -308,11 +310,16 @@ export function TraceRoom({ open, onClose }: TraceRoomProps) {
                 </button>
                 {selected === t.id && (
                   <div className="trc-events">
-                    {t.question && (
-                      <div className="trc-ask">
-                        ⚠ worker 卡住请示:「{t.question}」 —— 经理 continue 回答后,它带着答案继续
-                      </div>
-                    )}
+                    {t.question &&
+                      (t.status === 'escalated' ? (
+                        <div className="trc-ask">
+                          ⚠ 经理升级给你:「{t.question}」 —— 补充信息后重派,经理就能继续
+                        </div>
+                      ) : (
+                        <div className="trc-ask">
+                          ⚠ worker 卡住请示:「{t.question}」 —— 经理 continue 回答后,它带着答案继续
+                        </div>
+                      ))}
                     {(decisionsByTask[t.id]?.length ?? 0) > 0 && (
                       <>
                         <div className="trc-sec">经理</div>
