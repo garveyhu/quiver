@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { useTaskEvents } from '@/hooks/useTaskEvents';
-import { listTasks } from '@/services/commands';
-import type { StoredEvent, TaskRecord } from '@/services/wire';
+import { getDecisions, listTasks } from '@/services/commands';
+import type { ManagerDecision, StoredEvent, TaskRecord } from '@/services/wire';
 
 interface TraceRoomProps {
   open: boolean;
@@ -26,6 +26,17 @@ function statusClass(status: string): string {
   if (status === 'failed' || status === 'needs_rebase' || status === 'cancelled') return 'st-bad';
   return 'st-meta';
 }
+
+/** 经理决策动作中文(追溯室里"经理这条线"的标签)。 */
+const DECISION_CN: Record<string, string> = {
+  spawn: '派活',
+  continue: '续跑',
+  deliver: '交付',
+  block: '拦下',
+  escalate: '升级等你',
+  refresh_memory: '刷新记忆',
+  noop: '按兵不动',
+};
 
 /** 安全解析事件 payload(坏数据不崩,返回空对象)。 */
 function parsePayload(raw: string): Record<string, unknown> {
@@ -97,18 +108,18 @@ function EventRow({ ev }: { ev: StoredEvent }) {
   }
 }
 
-/** 选中任务的完整轨迹(订阅式,实时填充)。 */
+/** 选中任务的事件轨迹(订阅式,实时填充)。返回 fragment,融入外层 .trc-events。 */
 function TaskTrace({ taskId }: { taskId: string }) {
   const events = useTaskEvents(taskId);
   if (events.length === 0) {
-    return <div className="rev st-meta">这个任务还没有留下事件轨迹(simulate 旧任务或刚入队)。</div>;
+    return <div className="trc-ev st-meta">这个任务还没有留下事件轨迹(simulate 旧任务或刚入队)。</div>;
   }
   return (
-    <div className="trc-events">
+    <>
       {events.map(e => (
         <EventRow key={e.seq} ev={e} />
       ))}
-    </div>
+    </>
   );
 }
 
@@ -118,6 +129,7 @@ function TaskTrace({ taskId }: { taskId: string }) {
  */
 export function TraceRoom({ open, onClose }: TraceRoomProps) {
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
+  const [decisions, setDecisions] = useState<ManagerDecision[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
 
   useEffect(() => {
@@ -125,7 +137,20 @@ export function TraceRoom({ open, onClose }: TraceRoomProps) {
     void listTasks()
       .then(ts => setTasks([...ts].sort((a, b) => b.createdAt - a.createdAt)))
       .catch(() => {});
+    void getDecisions(200)
+      .then(setDecisions)
+      .catch(() => {});
   }, [open]);
+
+  // 经理决策按任务归集 —— 一个任务展开时,先看经理为它做了什么(派活理由 / 复核裁定)。
+  const decisionsByTask = useMemo(() => {
+    const m: Record<string, ManagerDecision[]> = {};
+    for (const d of decisions) {
+      if (d.taskId) (m[d.taskId] ??= []).push(d);
+    }
+    for (const k of Object.keys(m)) m[k].sort((a, b) => a.tsMs - b.tsMs);
+    return m;
+  }, [decisions]);
 
   return (
     <div className={`panel wide${open ? ' on' : ''}`}>
@@ -150,7 +175,23 @@ export function TraceRoom({ open, onClose }: TraceRoomProps) {
                   {t.costUsd ? ` · $${t.costUsd.toFixed(2)}` : ''}
                 </span>
               </button>
-              {selected === t.id && <TaskTrace taskId={t.id} />}
+              {selected === t.id && (
+                <div className="trc-events">
+                  {(decisionsByTask[t.id]?.length ?? 0) > 0 && (
+                    <>
+                      <div className="trc-sec">经理</div>
+                      {decisionsByTask[t.id].map(d => (
+                        <div className="trc-ev" key={`d${d.seq}-${d.tsMs}`}>
+                          <span className="trc-k mgr">🧠 {DECISION_CN[d.action] ?? d.action}</span>
+                          <span className="trc-t">{d.reason || (d.taskPrompt ?? '')}</span>
+                        </div>
+                      ))}
+                      <div className="trc-sec">员工</div>
+                    </>
+                  )}
+                  <TaskTrace taskId={t.id} />
+                </div>
+              )}
             </div>
           ))
         )}
