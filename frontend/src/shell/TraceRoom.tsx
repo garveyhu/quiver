@@ -274,14 +274,19 @@ export function TraceRoom({ open, onClose }: TraceRoomProps) {
               const sibs = t.parentGoal ? shown.filter(x => x.parentGoal === t.parentGoal) : [];
               const sibDone = sibs.filter(x => ['verified', 'merged', 'done'].includes(x.status)).length;
               const allDone = sibs.length > 0 && sibDone === sibs.length;
+              // 参与协作的员工(从子任务 workerRole 去重)—— 一眼看出谁在这个目标上分工。
+              const sibWorkers = [...new Set(sibs.map(x => x.workerRole).filter(Boolean))];
               return (
                 <Fragment key={t.id}>
                   {groupHead && (
                     <div className="trc-goal-head">
-                      ⑃ 协作目标：{t.parentGoal!.length > 24 ? `${t.parentGoal!.slice(0, 24)}…` : t.parentGoal} ·{' '}
+                      ⑃ 协作目标：{t.parentGoal!.length > 22 ? `${t.parentGoal!.slice(0, 22)}…` : t.parentGoal} ·{' '}
                       <span className={allDone ? 'st-ok' : 'st-meta'}>
-                        {sibDone}/{sibs.length} 子任务{allDone ? '完成 ✓' : '完成'}
+                        {sibDone}/{sibs.length} 完成{allDone ? ' ✓' : ''}
                       </span>
+                      {sibWorkers.length > 0 && (
+                        <span className="trc-goal-team"> · {sibWorkers.join('、')} 分工</span>
+                      )}
                     </div>
                   )}
                   <div className={`trc-task${t.parentGoal ? ' trc-sub' : ''}`}>
