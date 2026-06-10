@@ -324,3 +324,21 @@ simulate 能做的核心全做透、可见性全覆盖、安全护栏有测试�
 ### 教训
 - **simulate 桩跑通 ≠ real 真路径通**。两个致命 bug(不提交/不拆活)都藏在"机制看着完整"
   之下,只有真跑才暴露。用户开 real 是对的 —— 真跑才发现真问题。
+
+## 轮 79-80:异常路径 + 过夜多目标真跑(2026-06-10)
+
+- **失败自愈真路径** — verify 必红 → 经理 block → 自动重试(attempt 1→2)→ 重试上限 → escalate
+  升级给人。main 永不坏(坏代码反复失败始终没进 main)。
+- **空转 spawn 修复** — 队列空时 claude 经理仍每拍 spawn,execute claim None 回滚却被判推进 →
+  立即重 tick 空转烧钱。修:execute_effect 返回"是否真推进",claim None→false→经理等待。
+  prompt 双保险:排队 0 别 spawn。实测 spawn 5→2,改 escalate。
+- **★ 过夜多目标(产品意象验证)** — 连派 3 独立目标、并发 2:经理 spawn spawn→deliver deliver
+  →spawn→deliver,并发上限遵守(worker 时间区间重叠证实)。3 个全 merged(power/reverse/gcd
+  各自落到 main.py/stringutils.py/mathutils.py)。晨报准确汇总:"合进 main 3·花费 $0.59"。
+  **一次跑通无 bug** —— 前 5 轮修复(commit/plan/空转)在完整流程全生效。
+
+### 连续 6 轮真跑总结(轮 75-80)
+真交付(commit_worktree)/真协作拆活(plan prompt)/真记忆决策(验证)/真自愈+main永不坏/
+空转修复/过夜多目标。**正常+异常+工作流全部真 claude 端到端验证通过**。
+方法论:每轮真跑都挖出 simulate 发现不了的真 bug —— "达不到"的根源是 simulate 假象盖住了
+真路径断裂。真跑逐一逼出、修掉。
