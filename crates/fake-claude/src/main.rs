@@ -274,10 +274,17 @@ fn emit_manager_decision(session: &str, prompt: &str, delay: Duration) {
 
 /// 从决策 prompt 推一个决策 JSON 字符串(桩,验证 ClaudeBrain 链路用)。
 fn decide_from_prompt(prompt: &str) -> String {
-    // 先裁后派:完工待复核的优先交付(抽它的 node_id)。
+    // 先裁后派:完工待复核的优先裁决。§5 双向协作演示:首轮(prompt 里没"已续跑")给一轮具体
+    // 指导让它再跑(continue);已续跑过 → 收尾交付(deliver)。真 claude 会按产出质量智能判断,
+    // 这里桩固定"指导一轮再交付",好让 simulate 也能看到 spawn→continue→deliver 的双向闭环。
     if prompt.contains("完工待你复核") {
         if let Some(node) = extract_node_id(prompt) {
-            return format!(r#"{{"action":"deliver","node_id":"{node}"}}"#);
+            if prompt.contains("已续跑") {
+                return format!(r#"{{"action":"deliver","node_id":"{node}"}}"#);
+            }
+            return format!(
+                r#"{{"action":"continue","node_id":"{node}","prompt":"产出方向对,请再完善边界处理和中文注释"}}"#
+            );
         }
     }
     // 否则看队首任务:列举多个子目标(用「、」分隔)→ 拆活分工(§5 协作);单个 → 原样派活。

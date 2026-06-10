@@ -16,8 +16,10 @@ pub enum Effect {
     Spawn { node_id: String, fence: Fence, prompt: String },
     /// 拆活:把这些子任务入队(§5 协作)。不占在途名额(只入队列),后续逐个 spawn。
     Plan { subtasks: Vec<String> },
-    /// 给在途 worker 追加指令。
-    Continue { node_id: String, prompt: String },
+    /// 续跑(§5 双向协作):经理评审完上一轮、admit 新名额让同一任务的 worker `--resume` 带经理
+    /// 指导再跑一轮。`node_id`/`fence` 是新名额;`ref_node` 是上一轮完成的节点(执行层据此从
+    /// 待复核队找回是哪个 task,resume 它的 session)。
+    Continue { node_id: String, fence: Fence, ref_node: String, prompt: String },
     /// 交付某节点成果(合并/发货)。
     Deliver { node_id: String },
     /// 拦下某节点成果。
@@ -108,10 +110,21 @@ impl Orchestrator {
                 }
             }
             Decision::Continue { node_id, prompt } => {
-                if self.inflight.fence_of(node_id).is_some() {
-                    Effect::Continue { node_id: node_id.clone(), prompt: prompt.clone() }
-                } else {
-                    Effect::Nothing // 未知/已下线节点 → 拒掉
+                // §5 双向协作:经理评审完 worker 这一轮、给指导让它再跑一轮 —— admit 一个**新**
+                // 名额(像 spawn,因为上一轮的 node 完工后已 on_complete 下线),带上被续跑节点的
+                // 引用,执行层据此 resume 同一任务 session + 注入经理指导。满载 → 拒掉。
+                let new_node = format!("node-{}", self.node_counter);
+                match self.inflight.admit(new_node.clone()) {
+                    Some(fence) => {
+                        self.node_counter += 1;
+                        Effect::Continue {
+                            node_id: new_node,
+                            fence,
+                            ref_node: node_id.clone(),
+                            prompt: prompt.clone(),
+                        }
+                    }
+                    None => Effect::Nothing,
                 }
             }
             Decision::Deliver { node_id } => Effect::Deliver { node_id: node_id.clone() },
@@ -208,10 +221,30 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn tick_continue_unknown_node_is_rejected() {
+    async fn tick_continue_admits_new_slot_for_resume() {
+        // §5 双向协作:Continue 现在 admit 一个新名额(让上一轮的任务 --resume 再跑),带上被续跑
+        // 节点的引用;不再要求 ref_node 还在途(它完工后早下线了)。
         let mut o = Orchestrator::new(2);
-        let brain = FakeBrain(Decision::Continue { node_id: "ghost".into(), prompt: "go".into() });
-        assert_eq!(o.tick(&brain, &ctx()).await.unwrap().effect, Effect::Nothing);
+        let brain = FakeBrain(Decision::Continue { node_id: "node-0".into(), prompt: "改进 X".into() });
+        match o.tick(&brain, &ctx()).await.unwrap().effect {
+            Effect::Continue { ref_node, fence, prompt, .. } => {
+                assert_eq!(ref_node, "node-0");
+                assert_eq!(fence, 1);
+                assert_eq!(prompt, "改进 X");
+            }
+            other => panic!("expected Continue, got {other:?}"),
+        }
+        assert_eq!(o.inflight_len(), 1, "续跑占一个在途名额");
+    }
+
+    #[tokio::test]
+    async fn tick_continue_rejected_when_full() {
+        // 满载 → 续跑也得排队(admit 失败 → Nothing),和 spawn 一样守在途上限。
+        let mut o = Orchestrator::new(1);
+        let spawn = FakeBrain(Decision::Spawn { prompt: "x".into(), reason: None });
+        assert!(matches!(o.tick(&spawn, &ctx()).await.unwrap().effect, Effect::Spawn { .. }));
+        let cont = FakeBrain(Decision::Continue { node_id: "node-0".into(), prompt: "go".into() });
+        assert_eq!(o.tick(&cont, &ctx()).await.unwrap().effect, Effect::Nothing);
     }
 
     #[tokio::test]

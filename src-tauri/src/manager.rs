@@ -320,7 +320,7 @@ async fn execute_effect(
                     task_id_out = Some(task.id.clone());
                     task_prompt_out = Some(work_prompt.clone()); // 派的具体活,给决策流看
                     let _ = app.emit(TASK_EVENT_CHANNEL, project_key);
-                    spawn_worker(app, store, pm, node_id.clone(), *fence, task.id, work_prompt, RunMode::from_label(&task.mode), project_key.to_string());
+                    spawn_worker(app, store, pm, node_id.clone(), *fence, task.id, work_prompt, RunMode::from_label(&task.mode), 0, project_key.to_string());
                 }
                 _ => {
                     // ctx 快照说有排队、认领时却空了(竞态/已被拆) → 回滚刚 admit 的名额,免得泄漏。
@@ -402,9 +402,54 @@ async fn execute_effect(
             }
         }
         // Continue P0 先"记录 + 让前端看见",真 resume 留后续刀(见 plan「不做」)。
-        Effect::Continue { node_id, .. } => {
-            node_id_out = Some(node_id.clone());
-            task_id_out = pm.node_tasks.lock().await.get(node_id).cloned();
+        Effect::Continue { node_id, fence, ref_node, prompt } => {
+            // §5 双向协作:经理评审完上一轮产出、给了具体指导 → 让**同一任务**的 worker `--resume`
+            // 带着指导再跑一轮(迭代改进),而不是闷头一锤子买卖。ref_node 是上一轮完工的节点 →
+            // 从待复核队找回它是哪个 task,resume 它的 session_id(worker 记得自己上一轮干了啥)。
+            let found = {
+                let reviews = pm.reviews.lock().await;
+                reviews
+                    .iter()
+                    .find(|r| &r.node_id == ref_node)
+                    .map(|r| (r.task_id.clone(), r.round))
+            };
+            if let Some((tid, prev_round)) = found {
+                // 从待复核队摘掉(正在续跑,不再等裁);建新 node→task 映射;标 running。
+                pm.reviews.lock().await.retain(|r| r.task_id != tid);
+                pm.node_tasks
+                    .lock()
+                    .await
+                    .insert(node_id.clone(), tid.clone());
+                let mode = store
+                    .get_task(&tid)
+                    .ok()
+                    .flatten()
+                    .map(|t| t.mode)
+                    .unwrap_or_else(|| "simulate".to_string());
+                let _ = store.update_task_status(&tid, "running", crate::now_ms());
+                node_id_out = Some(node_id.clone());
+                task_id_out = Some(tid.clone());
+                task_prompt_out = Some(format!("续跑改进:{prompt}"));
+                let _ = app.emit(TASK_EVENT_CHANNEL, project_key);
+                // spawn_worker 用经理指导当 prompt;worker 内部凭 task.session_id 自动 --resume,
+                // 于是它带着"上一轮的记忆 + 经理这轮的指导"改进。
+                spawn_worker(
+                    app,
+                    store,
+                    pm,
+                    node_id.clone(),
+                    *fence,
+                    tid,
+                    prompt.clone(),
+                    RunMode::from_label(&mode),
+                    prev_round + 1, // §5 双向协作:续跑轮次 +1
+                    project_key.to_string(),
+                );
+            } else {
+                // ref 找不到(竞态/已被别的拍裁掉) → 回滚刚 admit 的名额,这拍不推进。
+                pm.orch.lock().await.on_complete(node_id, *fence);
+                progressed = false;
+            }
         }
         Effect::Escalate { .. } | Effect::Refresh | Effect::Nothing => {}
     }
@@ -555,6 +600,7 @@ fn spawn_worker(
     task_id: String,
     prompt: String,
     mode: RunMode,
+    round: u32,
     project_key: String,
 ) {
     let app = app.clone();
@@ -577,6 +623,7 @@ fn spawn_worker(
             node_id: node_id.clone(),
             task_id,
             status,
+            round, // §5 双向协作:这是第几轮(首跑 0,经理每 continue 一次 +1)
         });
         // 回流(§5.5 栅栏对账):栅栏匹配才释放名额,挡掉过期/重复。
         pm.orch.lock().await.on_complete(&node_id, fence);

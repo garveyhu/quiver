@@ -114,9 +114,16 @@ fn build_prompt(ctx: &ManagerContext, system_prompt: &str) -> String {
         let lines: String = ctx
             .pending_reviews
             .iter()
-            .map(|r| format!("- 节点 {} 完工,终态 {}(任务 {})\n", r.node_id, r.status, r.task_id))
+            .map(|r| {
+                let round = if r.round > 0 {
+                    format!(",已续跑第 {} 轮", r.round)
+                } else {
+                    String::new()
+                };
+                format!("- 节点 {} 完工,终态 {}(任务 {}{})\n", r.node_id, r.status, r.task_id, round)
+            })
             .collect();
-        format!("\n完工待你复核裁决(先裁后派,deliver 或 block):\n{lines}")
+        format!("\n完工待你复核裁决(deliver 交付 / continue 给指导再跑一轮改进 / block 拦下):\n{lines}")
     };
     // §14 团队专长:列出员工各擅长什么,经理派活时在任务描述里点明所需专长 → 派给对的人。
     let team = if ctx.team.is_empty() {
@@ -143,7 +150,9 @@ fn build_prompt(ctx: &ManagerContext, system_prompt: &str) -> String {
          - {{\"action\":\"plan\",\"subtasks\":[\"子任务1\",\"子任务2\"]}} —— **拆活分工**:当队首任务\
            包含多件可独立完成的事时,把它拆成若干子任务,各自入队、分给多个 worker 并行协作;\
            每条 subtask 写成给 worker 的完整任务描述(同样可点明所需专长词)\n\
-         - {{\"action\":\"continue\",\"node_id\":\"...\",\"prompt\":\"追加指令\"}} —— 让在途 worker 继续\n\
+         - {{\"action\":\"continue\",\"node_id\":\"...\",\"prompt\":\"给 worker 的具体改进指导\"}} —— \
+           **双向协作**:评审完一个完工节点、觉得产出方向对但还能更好(没到该 deliver、也不至于 block)时,\
+           给它具体指导,让它 --resume 带着上一轮记忆 + 你的指导再跑一轮改进。反复救不动再 block\n\
          - {{\"action\":\"deliver\",\"node_id\":\"...\"}} —— 交付某节点成果\n\
          - {{\"action\":\"block\",\"node_id\":\"...\",\"reason\":\"...\"}} —— 拦下某节点\n\
          - {{\"action\":\"escalate\",\"reason\":\"...\"}} —— 超出能力,升级给人\n\
@@ -200,7 +209,7 @@ mod tests {
             pending_reviews: vec![PendingReview {
                 node_id: "node-7".into(),
                 task_id: "task-1".into(),
-                status: "verified".into(),
+                status: "verified".into(), round: 0,
             }],
             team: vec!["员工 2 · 测试".into(), "员工 3 · 前端".into()],
             ..ManagerContext::default()

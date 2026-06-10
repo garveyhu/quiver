@@ -64,6 +64,10 @@ pub struct PendingReview {
     pub task_id: String,
     /// worker 终态标签:verified / failed / needs_rebase / done …
     pub status: String,
+    /// 第几轮(§5 双向协作):首跑 0,经理每 continue 一次 +1。让经理知道已经迭代几轮了,
+    /// 该收手还是再给一轮指导 —— 也是防"反复 continue 救不动"的依据。
+    #[serde(default)]
+    pub round: u32,
 }
 
 /// 经理这一拍看到的、已压扁的局面(§5)。随阶段增长(在途明细、最近 episode、风险信号…)。
@@ -211,7 +215,7 @@ mod tests {
             pending_reviews: vec![PendingReview {
                 node_id: "n1".into(),
                 task_id: "t1".into(),
-                status: "verified".into(),
+                status: "verified".into(), round: 0,
             }],
             ..ManagerContext::default()
         };
@@ -224,7 +228,7 @@ mod tests {
             pending_reviews: vec![PendingReview {
                 node_id: "n2".into(),
                 task_id: "t2".into(),
-                status: "failed".into(),
+                status: "failed".into(), round: 0,
             }],
             ..ctx.clone()
         };
