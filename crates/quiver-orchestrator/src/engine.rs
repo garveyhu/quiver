@@ -162,6 +162,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn tick_plan_passes_subtasks_through_without_taking_a_slot() {
+        // §5 协作:拆活只把子任务入队,不占在途名额、不分配 node/fence —— 直通子任务列表。
+        let mut o = Orchestrator::new(1);
+        let brain = FakeBrain(Decision::Plan {
+            subtasks: vec!["做登录".into(), "做注册".into()],
+            reason: Some("遵循公司约定".into()),
+        });
+        let step = o.tick(&brain, &ctx()).await.unwrap();
+        match step.effect {
+            Effect::Plan { subtasks } => assert_eq!(subtasks, vec!["做登录", "做注册"]),
+            other => panic!("expected Plan, got {other:?}"),
+        }
+        assert_eq!(o.inflight_len(), 0, "拆活不占在途名额");
+    }
+
+    #[tokio::test]
+    async fn tick_plan_empty_is_nothing() {
+        let mut o = Orchestrator::new(1);
+        let brain = FakeBrain(Decision::Plan { subtasks: vec![], reason: None });
+        assert_eq!(o.tick(&brain, &ctx()).await.unwrap().effect, Effect::Nothing);
+    }
+
+    #[tokio::test]
     async fn tick_spawn_rejected_when_full() {
         let mut o = Orchestrator::new(1);
         let brain = FakeBrain(Decision::Spawn { prompt: "x".into(), reason: None });
