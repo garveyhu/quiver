@@ -428,3 +428,7 @@ body {
 .tj-fail .tj-dot { background: var(--bad); border-color: var(--bad); }
 .tj-fail .tj-label { color: var(--bad); font-weight: 600; }
 @keyframes tjpulse { 0%,100%{ box-shadow: 0 0 0 0 rgba(120,170,230,.5); } 50%{ box-shadow: 0 0 0 4px rgba(120,170,230,0); } }
+
+/* 建筑可点击:房间标签默认不挡场景(pointer-events:none 在 .room-labels),可点的单独开 auto + hover 高亮。 */
+.roomlabel.clickable { pointer-events: auto; cursor: pointer; transition: color var(--t-fast), background var(--t-fast), border-color var(--t-fast); border: 1px solid transparent; }
+.roomlabel.clickable:hover { color: var(--tx-1); background: var(--tint-hi); border-color: var(--bd-strong); }

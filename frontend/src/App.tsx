@@ -245,7 +245,11 @@ export function App() {
   return (
     <>
       <div id="stage" className={`stage${frozen ? ' frozen' : ''}`}>
-        <Office completionFx={completionFx} onOpenTrace={() => setOverlay('trace')} />
+        <Office
+          completionFx={completionFx}
+          onOpenTrace={() => setOverlay('trace')}
+          onOpenPanel={p => setOverlay(p as Overlay)}
+        />
       </div>
       <div className="topbar">
         <Hud data={hud} budgetCap={budgetCap} />

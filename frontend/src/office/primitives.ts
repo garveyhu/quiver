@@ -42,6 +42,8 @@ const polygon = (pts: Point[]): string =>
 /** 房间标签:文本 + 它在 world 局部的坐标。由 Office 在**屏幕空间浮层**渲染(不进 world,
  * 不被相机 transform:scale 缩放)→ DPR=1 显示器上也不会因纹理上采样发糊。 */
 export interface RoomLabel {
+  /** 房间标识(lounge/work/ops/…):点击建筑时映射到要打开的面板。 */
+  key: string;
   text: string;
   wx: number;
   wy: number;
@@ -90,9 +92,9 @@ export class SceneBuilder {
 
   /** 房间标签(漂在房间中心上方)。**只收集坐标,不画进 world** —— Office 在屏幕空间浮层渲染,
    * 字号固定、永不随相机缩放 → DPR=1 显示器也清晰(不再是 world 纹理放大的糊字)。 */
-  label(c: number, r: number, text: string): void {
+  label(c: number, r: number, text: string, key = ''): void {
     const p = this.pt(c, r);
-    this.roomLabels.push({ text, wx: p.x, wy: p.y - 6 });
+    this.roomLabels.push({ key, text, wx: p.x, wy: p.y - 6 });
   }
 
   /** 可扩展空位的斜线占位标记。 */

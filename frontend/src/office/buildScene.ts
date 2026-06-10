@@ -68,10 +68,10 @@ export function buildScene(): Scene {
     b.wallEdge(room.c0, room.r0, room.c0, room.r1 + 1, WALLH, room.wall, z, 'brightness(.6)');
   }
 
-  // 房间标签
+  // 房间标签(带 key,点击建筑映射到对应面板)
   for (const key of Object.keys(ROOMS) as RoomKey[]) {
     const room = ROOMS[key];
-    b.label((room.c0 + room.c1) / 2, (room.r0 + room.r1) / 2, room.label);
+    b.label((room.c0 + room.c1) / 2, (room.r0 + room.r1) / 2, room.label, key);
   }
 
   furnishLounge(b);
