@@ -175,6 +175,42 @@ impl Store {
         )?;
         Ok(role)
     }
+
+    /// 雇一个新角色(§14 角色生命周期):全字段插入,id 必须唯一(调用方用时间戳生成)。
+    pub fn create_role(&self, role: &AgentRole) -> anyhow::Result<()> {
+        let conn = self.conn.lock().expect("store lock");
+        conn.execute(
+            "INSERT INTO agent_role
+                (id, name, kind, brain, model, system_prompt, budget_usd, max_turns,
+                 specialty, version, updated_at)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
+            params![
+                role.id,
+                role.name,
+                role.kind,
+                role.brain,
+                role.model,
+                role.system_prompt,
+                role.budget_usd,
+                role.max_turns,
+                role.specialty,
+                role.version,
+                role.updated_at,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// 裁掉一个**员工**角色(§14):只允许删 `kind='worker'` —— 内置经理/图书管理员是单例
+    /// 岗位,删不得。返回是否真删了(不是 worker / 不存在 → false)。
+    pub fn delete_role(&self, id: &str) -> anyhow::Result<bool> {
+        let conn = self.conn.lock().expect("store lock");
+        let n = conn.execute(
+            "DELETE FROM agent_role WHERE id = ?1 AND kind = 'worker'",
+            params![id],
+        )?;
+        Ok(n == 1)
+    }
 }
 
 #[cfg(test)]
@@ -227,5 +263,36 @@ mod tests {
     fn update_unknown_role_errors() {
         let store = Store::open_in_memory().unwrap();
         assert!(store.update_role("ghost", &RolePatch::default(), 1).is_err());
+    }
+
+    #[test]
+    fn hire_and_fire_worker_but_not_singletons() {
+        let store = Store::open_in_memory().unwrap();
+        let before = store.list_roles().unwrap().iter().filter(|r| r.kind == "worker").count();
+        // 雇一个新员工。
+        let new = AgentRole {
+            id: "worker-99".into(),
+            name: "新员工".into(),
+            kind: "worker".into(),
+            brain: "rule".into(),
+            model: "sonnet".into(),
+            system_prompt: String::new(),
+            budget_usd: None,
+            max_turns: None,
+            specialty: "通用".into(),
+            version: 1,
+            updated_at: 0,
+        };
+        store.create_role(&new).unwrap();
+        assert_eq!(
+            store.list_roles().unwrap().iter().filter(|r| r.kind == "worker").count(),
+            before + 1
+        );
+        // 裁掉它。
+        assert!(store.delete_role("worker-99").unwrap(), "员工可裁");
+        assert!(store.get_role("worker-99").unwrap().is_none());
+        // 经理/图书管理员是单例岗位,裁不掉(delete 只认 kind='worker')。
+        assert!(!store.delete_role("manager").unwrap(), "经理裁不掉");
+        assert!(store.get_role("manager").unwrap().is_some());
     }
 }

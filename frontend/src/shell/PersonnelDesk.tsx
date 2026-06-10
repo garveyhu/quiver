@@ -4,6 +4,10 @@ interface PersonnelDeskProps {
   open: boolean;
   roles: AgentRole[];
   onPatch: (id: string, patch: RolePatch) => void;
+  /** §14 雇一个新员工。 */
+  onHire: () => void;
+  /** §14 裁掉一个员工(仅员工)。 */
+  onFire: (id: string) => void;
   onClose: () => void;
 }
 
@@ -32,7 +36,8 @@ function parseNum(raw: string): number | null | undefined {
  * claude 真想·走 headless 额度,**烧钱大脑只能在这里显式打开**),员工卡的模型/预算/
  * 轮数真接到 run 路径。每次改动 version+1,卡片上可见。
  */
-export function PersonnelDesk({ open, roles, onPatch, onClose }: PersonnelDeskProps) {
+export function PersonnelDesk({ open, roles, onPatch, onHire, onFire, onClose }: PersonnelDeskProps) {
+  const workerCount = roles.filter(r => r.kind === 'worker').length;
   return (
     <div className={`panel${open ? ' on' : ''}`}>
       <h2>人事部 · 角色配置</h2>
@@ -46,6 +51,12 @@ export function PersonnelDesk({ open, roles, onPatch, onClose }: PersonnelDeskPr
               <div className="role-head">
                 <b>{r.name}</b>
                 <span className="st-meta"> {KIND_CN[r.kind] ?? r.kind} · v{r.version}</span>
+                {/* 只能裁员工,且至少留一个(不能裁到没人干活)。 */}
+                {r.kind === 'worker' && workerCount > 1 && (
+                  <button className="pbtn" type="button" style={{ float: 'right' }} onClick={() => onFire(r.id)}>
+                    裁员 ✕
+                  </button>
+                )}
               </div>
               {BRAIN_CN[r.kind] && (
                 <div className="kv">
@@ -138,6 +149,9 @@ export function PersonnelDesk({ open, roles, onPatch, onClose }: PersonnelDeskPr
         )}
       </div>
       <div className="foot">
+        <button className="pbtn" type="button" onClick={onHire}>
+          + 雇个员工
+        </button>
         <button className="pbtn go" type="button" onClick={onClose}>
           进办公室
         </button>

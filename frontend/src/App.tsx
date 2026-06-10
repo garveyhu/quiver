@@ -217,6 +217,8 @@ export function App() {
         open={overlay === 'personnel'}
         roles={personnel.roles}
         onPatch={(id, patch) => void personnel.patchRole(id, patch).catch(() => {})}
+        onHire={() => void personnel.hire().catch(e => setCaption(`雇人失败:${e instanceof Error ? e.message : String(e)}`))}
+        onFire={id => void personnel.fire(id).catch(e => setCaption(`裁员失败:${e instanceof Error ? e.message : String(e)}`))}
         onClose={() => setOverlay('none')}
       />
       <Atmosphere spentUsd={hud.spentUsd} budgetCapUsd={budgetCap} />

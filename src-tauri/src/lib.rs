@@ -186,6 +186,38 @@ fn list_roles(state: State<'_, AppState>) -> Result<Vec<quiver_store::AgentRole>
     store.list_roles().map_err(|e| format!("{e:#}"))
 }
 
+/// 人事部:雇一个新员工(§14 角色生命周期)。生成唯一 id,默认免费规则配置,返回新角色行。
+#[tauri::command]
+fn hire_worker(state: State<'_, AppState>) -> Result<quiver_store::AgentRole, String> {
+    let store = state.store()?;
+    let now = now_ms();
+    let role = quiver_store::AgentRole {
+        id: format!("worker-{now}"),
+        name: "新员工".to_string(),
+        kind: "worker".to_string(),
+        brain: "rule".to_string(),
+        model: "sonnet".to_string(),
+        system_prompt: String::new(),
+        budget_usd: None,
+        max_turns: None,
+        specialty: "通用".to_string(),
+        version: 1,
+        updated_at: now,
+    };
+    store.create_role(&role).map_err(|e| format!("{e:#}"))?;
+    Ok(role)
+}
+
+/// 人事部:裁掉一个员工(§14)。只能裁 kind=worker(经理/图书管理员是单例,删不得)。
+#[tauri::command]
+fn fire_worker(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    let store = state.store()?;
+    if !store.delete_role(&id).map_err(|e| format!("{e:#}"))? {
+        return Err("只能裁员工(经理/图书管理员是单例岗位,删不得)".to_string());
+    }
+    Ok(())
+}
+
 /// 人事部:增量改一个角色(version+1),返回更新后的完整配置。改「经理」的 `brain` 字段
 /// 即切换经理大脑(rule 免费 / claude 真想)——下次经理循环启动时生效。
 #[tauri::command]
@@ -887,6 +919,8 @@ pub fn run() {
         update_settings,
         list_roles,
         update_role,
+        hire_worker,
+        fire_worker,
         get_decisions,
         list_tasks,
         get_stats,
@@ -916,6 +950,8 @@ pub fn run() {
         update_settings,
         list_roles,
         update_role,
+        hire_worker,
+        fire_worker,
         get_decisions,
         list_tasks,
         get_stats,
