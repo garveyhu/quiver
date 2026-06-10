@@ -106,3 +106,35 @@ verify 进沙箱(写隔离✓) → worker/经理/图书管理员进沙箱(禁读
 - 〔轮2·注意〕app 集成测试(run_task 套件)因 fake-claude 250ms think 地板变慢(~17s)——它走 settings 默认 fake_delay_ms=120 而非 env。能忍;若 CI 嫌慢,在测试 settings 里把 fake_delay_ms 设 0 即可(think 对 delay=0 整体跳过)。
 - 〔轮5-10 2026-06-10〕**C1+A2+C2 连续落地**(轮6-9 被 cron 切片,跨轮接力完成)。C1:决策留痕 episode 实测落库+时间线穿插显示;A2:经理拆活(next_task 进 ctx、ClaudeBrain prompt 嵌任务原文+改写指示+待复核清单、执行层用经理改写的 prompt 派工,QUEUE_NEXT_PLACEHOLDER 区分占位),94 测试过,RuleBrain 回归决策弧不变;C2:简报可见化(经理在想什么 ▾),实测 10 条记忆全显。**四支柱现状:A 自治(派活+复核裁决+风暴熔断)✓ B 配置(人事部 UI+真接线+显式烧钱开关)✓ C 记忆(brief 注入+决策留痕+可见化)✓ D 体感(决策流血肉+工作弧+交互三修)✓——骨架全通,后续是深化(D1 工位停留、真合并列车、librarian 换 claude、崩溃恢复硬化)。真 app 实测:⌘K→人事部渲染经理/员工两卡;改员工预算 1.5→落库 `worker|1.5|v2`(version+1✓)→显式清空→`worker||v3`(双层 Option 清除✓)。桥接器经验:**React onBlur 要 dispatch `focusout`**(不是 `blur`,React 17+ 委托 focusout)。测试 64 过(app 30/store 34)+tsc。已还原用户配置。
 - 〔轮3 2026-06-10〕**B1 人事部地基落地**。真 app 实测:agent_role seed 两行(`manager|经理|rule|sonnet|v1`/`worker|员工`)、派活无真 claude 进程(brain=rule 守住)、决策弧照常(派活→交付)。测试 93 通过 0 失败(store 34/app 30/orch 29)+tsc 干净+release check 过。**B2 注意**:UI 改经理 brain='claude' 后,经理循环是 per-project 缓存的(ProjectManager.brain 首次定)——改 brain 对已存在的 project 循环不生效,要么重启 app、要么 B2 顺手把 ManagerLoop 加"配置变了重建 brain"(update_role 后调,类似 resume_all 但换脑)。别忘这个,否则用户改了开关以为生效了。
+
+## 轮 25-37 进度补记(共享记忆追平,2026-06-10)
+
+> 25-36 轮口头汇报了但没记进文件,这里集中补。全程 simulate 免费验证,配置每轮还原。
+
+- **轮23 真合并列车接通(§5.7)** — 经理交付 real 任务(有分支)→ merge_and_reverify 合进 main(冲突→needs_rebase、重验红→reset main 护栏);simulate 无分支跳过不破坏。ProjectManager 加 MergeLock。
+- **轮24-25 晨报验收台(§12)** — 晨报按结局三分类(合进 main/卡住等你/升级等你拍板,真数据)+ 一站式打回重做按钮(onRequeue 共享回调);escalate 状态条喊人。
+- **轮26 并发实时生效 + 批量派活** — InFlight::set_max,manager_loop 每拍同步 settings.max_workers(轮3 缓存坑彻底修);「派一批活」命令。
+- **轮27 两个真 bug 修复** — ①current_project 重启从 last_project 自愈(否则重启瘫痪);②enqueueBatch 不再静默吞异常假报成功。教训:前端 catch 绝不空吞。
+- **轮28 并行协作实测** — max=3 派一批 → Monitor 抓到同时 running=3 + 决策流连续派 3 件不同活。
+- **轮29 预算配额感知(§9)** — RuleBrain 预算不足支撑满并发时收敛(BUDGET_PER_SLOT_USD=0.5),极紧串行但空闲不饿死。
+- **轮28(git) 8 批分批提交** — 28 轮工作按依赖分 8 个 commit(store→orchestrator→memory→core→fake-claude→app→frontend→docs)。**之后每轮都即时提交**。
+- **轮30 每员工独立配置(§14)** — seed 三个独立员工(worker/worker-2/worker-3);run.rs 按 task_id 在员工间稳定分配,并行任务各用各自配置。
+- **轮31 员工专长 + 智能派活** — agent_role 加 specialty;run.rs 先按专长匹配任务关键词派给对口员工。**并修迁移顺序 bug**:execute_batch 里 INSERT 引用新列必须先 add_column 再 seed,否则既有 DB 启动 panic。
+- **轮32 CEO 雇人/裁员(§14)** — create_role/delete_role(只删 worker,经理/图书管理员单例保护);人事部「+雇个员工」+ 卡上「裁员✕」(至少留一人)。
+- **轮33 claude 经理看团队专长指派** — ManagerContext 加 team(员工专长清单);ClaudeBrain prompt 嵌团队 + 指示经理改写任务突出专长 → run.rs 派给对的人。真指派端到端需 claude 经理。
+- **轮34 CEO 注入权威事实(§6.2)** — add_authoritative_fact IPC,工作台「注入知识」框;权威档进简报、影响 claude 经理决策。
+- **轮35 机械矛盾消解(§6.4)** — supersede_lower_same_entity:CEO 录入带主题的权威事实 → 作废同主题更低可信度的旧事实(按 trust_rank 五档,无 AI、可单测)。实测旧「RocksDB」被新「SQLite」作废。
+- **轮36 控制条直达入口** — 经理/人事部从 ⌘K 提为常驻按钮(回应"配置看不到")。
+- **轮37 整体回归** — 全套 **240 测试通过 0 失败**;系统整体健康。
+
+### 对照地图更新(✗→✓ 的)
+- §5.7 合并列车:✗→**✓ 接通**(真合并端到端需 real 验,护栏在)
+- §8 安全:✗→**◐ 三道防线就位**(seatbelt 罩进程+禁读密钥+git 检出不执行;剩写隔离收紧/审计变异式/断网转发器)
+- §9 成本:◐→**✓ 配额感知+烧钱显式开关+熔断**
+- §10 复盘:◐→**◑ decision_log 落库+跨重启回放+晨报三分类**(剩因果树视图)
+- §12 验收台:◐→**◑ 晨报三分类+一站式打回+escalate 喊人**(剩接受/合并按钮)
+- §14 人事:✓→**✓✓ 每员工独立配置+专长+雇人裁员+智能派活**(剩模板库导入导出)
+- §6 记忆:◐→**◑ 决策留痕+CEO 注入权威+机械矛盾消解+提炼器(claude)**(剩 ClaudeJudge 语义消解、向量检索接线)
+
+### 仍需 real(烧钱,待用户在场)
+claude 经理真思考/真拆活/按专长真指派、真合并列车端到端、worker 写隔离收紧、librarian 真提炼。机械层链路都建好了,开 claude 即生效。
