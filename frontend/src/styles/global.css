@@ -76,13 +76,17 @@ body {
 .buildmark { position: absolute; width: var(--tw); height: var(--th); margin-left: calc(var(--tw)/-2); margin-top: calc(var(--th)/-2);
   clip-path: polygon(50% 0,100% 50%,50% 100%,0 50%); background: repeating-linear-gradient(45deg, transparent 0 5px, rgba(255,210,122,.10) 5px 7px); display: grid; place-items: center; }
 .buildmark b { color: #7c89ad; font-size: 13px; font-weight: 400; }
-.roomlabel { position: absolute; transform: translate(-50%,-50%); font-size: 10.5px; letter-spacing: 1.2px; color: var(--tx-2); background: rgba(10,14,26,.5);
-  padding: 3px 9px; border-radius: var(--r-1); white-space: nowrap; pointer-events: none; backdrop-filter: blur(2px); border: 1px solid var(--bd-soft); }
+.roomlabel { position: absolute; transform: translate(-50%,-50%); font-size: 10.5px; letter-spacing: 1.2px; color: var(--tx-2); background: rgba(10,14,26,.72);
+  padding: 3px 9px; border-radius: var(--r-1); white-space: nowrap; pointer-events: none; border: 1px solid var(--bd-soft); }
 .poly { position: absolute; inset: 0; pointer-events: none; transition: background .3s; }
 .rect { position: absolute; pointer-events: none; transition: background .3s; }
-.glow { position: absolute; border-radius: 50%; filter: blur(9px); mix-blend-mode: screen; pointer-events: none; }
+/* 灯光辉光:用 radial-gradient 模拟柔光,不用 filter:blur + mix-blend(两者在 macOS WebView
+   极耗 GPU 合成,办公室里几十个直接拖垮整机)。元素的内联 background 色仍生效为中心色。 */
+.glow { position: absolute; border-radius: 50%; opacity: .5; pointer-events: none;
+  -webkit-mask-image: radial-gradient(circle, #000 28%, transparent 72%); mask-image: radial-gradient(circle, #000 28%, transparent 72%); }
 /* 交付世界内特效:质检台一闪 + 发货口飞箱 */
-.worldfx-glow { position: absolute; width: 64px; height: 36px; margin-left: -32px; margin-top: -18px; border-radius: 50%; filter: blur(7px); mix-blend-mode: screen; pointer-events: none; animation: worldfx-pulse 1.1s ease-out; }
+.worldfx-glow { position: absolute; width: 64px; height: 36px; margin-left: -32px; margin-top: -18px; border-radius: 50%; opacity: .8; pointer-events: none; animation: worldfx-pulse 1.1s ease-out;
+  -webkit-mask-image: radial-gradient(circle, #000 30%, transparent 72%); mask-image: radial-gradient(circle, #000 30%, transparent 72%); }
 @keyframes worldfx-pulse { 0%{ opacity: 0; transform: scale(.6); } 25%{ opacity: .95; } 100%{ opacity: 0; transform: scale(1.5); } }
 .crate { position: absolute; width: 16px; height: 13px; margin-left: -8px; background: linear-gradient(180deg,#9a7350,#5a4636); border: 1px solid #4a3628; image-rendering: pixelated; pointer-events: none; }
 .worldfx-ship { animation: shipout 1s ease-in forwards; }
@@ -92,14 +96,14 @@ body {
 .pled { position: absolute; width: 2px; height: 2px; margin-left: -1px; margin-top: -1px; border-radius: 1px; pointer-events: none; }
 .pled.b { animation: blink2 1.4s steps(1) infinite; }
 .pspeck { position: absolute; width: 2px; height: 2px; border-radius: 1px; pointer-events: none; }
-.pcshadow { position: absolute; border-radius: 50%; background: rgba(0,0,0,.34); filter: blur(1.5px); pointer-events: none; }
+.pcshadow { position: absolute; border-radius: 50%; background: rgba(0,0,0,.3); pointer-events: none; }
 .pscan { position: absolute; pointer-events: none; opacity: .5; background: repeating-linear-gradient(0deg, rgba(255,255,255,.10) 0 1px, transparent 1px 3px); }
 .pclock-h { position: absolute; pointer-events: none; transform-origin: bottom center; }
 @keyframes blink2 { 0%,100%{ opacity: 1; } 50%{ opacity: .2; } }
 @keyframes spin { from{ transform: rotate(0deg); } to{ transform: rotate(360deg); } }
 
 /* 咖啡热气 */
-.steam { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,.5); filter: blur(2px); pointer-events: none; }
+.steam { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,.32); pointer-events: none; }
 @keyframes steam { 0%{ transform: translate(0,0) scale(1); opacity: .5; } 100%{ transform: translate(-3px,-22px) scale(1.8); opacity: 0; } }
 
 /* 猫 */
@@ -112,7 +116,7 @@ body {
 
 /* ===== 工人精灵 ===== */
 .worker { position: absolute; width: 24px; height: 40px; margin-left: -12px; margin-top: -34px; transition: left var(--walk,.6s) linear, top var(--walk,.6s) linear; cursor: pointer; image-rendering: pixelated; }
-.worker .shadow { position: absolute; left: 50%; bottom: -2px; width: 18px; height: 6px; margin-left: -9px; background: rgba(0,0,0,.4); border-radius: 50%; filter: blur(1.5px); transition: width .2s, opacity .2s; }
+.worker .shadow { position: absolute; left: 50%; bottom: -2px; width: 18px; height: 6px; margin-left: -9px; background: rgba(0,0,0,.36); border-radius: 50%; transition: width .2s, opacity .2s; }
 .worker.moving .shadow { width: 22px; opacity: .55; animation: shadowpace .42s steps(2) infinite; }
 .worker .body { position: absolute; left: 0; bottom: 6px; width: 24px; height: 34px; transform-origin: 50% 100%; filter: drop-shadow(0 1px 0 rgba(0,0,0,.55)); }
 .worker .stack { position: absolute; inset: 0; animation: sway 3.4s ease-in-out infinite; transform-origin: 50% 100%; }
@@ -186,9 +190,9 @@ body {
 @keyframes rise { 0%{ opacity: 0; transform: translate(-50%,4px); } 20%{ opacity: 1; } 100%{ opacity: 0; transform: translate(-50%,-22px); } }
 
 /* ===== 窗外体积光束 ===== */
-.godray { position: absolute; pointer-events: none; mix-blend-mode: screen; opacity: .5;
-  background: linear-gradient(180deg, rgba(173,214,255,.5) 0%, rgba(160,200,255,.18) 42%, rgba(160,200,255,0) 92%);
-  clip-path: polygon(34% 0, 66% 0, 92% 100%, 8% 100%); filter: blur(3px); animation: shaft 7.5s ease-in-out infinite; transform-origin: 50% 0; }
+.godray { position: absolute; pointer-events: none; opacity: .32;
+  background: linear-gradient(180deg, rgba(173,214,255,.4) 0%, rgba(160,200,255,.14) 42%, rgba(160,200,255,0) 92%);
+  clip-path: polygon(34% 0, 66% 0, 92% 100%, 8% 100%); animation: shaft 7.5s ease-in-out infinite; transform-origin: 50% 0; }
 .godray.b { opacity: .32; clip-path: polygon(44% 0, 58% 0, 78% 100%, 20% 100%); animation-duration: 9.5s; animation-delay: -3s; }
 @keyframes shaft { 0%,100%{ opacity: .34; transform: skewX(-3deg) scaleX(.96); } 50%{ opacity: .6; transform: skewX(0deg) scaleX(1.04); } }
 
@@ -245,6 +249,9 @@ body {
   box-shadow: var(--sh-3), inset 0 1px 0 var(--hairline-top); z-index: 9600; opacity: 0; pointer-events: none;
   transition: opacity var(--t-mid) var(--ease), transform var(--t-mid) var(--ease); color: var(--tx-1); font-size: 13px; letter-spacing: .1px; }
 .panel.on { opacity: 1; pointer-events: auto; transform: translate(-50%,-50%) scale(1); }
+/* 关闭的面板不可见,但 backdrop-filter 仍每帧采样背景模糊(白耗 GPU)。关时关掉它 +
+   content-visibility 跳过渲染 —— 同时挂着 8 个面板的模糊层是整机掉帧的一大来源。 */
+.panel:not(.on) { backdrop-filter: none; -webkit-backdrop-filter: none; content-visibility: hidden; }
 /* 追溯室信息量大,用更宽的面板。 */
 .panel.wide { width: min(760px,94vw); }
 
