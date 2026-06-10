@@ -336,6 +336,12 @@ fn decide_from_prompt(prompt: &str) -> String {
         }
         return format!(r#"{{"action":"spawn","prompt":"{}"{reason}}}"#, json_escape(&inject(&task)));
     }
+    // §5 主动自治:队列空(无队首) + 有 CEO 自治目标 → **主动** plan 推进它的下一批任务,而非
+    // noop 收工。桩固定两个示例子任务;真 claude 会看项目简报/记忆智能规划。让 simulate 看到
+    // 「绝对自治」(主动驱动)的形态:给个方向,经理自己持续推进。
+    if prompt.contains("【自治目标】") {
+        return r#"{"action":"plan","subtasks":["推进自治目标:完善一处实现细节","推进自治目标:补一处测试覆盖"],"reason":"队列空,主动规划推进 CEO 的自治目标"}"#.to_string();
+    }
     r#"{"action":"noop"}"#.to_string()
 }
 

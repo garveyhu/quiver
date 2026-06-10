@@ -217,6 +217,8 @@ async fn manager_loop(app: AppHandle, store: Arc<Store>, pm: Arc<ProjectManager>
             next_task: peek_next_task(&store, &project_key),
             // §14 团队专长清单:让经理知道有哪些员工、各擅长什么,派活时点明专长 → 派给对的人。
             team: team_specialties(&store),
+            // §5 主动自治:CEO 的高层方向。非空 + 队列空时,经理主动 plan 推进(而非 noop 退出)。
+            autonomous_goal: settings.as_ref().map(|s| s.autonomous_goal.clone()).unwrap_or_default(),
         };
 
         // 2. 经理拍决策:**每拍现场按人事部配置选脑**(rule 免费/claude 真想,§14)——

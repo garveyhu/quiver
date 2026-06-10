@@ -398,6 +398,7 @@ async fn manager_preview(state: State<'_, AppState>) -> Result<ManagerPreviewDto
         pending_reviews: vec![],
         next_task: None,
         team: vec![],
+        autonomous_goal: String::new(),
     };
     let decision = RuleBrain.decide(&ctx).await.map_err(|e| format!("{e:#}"))?;
     Ok(ManagerPreviewDto {

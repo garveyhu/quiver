@@ -65,6 +65,7 @@ export interface SettingsPatch {
   defaultMode?: string;
   model?: string;
   autonomous?: boolean;
+  autonomousGoal?: string;
 }
 
 /**

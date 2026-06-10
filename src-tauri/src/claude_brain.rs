@@ -145,10 +145,23 @@ fn build_prompt(ctx: &ManagerContext, system_prompt: &str) -> String {
         ),
         None => String::new(),
     };
+    // §5 主动自治:有 CEO 的高层目标 + 队列空时,经理不该 noop 退出,而是基于「目标 + 记忆
+    // (已做了什么)」主动 plan 出推进目标的下一批任务 —— 这是「绝对自治」(主动驱动)的核心。
+    let goal = if ctx.autonomous_goal.trim().is_empty() {
+        String::new()
+    } else {
+        format!(
+            "\n\n【自治目标】CEO 要你持续推进:「{}」。**如果队列空了(排队 0)**,别 noop 收工 —— \
+             看项目简报里已经做过什么,主动 plan 出推进这个目标的下一批具体子任务(2-4 个,别重复\
+             已做的、按记忆里的经验来)。目标看着推进得差不多了、或拿不准下一步、或预算紧 → 才\
+             escalate 给 CEO 或 noop。队列非空时照常先处理在手的活。",
+            ctx.autonomous_goal.trim()
+        )
+    };
     format!(
         "{style}你是一个自治 AI 研发公司的经理。看当前局面,决定这一拍做什么。只输出一个 JSON 对象,\
          不要任何解释、不要修改任何文件。\n\
-         局面:在途 {}/{},排队 {} 个任务,预算剩余 ${:.2}。\n项目简报:\n{brief}{team}{reviews}{next}\n\n\
+         局面:在途 {}/{},排队 {} 个任务,预算剩余 ${:.2}。\n项目简报:\n{brief}{team}{reviews}{next}{goal}\n\n\
          输出一个 JSON,action 取其一:\n\
          - {{\"action\":\"spawn\",\"prompt\":\"给新 worker 的任务描述\"}} —— 派新活(仅当在途未满、\
            有预算、**且排队>0**;排队为 0 时没有新活可派,别 spawn,用 noop 或先处理待复核)\n\

@@ -98,6 +98,11 @@ pub struct ManagerContext {
     /// 派活时据此在任务描述里点明所需专长 → 系统派给对的人(run.rs 专长匹配)。
     #[serde(default)]
     pub team: Vec<String>,
+    /// 自治目标(§5 主动自治):CEO 的高层方向。非空 + 队列空时,经理应**主动** plan 推进它的
+    /// 下一批任务(参考记忆别重复已做的),而非 noop 退出 —— 这是「绝对自治」(主动驱动)与
+    /// 「绝对听话」(被动等派活)的分界。空 = 被动模式,队列空就停。
+    #[serde(default)]
+    pub autonomous_goal: String,
 }
 
 /// [`RuleBrain`] spawn 决策的占位 prompt:表示"原样认领队列下一个任务"(执行层据此用

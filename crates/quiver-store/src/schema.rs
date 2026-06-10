@@ -113,6 +113,7 @@ pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
     // 自治开关(DESIGN §5):on=经理控制循环驱动调度(基于决策派活),off=旧 scheduler 无脑流水线。
     // 默认 0(关)——经理循环验证稳了用户再翻开,可随时回退。
     add_column_if_absent(conn, "settings", "autonomous", "INTEGER NOT NULL DEFAULT 0")?;
+    add_column_if_absent(conn, "settings", "autonomous_goal", "TEXT NOT NULL DEFAULT ''")?;
 
     // P0 crash-recovery columns on `task` (DESIGN §20 / §23 P0). The supervisor's
     // reconcile keys off these; all NULLABLE so existing rows and the current
