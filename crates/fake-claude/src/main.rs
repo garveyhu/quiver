@@ -67,10 +67,12 @@ fn main() -> ExitCode {
         // 请示在 result **之前** emit(worker 工作中卡住请示)—— result 之后的输出 runner 可能
         // 已不收(result 是终止信号)。真 claude 也是在产出过程里写 NEEDS_INPUT、然后才收尾。
         emit_init(&session, delay);
+        // 文本含换行(NEEDS_INPUT 要单独成行)→ **必须 json_escape**,否则裸 \n 破坏 NDJSON、
+        // runner 整条丢弃(emit_text 不自带转义,调用方负责)。这是 worker 请示信号丢失的真因。
         emit_text(
             &session,
             "ask",
-            "实现到一半遇到一个取舍拿不准。\nNEEDS_INPUT: 排序要稳定排序还是性能优先?",
+            &json_escape("实现到一半遇到一个取舍拿不准。\nNEEDS_INPUT: 排序要稳定排序还是性能优先?"),
             delay,
         );
         emit_result_ok(&session, delay);
