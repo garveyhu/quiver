@@ -372,3 +372,27 @@ simulate 发现不了的真 bug(交付/拆活/空转/.quiver/孤儿worktree + �
 ### 9 轮真跑(75-83)闭合
 真交付/拆活协作/记忆决策/自愈+main永不坏/空转/过夜多目标/真冲突/.quiver污染/崩溃恢复(任务恢复
 +孤儿worktree+孤儿进程)。**正常+异常+工作流+冲突+崩溃全链路真 claude 验证 + 卫生闭合**。
+
+## 轮 84-90:预算硬闸 + 双向协作(用户点名核心)(2026-06-10)
+
+> 用户打断、点明最缺「双向聪明协作」。主线:从单向传送带做成真团队(经理↔worker↔CEO 三向闭环)。
+
+- **预算硬闸(real 真跑修)** — execute 派活前根本没硬闸、只靠 claude 自觉,且 ctx.budget 快照
+  滞后一拍 → cap $0.3 烧到 $0.51。修:硬闸**实时重算**预算,耗尽绝不派、剩余留队列。
+- **记忆官 simulate 一致性** — distill 固定 resolve_agent_bin(Real)→ simulate 下记忆官 claude
+  偷烧 real。修:跟随 default_mode(simulate→fake 输出 []、不造假事实)。「simulate 全免费」无缺口。
+- **专长派活** — 无专长任务按 task_id 散开会占测试/前端员工。修:优先通用员工,留专长员工接专长活。
+- **★ 双向协作 经理→worker** — 用户点名核心。根因:Effect::Continue 是空壳、且要求 node 在途
+  (完工即下线)→ 续跑永远被拒、协作单向死。修:Continue admit 新名额、worker --resume 带经理
+  指导迭代改进;PendingReview 加 round 防无限。实测 spawn→continue(指导)→resume→deliver。
+- **★ 双向协作 worker→经理** — worker 卡住主动请示(prompt 注入约定、写 NEEDS_INPUT→终态
+  needs_input+question)。真因查很久:emit_text 不转义、多行 NEEDS_INPUT 的裸 \n 破坏 NDJSON、
+  runner 整条丢弃。修:json_escape。实测 worker 请示「排序稳定还是性能?」被捕获。
+- **双向协作可见** — 追溯室「⚠ worker 请示中」+ 展开看请示内容(TaskRecord.question 纵切上 wire)。
+- **★ real 验证 + escalate 闭环** — 开 real:真 claude 经理两次都智能 escalate 缺信息任务(上游
+  边界判断,比 worker 请示更聪明)。暴露真 bug:Effect::Escalate 空壳→任务卡 queued+反复升级。
+  修:claim 队首标 escalated 挂起、原因存 question、晨报「等你处理」、追溯室「⚠ 经理升级·等你」。
+
+### 对照地图:§5 协作 ✓✓✓ 三向闭环(经理→worker / worker→经理 / 经理→CEO)+ 全可见
+### 连续 real 真跑(75-90):交付/拆活/记忆/自愈/main永不坏/空转/过夜/冲突/.quiver/崩溃恢复/
+### 预算硬闸/经理智能 escalate —— 正常+异常+工作流+协作+边界 全真 claude 验证,11 个真 bug 修掉。
