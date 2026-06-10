@@ -154,3 +154,102 @@ fn needs_rebase(reason: RebaseReason) -> MergeReport {
         reason: Some(reason),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::git::GitGuard;
+    use crate::verify::VerifyCommand;
+    use std::process::Command;
+    use tempfile::TempDir;
+
+    /// 在临时目录建一个 repo:main 有 base.txt;分支 `branch` 在 `file` 写 `content`。
+    /// 回到 main。返回 TempDir(持有目录生命周期)。
+    fn repo_with_branch(branch: &str, file: &str, content: &str) -> TempDir {
+        let dir = TempDir::new().unwrap();
+        let p = dir.path().to_path_buf();
+        let git = move |args: &[&str]| {
+            let o = Command::new("git").current_dir(&p).args(args).output().unwrap();
+            assert!(o.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&o.stderr));
+        };
+        git(&["-c", "init.defaultBranch=main", "init", "--quiet"]);
+        git(&["config", "user.email", "t@t"]);
+        git(&["config", "user.name", "t"]);
+        std::fs::write(dir.path().join("base.txt"), "base").unwrap();
+        git(&["add", "."]);
+        git(&["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "init"]);
+        git(&["checkout", "--quiet", "-b", branch]);
+        std::fs::write(dir.path().join(file), content).unwrap();
+        git(&["add", "."]);
+        git(&["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "work"]);
+        git(&["checkout", "--quiet", "main"]);
+        dir
+    }
+
+    #[tokio::test]
+    async fn green_merge_advances_main_and_lands_file() {
+        let dir = repo_with_branch("feat", "new.txt", "hello");
+        let guard = GitGuard::new(dir.path());
+        let before = guard.head_commit("main").await.unwrap();
+        let report = merge_and_reverify(
+            &MergeLock::new(), &guard, "feat", "main", "merge feat", &VerifyCommand::shell("exit 0"),
+        )
+        .await
+        .unwrap();
+        assert_eq!(report.decision, MergeDecision::Merged);
+        assert_ne!(guard.head_commit("main").await.unwrap(), before, "main 推进了");
+        assert!(dir.path().join("new.txt").exists(), "合并的文件落到了 main");
+    }
+
+    #[tokio::test]
+    async fn red_reverify_rolls_main_back_byte_for_byte() {
+        // 「main 永不坏」铁律:合并后重验红 → main reset 回合并前,文件不留。
+        let dir = repo_with_branch("feat", "new.txt", "hello");
+        let guard = GitGuard::new(dir.path());
+        let before = guard.head_commit("main").await.unwrap();
+        let report = merge_and_reverify(
+            &MergeLock::new(), &guard, "feat", "main", "merge feat", &VerifyCommand::shell("exit 1"),
+        )
+        .await
+        .unwrap();
+        assert_eq!(report.decision, MergeDecision::NeedsRebase);
+        assert_eq!(report.reason, Some(RebaseReason::ReVerifyRed));
+        assert_eq!(guard.head_commit("main").await.unwrap(), before, "main 还原到合并前");
+        assert!(!dir.path().join("new.txt").exists(), "红验证 → 坏改动没进 main");
+    }
+
+    #[tokio::test]
+    async fn conflict_leaves_main_untouched() {
+        // 分支和 main 改同一文件 → 冲突 → NeedsRebase,main 一字不动。
+        let dir = TempDir::new().unwrap();
+        let p = dir.path().to_path_buf();
+        let git = move |args: &[&str]| {
+            let o = Command::new("git").current_dir(&p).args(args).output().unwrap();
+            assert!(o.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&o.stderr));
+        };
+        git(&["-c", "init.defaultBranch=main", "init", "--quiet"]);
+        git(&["config", "user.email", "t@t"]);
+        git(&["config", "user.name", "t"]);
+        std::fs::write(dir.path().join("f.txt"), "base").unwrap();
+        git(&["add", "."]);
+        git(&["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "init"]);
+        git(&["checkout", "--quiet", "-b", "feat"]);
+        std::fs::write(dir.path().join("f.txt"), "feat-version").unwrap();
+        git(&["add", "."]);
+        git(&["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "feat"]);
+        git(&["checkout", "--quiet", "main"]);
+        std::fs::write(dir.path().join("f.txt"), "main-version").unwrap();
+        git(&["add", "."]);
+        git(&["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "main2"]);
+
+        let guard = GitGuard::new(dir.path());
+        let before = guard.head_commit("main").await.unwrap();
+        let report = merge_and_reverify(
+            &MergeLock::new(), &guard, "feat", "main", "merge feat", &VerifyCommand::shell("exit 0"),
+        )
+        .await
+        .unwrap();
+        assert_eq!(report.decision, MergeDecision::NeedsRebase);
+        assert_eq!(guard.head_commit("main").await.unwrap(), before, "冲突 → main 不动");
+    }
+}
