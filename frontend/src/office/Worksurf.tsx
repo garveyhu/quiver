@@ -1,22 +1,33 @@
 import { useState } from 'react';
 
-import type { StoredEvent } from '@/services/wire';
+import type { AgentRole, StoredEvent } from '@/services/wire';
 import type { PlacedWorker } from '@/office/workers';
 
 interface WorksurfProps {
   worker: PlacedWorker | null;
   /** 该工人当前任务的事件流(working 时有) */
   events: StoredEvent[];
+  /** 全部角色配置 —— 用 workerRole 关联出这个员工的专长,让"专长分工"具体可见。 */
+  roles: AgentRole[];
   onClose: () => void;
   /** 跳到追溯室看这个员工/任务的完整档案(可选)。 */
   onOpenTrace?: () => void;
 }
 
+/** 真实员工身份:有 workerRole 用它(§14 谁在干),否则退回位置编号。 */
 function title(w: PlacedWorker): string {
   if (w.role === 'mgr') return '经理 · 领导区';
   if (w.role === 'aud') return '独立审计 · 质检台';
+  if (w.workerRole) return w.workerRole;
   const n = Number(w.id.replace('emp', '')) + 1;
   return `员工 #${n}`;
+}
+
+/** 这个员工的专长(从 roles 用 workerRole 关联),用于副标题"· 专长"。 */
+function specialtyOf(w: PlacedWorker, roles: AgentRole[]): string | undefined {
+  if (!w.workerRole) return undefined;
+  const sp = roles.find(r => r.name === w.workerRole)?.specialty?.trim();
+  return sp || undefined;
 }
 
 function state(w: PlacedWorker): string {
@@ -112,8 +123,9 @@ function EventRow({ ev }: { ev: StoredEvent }) {
  * 员工工作台(点小人 → 下钻):这位员工此刻在干什么 + claude 实时轨迹(思考/工具/结果,
  * 可读折叠)。在干活的小人是活的 —— 看得到 ta 此刻一步步在做什么,不再只是一句"待命"。
  */
-export function Worksurf({ worker, events, onClose, onOpenTrace }: WorksurfProps) {
+export function Worksurf({ worker, events, roles, onClose, onOpenTrace }: WorksurfProps) {
   const hasTrace = !!worker?.taskId && events.length > 0;
+  const specialty = worker ? specialtyOf(worker, roles) : undefined;
   return (
     <div className={`worksurf${worker ? ' on' : ''}`}>
       {worker && (
@@ -125,6 +137,7 @@ export function Worksurf({ worker, events, onClose, onOpenTrace }: WorksurfProps
               <i />
             </span>
             {title(worker)}
+            {specialty && <span className="ws-spec">· {specialty}</span>}
           </div>
           <div className="wmeta">{state(worker)}</div>
           {hasTrace && (

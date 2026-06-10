@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import type { CompletionFx } from '@/hooks/useCompletionFx';
+import { useRoles } from '@/hooks/useRoles';
 import { useTaskEvents } from '@/hooks/useTaskEvents';
 import { useWorkers } from '@/hooks/useWorkers';
 import { buildScene } from '@/office/buildScene';
@@ -42,6 +43,8 @@ export function Office({ completionFx, onOpenTrace }: OfficeProps) {
   const camera = useCamera(scene.layout.worldW, scene.layout.worldH);
   const [focused, setFocused] = useState<PlacedWorker | null>(null);
   const events = useTaskEvents(focused?.taskId ?? null);
+  // 角色配置:点小人时用 workerRole 关联专长(§14 专长分工可见)。常驻拉一次。
+  const { roles } = useRoles(true);
 
   // 点小人只打开详情(Worksurf),**不强行缩放摄像头** —— 想看近景自己滚轮,别夺镜头。
   const dive = useCallback((w: PlacedWorker) => {
@@ -79,7 +82,7 @@ export function Office({ completionFx, onOpenTrace }: OfficeProps) {
       <div className={`zoomhint${camera.zoomed || focused ? ' on' : ''}`}>滚轮缩放 · Esc / 双击 复位</div>
       {/* 详情弹出时:点框外任意处即收起,交互更顺手(不必非点「收起」按钮)。 */}
       {focused && <div className="ws-scrim" onClick={closeDive} />}
-      <Worksurf worker={focused} events={events} onClose={closeDive} onOpenTrace={onOpenTrace} />
+      <Worksurf worker={focused} events={events} roles={roles} onClose={closeDive} onOpenTrace={onOpenTrace} />
     </>
   );
 }

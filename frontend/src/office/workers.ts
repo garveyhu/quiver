@@ -24,6 +24,8 @@ export interface PlacedWorker {
   label?: string;
   /** 正在干的任务 id(working 时有),worksurf 下钻拉事件流用 */
   taskId?: string;
+  /** 真实员工身份(角色名,§14):这个小人是哪个员工在干 —— 让"专长分工"具体可见。 */
+  workerRole?: string;
 }
 
 /** 连帽衫配色池(移植原型 HOODS)。 */
@@ -99,7 +101,7 @@ export function placeWorkers(
       const p = iso(layout, dc, dr);
       // 气泡优先用 agent-event 的实时工具摘要,缺时退回任务目标。
       const label = bubbles[task.id] ?? shortLabel(task.prompt);
-      workers.push({ id: `emp${i}`, role: 'emp', x: p.x, y: p.y, z: zidx(dc, dr) + 5, hood, working: true, lean: true, label, taskId: task.id });
+      workers.push({ id: `emp${i}`, role: 'emp', x: p.x, y: p.y, z: zidx(dc, dr) + 5, hood, working: true, lean: true, label, taskId: task.id, workerRole: task.workerRole ?? undefined });
     } else if (i < busy + lingerCount) {
       // 完工驻留(D1):还在工位但不敲键,气泡报结果;到点(useWorkers 计时)回休息室。
       const linger = lingering[i - busy];
@@ -114,6 +116,7 @@ export function placeWorkers(
         hood,
         label: linger.ok ? '✓ 验收通过' : '✗ 没过验收',
         taskId: linger.task.id,
+        workerRole: linger.task.workerRole ?? undefined,
       });
     } else {
       const [c, r] = cells[(i * 5 + 2) % cells.length];

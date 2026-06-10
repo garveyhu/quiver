@@ -69,6 +69,7 @@ body {
 .worksurf .dot3 i:nth-child(2) { background: #ffd27a; }
 .worksurf .dot3 i:nth-child(3) { background: #6cc47a; }
 .worksurf .wmeta { padding: 12px 14px; font-size: 12.5px; color: var(--tx-2); line-height: 1.65; }
+.worksurf .ws-spec { color: #d9a86c; font-size: 11px; }
 .worksurf .ws-events { padding: 8px 14px; max-height: 38vh; overflow: auto; border-top: 1px solid var(--bd-soft); font-family: var(--mono); font-size: 12px; }
 .worksurf .ws-ev { padding: 3px 0; line-height: 1.5; color: var(--tx-2); white-space: pre-wrap; }
 .worksurf .ws-ev.ev-tool { color: var(--info); }
