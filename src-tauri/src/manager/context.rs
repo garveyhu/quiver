@@ -36,6 +36,8 @@ pub(super) fn count_queued(store: &Arc<Store>, project_key: &str) -> usize {
 
 /// 团队成员的专长清单(§14):列出所有员工角色 + 专长,供经理派活时按专长指派。
 pub(super) fn team_specialties(store: &Arc<Store>) -> Vec<String> {
+    // 战绩:每个员工干过多少、成了多少 —— 让经理拆活/派活时不只知道谁擅长,还知道谁靠谱(聪明协作)。
+    let perf = crate::run::worker_perf(store);
     store
         .list_roles()
         .map(|roles| {
@@ -44,7 +46,13 @@ pub(super) fn team_specialties(store: &Arc<Store>) -> Vec<String> {
                 .filter(|r| r.kind == "worker")
                 .map(|r| {
                     let sp = if r.specialty.trim().is_empty() { "通用" } else { r.specialty.as_str() };
-                    format!("{} · {sp}", r.name)
+                    let record = match perf.get(&r.name) {
+                        Some(&(total, ok)) if total > 0 => {
+                            format!(" · 战绩 {ok}/{total}({}%)", ok * 100 / total)
+                        }
+                        _ => " · 暂无战绩".to_string(),
+                    };
+                    format!("{} · {sp}{record}", r.name)
                 })
                 .collect()
         })

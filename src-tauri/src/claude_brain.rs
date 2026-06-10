@@ -160,7 +160,11 @@ fn build_prompt(ctx: &ManagerContext, system_prompt: &str) -> String {
     let team = if ctx.team.is_empty() {
         String::new()
     } else {
-        format!("\n团队成员(各自专长):\n{}\n", ctx.team.iter().map(|m| format!("- {m}\n")).collect::<String>())
+        format!(
+            "\n团队成员(专长 + 战绩,战绩=成功/总数):派活、拆活时把活交给**对口且靠谱**的人 —— \
+             难活、关键活优先给战绩好的;新人(暂无战绩)也给机会练手。\n{}\n",
+            ctx.team.iter().map(|m| format!("- {m}\n")).collect::<String>()
+        )
     };
     // 队首任务(A2 拆活):给原文,经理可原样派、也可结合简报改写/细化 spawn.prompt。
     let next = match &ctx.next_task {

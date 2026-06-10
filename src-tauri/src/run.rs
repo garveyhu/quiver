@@ -559,7 +559,7 @@ fn pick_worker_role(store: &Store, task_id: &str, prompt: &str) -> Option<quiver
 }
 
 /// 每个员工的历史战绩 (总数, 成功数),从全部任务按 worker_role 聚合。成功 = verified/merged/done。
-fn worker_perf(store: &Store) -> std::collections::HashMap<String, (u32, u32)> {
+pub(crate) fn worker_perf(store: &Store) -> std::collections::HashMap<String, (u32, u32)> {
     let mut m: std::collections::HashMap<String, (u32, u32)> = std::collections::HashMap::new();
     if let Ok(tasks) = store.list_tasks(None, None) {
         for t in tasks {
