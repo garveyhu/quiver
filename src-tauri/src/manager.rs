@@ -141,6 +141,12 @@ impl ManagerLoop {
     /// 自治模式下重启后组织仍由经理驱动(派活/复核/留痕),不降级回无脑流水线。
     /// best-effort:单个项目出错不挡其他项目恢复。返回 requeue 的任务数。
     pub async fn reconcile(&self, app: AppHandle, store: Arc<Store>, max_workers: usize) -> usize {
+        // §23 崩溃恢复卫生:上个会话被强杀时,running 任务的 worker(claude)子进程成了孤儿、
+        // 还在跑、还烧额度。它们的 PID 持久化在 task 表里 —— 重启后先把活着的孤儿 kill 掉
+        // (验证确是 claude,防 PID 复用误杀),再 requeue 任务重跑。
+        for (_tid, pid) in store.running_task_pids().unwrap_or_default() {
+            kill_orphan_worker(pid);
+        }
         let requeued = store.requeue_running_tasks(crate::now_ms()).unwrap_or(0);
         let projects = store.projects_with_pending_tasks().unwrap_or_default();
         for project in projects {
@@ -502,6 +508,28 @@ fn maybe_complete_parent_goal(store: &Arc<Store>, project: &str, task_id: &str) 
     };
     if let Some(parent) = all.iter().find(|t| t.prompt == goal && t.status == "planned") {
         let _ = store.update_task_status(&parent.id, new_status, crate::now_ms());
+    }
+}
+
+/// kill 一个上个会话遗留的孤儿 worker 进程。**先验证该 PID 当前确是 claude 进程**(`ps`
+/// 命令名含 claude)再杀 —— PID 会被系统复用,崩溃后那个号可能早归了别的无关进程,绝不能盲杀。
+/// best-effort:验证不过 / 杀不掉都静默跳过(顶多孤儿多跑一会到自然结束)。
+fn kill_orphan_worker(pid: i64) {
+    if pid <= 0 {
+        return;
+    }
+    let Ok(out) = std::process::Command::new("ps")
+        .args(["-p", &pid.to_string(), "-o", "command="])
+        .output()
+    else {
+        return;
+    };
+    let cmd = String::from_utf8_lossy(&out.stdout);
+    // 进程已不在(空输出)→ 无需杀;在、且确是 claude → kill。
+    if cmd.to_lowercase().contains("claude") {
+        let _ = std::process::Command::new("kill")
+            .args(["-9", &pid.to_string()])
+            .output();
     }
 }
 

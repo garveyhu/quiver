@@ -345,6 +345,11 @@ pub async fn run_streaming(
                     m.insert(tid.clone(), pid);
                 }
             }
+            // 也持久化进 task 表:内存 running_pids 在 app 崩溃时丢失,DB 里的 PID 让重启后的
+            // reconcile 能 kill 上个会话遗留的孤儿 worker 进程(§23 崩溃恢复卫生)。
+            if let Some(store) = store {
+                let _ = store.set_task_pid(&tid, pid as i64, crate::now_ms());
+            }
         },
     )
     .await;

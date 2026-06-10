@@ -343,6 +343,29 @@ impl Store {
         Ok(())
     }
 
+    /// 记录 running 任务的 worker 子进程 PID(持久化,§23 崩溃恢复:重启后据此 kill 孤儿)。
+    pub fn set_task_pid(&self, id: &str, pid: i64, updated_at: i64) -> anyhow::Result<()> {
+        let conn = self.conn.lock().expect("store lock");
+        conn.execute(
+            "UPDATE task SET worker_pid = ?2, updated_at = ?3 WHERE id = ?1",
+            params![id, pid, updated_at],
+        )?;
+        Ok(())
+    }
+
+    /// 列出所有 `running` 任务记着的 worker PID(崩溃重启后,这些就是要清的孤儿进程候选)。
+    pub fn running_task_pids(&self) -> anyhow::Result<Vec<(String, i64)>> {
+        let conn = self.conn.lock().expect("store lock");
+        let mut stmt = conn.prepare(
+            "SELECT id, worker_pid FROM task WHERE status = 'running' AND worker_pid IS NOT NULL",
+        )?;
+        let rows = stmt
+            .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?
+            .filter_map(Result::ok)
+            .collect();
+        Ok(rows)
+    }
+
     /// 记录子任务属于哪个父目标(§5 协作:经理拆活时,子任务标上原目标文本,追溯室画协作树)。
     pub fn set_task_parent_goal(&self, id: &str, goal: &str, updated_at: i64) -> anyhow::Result<()> {
         let conn = self.conn.lock().expect("store lock");
@@ -397,7 +420,8 @@ impl Store {
     pub fn requeue_running_tasks(&self, updated_at: i64) -> anyhow::Result<usize> {
         let conn = self.conn.lock().expect("store lock");
         let n = conn.execute(
-            "UPDATE task SET status = 'queued', updated_at = ?1 WHERE status = 'running'",
+            // 清 worker_pid:重跑会起新进程,旧 PID 已由 reconcile kill 过(或进程已死),别留着误杀。
+            "UPDATE task SET status = 'queued', worker_pid = NULL, updated_at = ?1 WHERE status = 'running'",
             params![updated_at],
         )?;
         Ok(n)
@@ -558,6 +582,23 @@ mod tests {
         assert_eq!(tasks[2].id, "t3");
         assert!(tasks[0].position < tasks[1].position);
         assert!(tasks[1].position < tasks[2].position);
+    }
+
+    #[test]
+    fn crash_recovery_tracks_and_clears_worker_pid() {
+        let store = Store::open_in_memory().unwrap();
+        store.enqueue_task(&new_task("t1", "/r", "p", "queued", 100)).unwrap();
+        // worker 跑起来:标 running + 持久化它的子进程 PID。
+        store.update_task_status("t1", "running", 200).unwrap();
+        store.set_task_pid("t1", 4242, 200).unwrap();
+        // reconcile 能从 DB 查到 running 任务的 PID(崩溃后据此 kill 孤儿 worker)。
+        assert_eq!(store.running_task_pids().unwrap(), vec![("t1".to_string(), 4242)]);
+        // requeue 把 running → queued 并清 PID(重跑起新进程,旧 PID 不留着免得误杀)。
+        store.requeue_running_tasks(300).unwrap();
+        assert!(
+            store.running_task_pids().unwrap().is_empty(),
+            "requeue 后不应再有 running PID"
+        );
     }
 
     #[test]
