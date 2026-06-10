@@ -10,6 +10,12 @@ body {
   background: #0a0e1a; color: var(--tx-1); font-family: var(--ui);
   -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; letter-spacing: .1px;
 }
+/* 非 retina(DPR=1)屏:antialiased 关掉了 subpixel 渲染 → 字发糊。改回 subpixel-antialiased
+   利用每像素 RGB 三个子像素(水平分辨率×3),字明显更锐利。retina 屏(DPR≥2)保持 antialiased
+   (子像素已无意义、antialiased 更细更好看)。这是非 retina 屏"字糊"最常见的真凶。 */
+@media (max-resolution: 1.5dppx) {
+  body { -webkit-font-smoothing: subpixel-antialiased; }
+}
 .num { font-family: var(--mono); font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1, "ss01" 1; letter-spacing: 0; }
 
 :root {
