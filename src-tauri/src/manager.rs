@@ -33,6 +33,7 @@ use quiver_core::verify::VerifyCommand;
 use quiver_orchestrator::{
     Decision, Effect, ManagerContext, Orchestrator, PendingReview, Step,
 };
+use quiver_memory::NewFact;
 use quiver_store::{Settings, Store, TaskRecord};
 
 use crate::run::{run_one_task, RunMode};
@@ -396,8 +397,14 @@ async fn execute_effect(
                 } else if let Some(t) = task.as_ref() {
                     // §5 失败自愈(绝对自治):经理拦下的若是**验证失败**的活,公司自己再试一轮
                     // (带返工会话续跑),到上限才停手等 CEO —— 不用 CEO 每次手动打回。
-                    if r.status.contains("fail") && t.attempt < MAX_AUTO_RETRY {
-                        auto_retry(store, pm, project_key, t).await;
+                    if r.status.contains("fail") {
+                        if t.attempt < MAX_AUTO_RETRY {
+                            auto_retry(store, pm, project_key, t).await;
+                        } else {
+                            // §6 记忆驱动:自愈都救不动的失败 → 沉淀成一条高可信「教训」事实,经理
+                            // 下一拍 brief 按 importance 优先召回,下次接类似活别同样硬上(越用越不重犯)。
+                            record_failure_lesson(app, project_key, t, &r.status);
+                        }
                     }
                 }
                 let _ = app.emit(TASK_EVENT_CHANNEL, project_key);
@@ -692,6 +699,47 @@ async fn auto_retry(store: &Arc<Store>, pm: &Arc<ProjectManager>, project: &str,
     }
     // 唤醒经理循环来 spawn 这个新排队任务(循环 idle 等待时靠这个戳醒)。
     pm.wake.notify_one();
+}
+
+/// §6 记忆驱动策略演化:一个任务连自愈都救不动(attempt 到上限仍失败)→ 把它沉淀成一条
+/// **教训**事实写进记忆。经理下一拍组装 brief 时按 importance 优先看到它,决策能避开/调整
+/// 同类活 —— 「从失败学、不重犯」,真正的"记忆 → 决策"闭环。机械绑真实失败(不是 AI 编的)→
+/// 高可信「已验证·机械」档。best-effort:任何一步失败只是不记,绝不影响编排。
+fn record_failure_lesson(app: &AppHandle, project: &str, task: &TaskRecord, status: &str) {
+    let Some(state) = app.try_state::<crate::AppState>() else {
+        return;
+    };
+    let Some(mem) = state.memory.get() else {
+        return;
+    };
+    let status_cn = match status {
+        s if s.contains("rebase") => "合并冲突/重验未过",
+        s if s.contains("fail") => "验证失败",
+        other => other,
+    };
+    // retry 任务的 prompt 带「(自动重试…)原任务:X」前缀,教训里只留原始任务文本免噪音。
+    let raw = task.prompt.rsplit("原任务:").next().unwrap_or(&task.prompt);
+    let gist: String = raw.chars().take(60).collect();
+    let text = format!(
+        "教训:任务「{gist}」试了 {} 次仍以「{status_cn}」收场、自愈救不动。下次接类似的活,\
+         先想清楚上次为什么没过、换个思路,别同样硬上。",
+        task.attempt
+    );
+    let _ = mem.insert_fact(&NewFact {
+        project: project.to_string(),
+        scope: None,
+        kind: "教训".to_string(),
+        text,
+        entities: None,
+        entity: None,
+        importance: Some(8), // 教训重要,brief 按 importance 排序时优先冒头给经理看
+        valid_at: None,
+        recorded_at: crate::now_ms(),
+        provenance: Some("失败自愈耗尽·机械".to_string()),
+        trust: "已验证·机械".to_string(), // 机械绑真实失败,非 AI 杜撰 → 高可信档
+        source_commit: None,
+        source_episode_id: None,
+    });
 }
 
 /// 全局串行(merge_lock);merge_and_reverify 自带护栏(冲突→needs_rebase、重验红→reset
