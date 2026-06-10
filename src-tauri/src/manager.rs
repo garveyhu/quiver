@@ -470,13 +470,26 @@ fn maybe_complete_parent_goal(store: &Arc<Store>, project: &str, task_id: &str) 
         .iter()
         .filter(|t| t.parent_goal.as_deref() == Some(goal.as_str()))
         .collect();
-    let done = |s: &str| matches!(s, "verified" | "merged" | "done");
-    if siblings.is_empty() || !siblings.iter().all(|t| done(&t.status)) {
-        return; // 还有兄弟子任务没完成
+    // 终态 = 不再进行中(成功或失败都算"尘埃落定");成功 = 验收过/合并/完成。
+    let terminal = |s: &str| {
+        matches!(
+            s,
+            "verified" | "merged" | "done" | "failed" | "verify_failed" | "needs_rebase" | "cancelled"
+        )
+    };
+    let ok = |s: &str| matches!(s, "verified" | "merged" | "done");
+    if siblings.is_empty() || !siblings.iter().all(|t| terminal(&t.status)) {
+        return; // 还有子任务在进行,先不收尾
     }
-    // 全部子任务完成 → 父目标(prompt==goal 且停在 planned)标「协作完成」done。
+    // 子任务都尘埃落定 → 父目标终结,免得卡 planned:全成功→done(协作完成);有失败→
+    // needs_rebase(协作部分失败,需要你看)。
+    let new_status = if siblings.iter().all(|t| ok(&t.status)) {
+        "done"
+    } else {
+        "needs_rebase"
+    };
     if let Some(parent) = all.iter().find(|t| t.prompt == goal && t.status == "planned") {
-        let _ = store.update_task_status(&parent.id, "done", crate::now_ms());
+        let _ = store.update_task_status(&parent.id, new_status, crate::now_ms());
     }
 }
 
