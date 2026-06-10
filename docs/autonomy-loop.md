@@ -299,3 +299,28 @@ simulate 能做的核心全做透、可见性全覆盖、安全护栏有测试�
 公司"骨架完成。真智能(经理理解语义拆活/择优选记忆派人)需用户开 real(烧 headless 额度)。
 信任基础(main 永不坏/密钥不外泄/预算闸/失败自愈上限)都有测试守护 —— 开 real 的路铺平加护栏。
 **下一步最高价值:用户给具体靶子,或开一次 real 看真智能天花板。**
+
+## 轮 75-78:真跑 real,挖出并修复真路径 bug(2026-06-10)
+
+> 用户授权"直接用真实 claude 测试跑真任务"。真跑挖出 simulate 永远发现不了的真 bug,
+> 把"绝对自治/聪明协作/记忆决策"从"看着通"推进到"真的通"。成本每任务 $0.15-0.33。
+
+- **★ 真交付断裂(修复)** — claude(acceptEdits)只改文件不 commit,supervisor 也没提交 worker
+  改动 → 分支 HEAD 停在 base、合并空、reverify 红 → needs_rebase。real 交付一直是断的,
+  simulate 不真改码、real 没端到端跑过而潜伏。修:GitGuard::commit_worktree。实测 merged。
+- **★ 真经理不会拆活(修复)** — ClaudeBrain 决策 prompt 漏教 plan,真 claude 只会 spawn 不会
+  拆解协作。修:prompt 补 plan。实测:复合目标→真 claude 自己拆 2 子任务→2 worker 真建文件
+  (utils.py+CHANGELOG)→都 merged。
+- **★ 真记忆决策(接线本就对,验证通过)** — CEO 录权威约定"函数名 q_ 前缀+中文 docstring"→
+  真 claude 经理读 brief 主动把约定具体化进派的活(任务没提约定)→ worker 产出 q_factorial
+  +中文 docstring。真 claude 运用记忆比 fake 机械附加聪明得多。
+- **三块核心真路径全通** — 真交付/真协作拆活/真记忆决策。两个致命 bug 都是真跑才暴露的。
+
+### 对照地图(真路径)
+- §5 自治交付:✓✓ **真合并到 main(commit_worktree 修复后)**
+- §5 聪明协作:✓✓ **真 claude 拆活+多员工真协作(plan 修复后)**
+- §6 记忆决策:✓✓ **真 claude 读记忆主动运用进决策与执行**
+
+### 教训
+- **simulate 桩跑通 ≠ real 真路径通**。两个致命 bug(不提交/不拆活)都藏在"机制看着完整"
+  之下,只有真跑才暴露。用户开 real 是对的 —— 真跑才发现真问题。
