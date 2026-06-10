@@ -245,6 +245,28 @@ body {
   box-shadow: var(--sh-3), inset 0 1px 0 var(--hairline-top); z-index: 9600; opacity: 0; pointer-events: none;
   transition: opacity var(--t-mid) var(--ease), transform var(--t-mid) var(--ease); color: var(--tx-1); font-size: 13px; letter-spacing: .1px; }
 .panel.on { opacity: 1; pointer-events: auto; transform: translate(-50%,-50%) scale(1); }
+/* 追溯室信息量大,用更宽的面板。 */
+.panel.wide { width: min(760px,94vw); }
+
+/* ===== 追溯室 ===== */
+.trc-task { border-bottom: 1px solid var(--bd-soft); }
+.trc-head { width: 100%; display: flex; align-items: center; gap: 9px; padding: 9px 4px; background: none; border: none;
+  cursor: pointer; color: var(--tx-1); font-family: var(--ui); font-size: 12.5px; text-align: left; }
+.trc-head:hover { background: var(--tint-hi); }
+.trc-head.on { background: var(--tint-hi); }
+.trc-head .grow { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trc-arrow { color: var(--tx-3); flex: none; width: 12px; }
+.trc-events { padding: 6px 0 10px 22px; display: flex; flex-direction: column; gap: 4px; }
+.trc-ev { display: flex; gap: 9px; font-size: 12px; line-height: 1.5; align-items: baseline; }
+.trc-k { flex: none; min-width: 58px; font-weight: 500; letter-spacing: .2px; }
+.trc-k.start { color: var(--accent); }
+.trc-k.tool { color: #6cc4d9; }
+.trc-k.think { color: var(--tx-3); }
+.trc-k.done { color: var(--ok); }
+.trc-k.fin { color: var(--accent); }
+.trc-k.err { color: var(--bad); }
+.trc-t { color: var(--tx-2); overflow-wrap: anywhere; }
+.trc-t.think { color: var(--tx-3); font-style: italic; }
 .panel h2 { font-size: 15px; font-weight: 650; letter-spacing: .1px; padding: 18px 20px 2px; }
 .panel .sub { padding: 0 20px 12px; color: var(--tx-3); font-size: 12px; line-height: 1.55; letter-spacing: .1px; }
 .panel .body { padding: 4px 20px 16px; }

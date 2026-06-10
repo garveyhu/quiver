@@ -8,12 +8,14 @@ interface CtrlsProps {
   onPersonnel: () => void;
   /** 打开系统设置(模式 / 模型 / 并发 / 预算 / 验证命令)。 */
   onSettings: () => void;
+  /** 打开追溯室(每个任务、每个员工干的每一步、结果)。 */
+  onTrace: () => void;
   /** 当前运行模式,在「CEO 下目标」上标出来 —— 一眼知道派活是免费模拟还是真烧钱。 */
   mode: 'simulate' | 'real';
 }
 
 /** 右上角控件栏:常用面板直达入口 + CEO 下目标(标当前模式)。功能不再只藏在 ⌘K 里。 */
-export function Ctrls({ onCmdk, onReport, onGoal, onManager, onPersonnel, onSettings, mode }: CtrlsProps) {
+export function Ctrls({ onCmdk, onReport, onGoal, onManager, onPersonnel, onSettings, onTrace, mode }: CtrlsProps) {
   return (
     <div className="ctrls">
       <button className="b-gh" type="button" onClick={onCmdk}>
@@ -24,6 +26,9 @@ export function Ctrls({ onCmdk, onReport, onGoal, onManager, onPersonnel, onSett
       </button>
       <button className="b-gh" type="button" onClick={onPersonnel} title="人事部:配置 / 专长 / 雇人">
         人事部
+      </button>
+      <button className="b-gh" type="button" onClick={onTrace} title="追溯室:每个任务每一步、花费、结果">
+        追溯
       </button>
       <button className="b-gh" type="button" onClick={onReport} title="晨报:合进 main / 卡住 / 等你拍板的结果">
         晨报

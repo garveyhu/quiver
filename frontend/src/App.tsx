@@ -24,6 +24,7 @@ import { ManagerDesk } from '@/shell/ManagerDesk';
 import { MorningReport } from '@/shell/MorningReport';
 import { PersonnelDesk } from '@/shell/PersonnelDesk';
 import { SettingsView } from '@/shell/SettingsView';
+import { TraceRoom } from '@/shell/TraceRoom';
 import { Timeline } from '@/shell/Timeline';
 import { TrustCard } from '@/shell/TrustCard';
 
@@ -33,7 +34,7 @@ const DEFAULT_CAPTION = '你是 CEO。经理在领导区待命 —— 点「CEO 
 const GOALS = ['做转写的导出功能', '修登录态丢失', '给看板加暗色模式', '把召回准确率提上去', '补端到端测试', '清掉废弃依赖'];
 
 /** 当前打开的叠层(同一时刻至多一个)。 */
-type Overlay = 'none' | 'cmdk' | 'report' | 'brief' | 'trust' | 'timeline' | 'manager' | 'personnel' | 'settings';
+type Overlay = 'none' | 'cmdk' | 'report' | 'brief' | 'trust' | 'timeline' | 'manager' | 'personnel' | 'settings' | 'trace';
 
 /** 应用根:等距办公室舞台 + 叠层 + 画面后期。叠层开合、派活握手、状态条文案在此编排。 */
 export function App() {
@@ -207,6 +208,10 @@ export function App() {
         setOverlay('settings');
         return;
       }
+      if (cmd.id === 'trace') {
+        setOverlay('trace');
+        return;
+      }
       if (cmd.id === 'estop') {
         void estop();
         return;
@@ -241,6 +246,7 @@ export function App() {
           onManager={() => setOverlay('manager')}
           onPersonnel={() => setOverlay('personnel')}
           onSettings={() => setOverlay('settings')}
+          onTrace={() => setOverlay('trace')}
           mode={runMode}
         />
       </div>
@@ -267,6 +273,7 @@ export function App() {
         onRequeue={onRequeue}
         onClose={() => setOverlay('none')}
       />
+      <TraceRoom open={overlay === 'trace'} onClose={() => setOverlay('none')} />
       <SettingsView
         open={overlay === 'settings'}
         settings={settings}
