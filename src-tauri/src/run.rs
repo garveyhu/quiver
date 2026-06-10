@@ -502,9 +502,20 @@ fn pick_worker_from(
     }) {
         return Some(hit.clone());
     }
-    // 无专长命中:按 task_id 稳定散开(同任务总同员工,不同任务散开),倾向通用/任意员工。
-    let idx = task_id.bytes().map(usize::from).sum::<usize>() % workers.len();
-    workers.into_iter().nth(idx)
+    // 无专长命中:**优先派给通用员工**(specialty 空 / "通用")—— 把有专长的留给专长活,别让
+    // 通用活占着测试/前端员工(否则真来了专长任务、专长员工却在忙通用活)。通用员工里按 task_id
+    // 稳定散开;一个通用员工都没有(全配了专长)→ 退回到全体散开。
+    let generic: Vec<quiver_store::AgentRole> = workers
+        .iter()
+        .filter(|r| {
+            let s = r.specialty.trim();
+            s.is_empty() || s == "通用"
+        })
+        .cloned()
+        .collect();
+    let pool = if generic.is_empty() { workers } else { generic };
+    let idx = task_id.bytes().map(usize::from).sum::<usize>() % pool.len();
+    pool.into_iter().nth(idx)
 }
 
 pub(crate) fn resolve_agent_bin(settings: &Settings, mode: RunMode) -> anyhow::Result<PathBuf> {
@@ -659,10 +670,14 @@ mod tests {
         // 含"前端" → w3。
         let r = pick_worker_from(team.clone(), "task-abc", "给看板加前端暗色模式").unwrap();
         assert_eq!(r.id, "w3");
-        // 无专长命中 → 按 task_id 稳定散开(同 id 总同一人)。
+        // 无专长命中 → 优先派通用员工 w1(留专长员工接专长活)+ 按 task_id 稳定(同 id 同人)。
         let a = pick_worker_from(team.clone(), "task-xyz", "清理废弃依赖").unwrap();
         let b = pick_worker_from(team.clone(), "task-xyz", "清理废弃依赖").unwrap();
         assert_eq!(a.id, b.id, "同任务稳定到同一员工");
+        assert_eq!(a.specialty, "通用", "无专长任务优先派通用员工,不占测试/前端员工");
+        // 全员都有专长(没通用)→ 退回全体散开,不至于派不出去。
+        let allspec = vec![worker("s1", "测试"), worker("s2", "前端")];
+        assert!(pick_worker_from(allspec, "task-xyz", "清理废弃依赖").is_some());
         // 空团队 → None。
         assert!(pick_worker_from(vec![], "t", "x").is_none());
     }
