@@ -11,7 +11,7 @@ import { useMorningReport } from '@/hooks/useMorningReport';
 import { useRoles } from '@/hooks/useRoles';
 import { useSettings } from '@/hooks/useSettings';
 import { Office } from '@/office/Office';
-import { cancelActiveTasks, enqueueTask, getInitialState, requeueTask } from '@/services/commands';
+import { cancelActiveTasks, enqueueTask, getInitialState, mergeTask, requeueTask } from '@/services/commands';
 import type { RunMode } from '@/services/wire';
 import { Atmosphere } from '@/shell/Atmosphere';
 import { BriefCard } from '@/shell/BriefCard';
@@ -60,6 +60,12 @@ export function App() {
     void requeueTask(taskId)
       .then(t => setCaption(`已打回重做 —— 新任务 ${t.id} 入队,经理会带着上次的记忆再派。`))
       .catch(e => setCaption(`打回失败:${e instanceof Error ? e.message : String(e)}`));
+  }, []);
+  const onMerge = useCallback((taskId: string) => {
+    setCaption('正在合并进 main(冲突 / 重验红会自动护栏还原)…');
+    void mergeTask(taskId)
+      .then(msg => setCaption(`✓ ${msg} —— 产物已进主干。`))
+      .catch(e => setCaption(`合并未成:${e instanceof Error ? e.message : String(e)}`));
   }, []);
   const goalIdx = useRef(0);
 
@@ -241,7 +247,7 @@ export function App() {
       <Caption text={caption} />
       <div className={`scrim${overlay !== 'none' ? ' on' : ''}`} onClick={() => setOverlay('none')} />
       <CommandPalette open={overlay === 'cmdk'} onRun={runCommand} />
-      <MorningReport open={overlay === 'report'} data={report} onRequeue={onRequeue} onClose={() => setOverlay('none')} />
+      <MorningReport open={overlay === 'report'} data={report} onRequeue={onRequeue} onMerge={onMerge} onClose={() => setOverlay('none')} />
       <BriefCard open={overlay === 'brief'} defaultGoal={briefGoal} onClose={() => setOverlay('none')} onConfirm={confirmBrief} />
       <TrustCard open={overlay === 'trust'} metrics={metrics} onClose={() => setOverlay('none')} />
       <Timeline open={overlay === 'timeline'} episodes={episodes} onClose={() => setOverlay('none')} />

@@ -40,6 +40,10 @@ export const enqueueTask = (prompt: string, mode: RunMode = 'simulate'): Promise
 export const requeueTask = (taskId: string): Promise<TaskRecord> =>
   call<TaskRecord>('requeue_task_cmd', { taskId });
 
+/** CEO 接受合并(§12):把一个 verified 且有分支的任务合进 main,返回结果文案。 */
+export const mergeTask = (taskId: string): Promise<string> =>
+  call<string>('merge_task_cmd', { taskId });
+
 /** 取消一个任务(queued 删除 / running·verifying 杀进程 / 已结束报错)。 */
 export const cancelTask = (id: string): Promise<void> => call<void>('cancel_task_cmd', { id });
 

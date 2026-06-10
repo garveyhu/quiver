@@ -771,6 +771,55 @@ async fn requeue_task_cmd(
     Ok(new)
 }
 
+/// §12 验收台·CEO 接受合并:把一个**已通过验收(verified)且有分支**的任务合进 main。走和
+/// 经理交付同一条合并列车(merge_and_reverify 自带护栏:冲突 / 合并后重验红 → main 还原、留
+/// 分支待人工)。simulate 任务无分支 → 拒绝。这是 real 流程里"CEO 看完产物点头合并"的入口。
+#[tauri::command]
+async fn merge_task_cmd(state: State<'_, AppState>, task_id: String) -> Result<String, String> {
+    use quiver_core::git::GitGuard;
+    use quiver_core::merge::{merge_and_reverify, MergeDecision, MergeLock};
+    use quiver_core::verify::VerifyCommand;
+
+    let store = state.store()?;
+    let task = store
+        .get_task(&task_id)
+        .map_err(|e| format!("{e:#}"))?
+        .ok_or_else(|| "任务不存在".to_string())?;
+    if task.status != "verified" {
+        return Err(format!("只能合并已通过验收的任务(当前状态:{})", task.status));
+    }
+    let branch = task
+        .branch
+        .filter(|b| !b.trim().is_empty())
+        .ok_or_else(|| "该任务没有待合并的分支(simulate 任务无分支,real 任务才有产物分支)".to_string())?;
+
+    let project = current_project(&state)?;
+    let verify_cmd = store
+        .get_settings()
+        .ok()
+        .map(|s| s.verify_command)
+        .filter(|c| !c.trim().is_empty())
+        .map(VerifyCommand::shell)
+        .unwrap_or_else(|| VerifyCommand::shell("exit 0"));
+    let msg = format!("quiver: merge {branch} (CEO 接受)");
+    // 独立 guard/merge_lock:手动接受多在非自治时(经理没在跑);merge_and_reverify 的护栏
+    // 保证即便撞车也不会污染 main。自治+手动并发共享 guard 留后续硬化。
+    let guard = GitGuard::new(project);
+    let merge_lock = MergeLock::new();
+    let now = now_ms();
+    match merge_and_reverify(&merge_lock, &guard, &branch, "main", &msg, &verify_cmd).await {
+        Ok(report) if report.decision == MergeDecision::Merged => {
+            let _ = store.update_task_status(&task_id, "merged", now);
+            Ok("已合进 main".to_string())
+        }
+        Ok(_) => {
+            let _ = store.update_task_status(&task_id, "needs_rebase", now);
+            Err("有冲突或合并后重验未过,main 已护栏还原,任务留分支待人工".to_string())
+        }
+        Err(e) => Err(format!("合并出错:{e:#}")),
+    }
+}
+
 /// Run ONE task immediately against the picked repo and stream its events to the
 /// UI (legacy single-shot path, kept for the original quick-run control). The
 /// task row is enqueued `running` up front, shares a fresh per-call git guard,
@@ -958,6 +1007,7 @@ pub fn run() {
         run_task_cmd,
         enqueue_task_cmd,
         requeue_task_cmd,
+        merge_task_cmd,
         get_settings,
         update_settings,
         list_roles,
@@ -990,6 +1040,7 @@ pub fn run() {
         run_task_cmd,
         enqueue_task_cmd,
         requeue_task_cmd,
+        merge_task_cmd,
         get_settings,
         update_settings,
         list_roles,

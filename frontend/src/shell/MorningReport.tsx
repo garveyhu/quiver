@@ -6,6 +6,8 @@ interface MorningReportProps {
   data: MorningReportData;
   /** §12 一站式处理:把卡住/升级的任务直接打回重做(经理带记忆再派)。 */
   onRequeue: (taskId: string) => void;
+  /** CEO 接受合并:把一个 verified 且有分支的任务合进 main(§12)。 */
+  onMerge: (taskId: string) => void;
   onClose: () => void;
 }
 
@@ -18,7 +20,7 @@ function cost(t: TaskRecord): string {
  * (公司真推进了项目)、卡住等你的、升级等你拍板的 —— 一眼看清"昨晚公司干成了什么、
  * 还有什么需要我"。复用 .panel 叠层基础设施。
  */
-export function MorningReport({ open, data, onRequeue, onClose }: MorningReportProps) {
+export function MorningReport({ open, data, onRequeue, onMerge, onClose }: MorningReportProps) {
   const { stats, mergedToMain, needsYou, escalations, recent } = data;
 
   const sub = stats
@@ -94,15 +96,24 @@ export function MorningReport({ open, data, onRequeue, onClose }: MorningReportP
           <>
             <div className="kv">
               <b>验收通过</b>
-              <span className="st-meta">已过验收(simulate / 待合并)</span>
+              <span className="st-meta">已过验收(simulate / 待你接受合并)</span>
             </div>
-            {recent.map(t => (
-              <div className="rev" key={t.id}>
-                <span className="grow">{t.prompt}</span>
-                <span className="st-ok">通过</span>
-                <span className="st-meta">{cost(t)}</span>
-              </div>
-            ))}
+            {recent.map(t => {
+              // real 任务过验收后产物留在分支上,等 CEO 点头合进 main(§12 接受)。simulate 无分支。
+              const mergeable = t.status === 'verified' && !!t.branch;
+              return (
+                <div className="rev" key={t.id}>
+                  <span className="grow">{t.prompt}</span>
+                  <span className="st-ok">通过</span>
+                  <span className="st-meta">{cost(t)}</span>
+                  {mergeable && (
+                    <button className="pbtn go" type="button" onClick={() => onMerge(t.id)}>
+                      合进 main ✓
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </>
         )}
       </div>
