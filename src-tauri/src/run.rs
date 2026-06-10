@@ -299,10 +299,26 @@ pub async fn run_streaming(
             if lines.is_empty() { String::new() } else { format!("{}\n\n", lines.join("\n")) }
         })
         .unwrap_or_default();
+    // §6 记忆驱动 worker:把项目沉淀的记忆(约定/教训/有效做法)也喂给干活的人,不只喂经理 ——
+    // worker 按项目风格干、别重蹈覆辙。只取当前事实(6 条,按 importance 排:约定/教训冒头),不带
+    // episode 流水。记忆是加性依赖,读不到就空、绝不挡干活。
+    let project_key = guard.repo().display().to_string();
+    let mem_brief = {
+        let text = app
+            .try_state::<crate::AppState>()
+            .and_then(|st| st.memory.get().and_then(|m| m.brief(&project_key, 6, 0).ok()))
+            .map(|b| b.to_text())
+            .unwrap_or_default();
+        if text.trim().is_empty() {
+            String::new()
+        } else {
+            format!("[项目记忆] 这个项目沉淀的约定与经验,干活时遵循、别重蹈覆辙:\n{text}\n\n")
+        }
+    };
     // §5 双向协作(worker→经理):告诉 worker 卡住别硬猜 —— 遇到该上级拍板的点写 NEEDS_INPUT,
     // 经理会给指示;能自己合理决定的正常做完,不必事事请示。
     let prompt = format!(
-        "{role_intro}{prompt}\n\n[协作约定] 遇到需要上级拍板的点(架构选择、模糊或缺失的需求、重大取舍),\
+        "{role_intro}{mem_brief}{prompt}\n\n[协作约定] 遇到需要上级拍板的点(架构选择、模糊或缺失的需求、重大取舍),\
          或缺关键信息做不下去时,别擅自硬做或瞎猜 —— 在输出末尾单独起一行写 \
          `NEEDS_INPUT: <你的具体问题>`,经理看到会给你指示后你再继续。能自己合理决定的就正常做完。"
     );
