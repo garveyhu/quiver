@@ -26,10 +26,9 @@ const DIVE = 6;
 
 /** 把整张办公室收进视口的基准缩放(留 0.4 下限)。 */
 function computeFit(worldW: number, worldH: number): number {
-  // 上限 1:**绝不放大世界**。world 用 transform:scale,放大(>1)会把整个 world 栅格化成纹理
-  // 再 GPU 上采样 → 文字/像素发糊(控制条不在 world 里所以一直清晰)。世界比窗口小就 1:1 居中
-  // 显示、周围留深色空白(沉浸),想看近景自己滚轮放大(用户主动,糊也认了)。
-  return Math.max(0.4, Math.min(1, window.innerWidth / worldW, window.innerHeight / worldH));
+  // 放大填满窗口。去掉了 .world 的 will-change:transform 后,静态缩放会按目标尺寸重新栅格化
+  // (放大也清晰),所以可以放心放大填满,不再有纹理上采样模糊。
+  return Math.max(0.4, Math.min(window.innerWidth / worldW, window.innerHeight / worldH));
 }
 
 /**

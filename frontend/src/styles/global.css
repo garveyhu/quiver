@@ -44,7 +44,10 @@ body {
 /* 急停:全公司冻结(灰化压暗) */
 .stage.frozen { filter: grayscale(.92) brightness(.62); }
 .scene-fit { position: absolute; inset: 0; display: grid; place-items: center; }
-.world { position: relative; transform-origin: center; will-change: transform; }
+/* 不要 will-change:transform —— 它强制 world 成合成层,子树先按原尺寸栅格化成纹理再 GPU
+   放大(DPR=1 下文字/像素糊)。去掉后静态缩放直接按目标尺寸重新栅格化 → 放大填满也清晰。
+   (代价:滚轮缩放时每帧重绘,偶尔缩放可接受。) */
+.world { position: relative; transform-origin: center; }
 .zoomhint { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #7c89ad; z-index: 9000; opacity: 0; transition: opacity .3s; pointer-events: none; }
 .zoomhint.on { opacity: 1; }
 .worksurf { position: fixed; left: 50%; top: 47%; transform: translate(-50%,-50%) scale(.96); width: min(600px,90vw); background: var(--s-2); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
