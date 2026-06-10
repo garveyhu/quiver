@@ -61,9 +61,11 @@ function loungeCells(): Array<[number, number]> {
 
 const EMP_COUNT = 5;
 
-/** 员工气泡用的短标签(截断长 prompt)。 */
+/** 员工气泡用的短标签:剥掉注入的"(公司约定:…)"记忆尾巴(那是给 worker 看的,不是气泡),
+ * 只留任务名再截断 —— 气泡干净,记忆约定在追溯室/调度台看完整。 */
 function shortLabel(prompt: string): string {
-  return prompt.length > 10 ? prompt.slice(0, 10) + '…' : prompt;
+  const clean = prompt.split('(公司约定:')[0].trim();
+  return clean.length > 10 ? `${clean.slice(0, 10)}…` : clean;
 }
 
 /** 刚完工、在工位驻留收尾的任务(D1:不瞬移,气泡报结果几秒再走)。 */
