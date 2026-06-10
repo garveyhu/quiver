@@ -465,11 +465,12 @@ body {
 .ws-id-row > b { color: var(--tx-1); font-weight: 500; }
 .ws-id-hint { margin-top: 6px; padding-top: 7px; border-top: 1px solid var(--bd-soft); color: var(--tx-3); font-size: 11.5px; line-height: 1.55; }
 
-/* 经理坐姿:整体下沉(从站立 -40 → 坐到椅上),身体压低、袍子下摆收短,看起来坐着办公而非站着。 */
-.worker.mgr { margin-top: -26px; }
+/* 经理坐姿:整体下沉(从站立 -40 → 坐到椅上),身体压低、袍子下摆收短,看起来坐着办公而非站着。
+   保留轻微 sway 呼吸,不僵硬(之前 animation:none 太死板)。 */
+.worker.mgr { margin-top: -30px; }
 .worker.mgr .body { bottom: 0; }
 .worker.mgr .robe { top: 23px; height: 11px; }
-.worker.mgr .stack { animation: none; }
+.worker.mgr .stack { animation: sway 4s ease-in-out infinite; }
 
 /* 菜单入口分组:按职责(看公司/配公司)用竖分隔线分块,不再一长条平铺 → 有层级、不繁琐。 */
 .ctrl-div { width: 1px; height: 16px; background: var(--bd-strong); margin: 0 3px; flex: none; opacity: .6; }

@@ -69,8 +69,10 @@ export function buildScene(): Scene {
     b.wallEdge(room.c0, room.r0, room.c0, room.r1 + 1, WALLH, room.wall, z, 'brightness(.6)');
   }
 
-  // 房间标签(带 key,点击建筑映射到对应面板)
+  // 房间标签(带 key,点击建筑映射到对应面板)。可扩展位是空占位,不显示标签 —— 它正好在经理区
+  // 下方,标签挤在一起干扰看经理。
   for (const key of Object.keys(ROOMS) as RoomKey[]) {
+    if (key === 'build') continue;
     const room = ROOMS[key];
     b.label((room.c0 + room.c1) / 2, (room.r0 + room.r1) / 2, room.label, key);
   }
@@ -107,9 +109,9 @@ function furnishRightColumn(b: SceneBuilder): void {
   plant(b, 12.8, 0.3);
   wallClock(b, 11.1, 0.2, 30);
   deskLamp(b, 11.0, 0.95);
-  // 领导区(经理 + 记忆书):给经理一把高背椅,让 ta 坐着办公(经理 sprite 在 11.5,3.3,椅子对齐)。
+  // 领导区(经理 + 记忆书):给经理一把矮背椅坐着办公。椅座中心对准经理脚(经理 sprite 锚 11.5,3.3)。
   board(b, 11.2, 2.4);
-  managerChair(b, 11.42, 3.18);
+  managerChair(b, 11.32, 3.12);
   memoryBook(b, 12.6, 2.6);
   plant(b, 12.9, 3.5);
   wallPoster(b, 11.05, 2.0, 1.0, ['#3a2e1a', '#e6bd6c', '#ffd27a']);
