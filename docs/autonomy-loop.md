@@ -1,0 +1,108 @@
+# 自治引擎重塑 · /loop 共享记忆
+
+> 这是 `/loop`(每 20 分钟)的共享记忆。每轮 fire:① 读本文件 ② 做「路线图」最上面未勾的一项(一轮一个可验证切片) ③ `cargo test` + tsc + 桥接器真应用验证 ④ 勾掉并把发现写进「迭代日志」。**保持 app 始终可用、全程 simulate 免费验证(绝不用 real 烧额度)。**
+
+## 用户的核心期望(产品意图,每轮对照)
+
+> "我需要**绝对自治**的聪明的协作工作能力,支持**丰富的配置**和**强大的记忆决策**能力。初衷是让应用**一直跑下去**——有一个经理一直帮我去回其他 AI 的决策。而且每个人物(经理/员工)都该有**各种配置**,现在什么都没看见。"
+
+拆成四根支柱(蓝图 docs/autonomous-org.md 对应章节):
+- **A. 绝对自治** — 经理常驻、worker 完成后经理复核裁决(deliver/block/escalate),不只是派活(§5)
+- **B. 丰富配置** — 人事部:经理/员工角色配置(模型/提示/预算/并发/重启策略),可见可改(§14)
+- **C. 记忆决策** — 经理带着项目记忆(brief/facts/episodes)决策,决策也留痕回记忆(§6)
+- **D. 体感不是玩具** — 决策可见有血肉、simulate 节奏可信、交互丝滑
+
+## 已完成(本 session,自治引擎接通那一刀 + 第 1 轮)
+
+- [x] 删走歪的 QwenBrain(千问只配做 embedding,经理思考必须 claude)
+- [x] 经理控制循环 + Effect 执行层(`src-tauri/src/manager.rs`):tick→decide→apply→真 spawn worker→回流唤醒;`settings.autonomous` 开关(默认关,经理工作台里可开)
+- [x] ClaudeBrain(`src-tauri/src/claude_brain.rs`):real 模式经理用 claude 想;simulate 用免费 RuleBrain
+- [x] 前端经理工作台(`shell/ManagerDesk.tsx`,按 M):局面卡+自治开关+决策流
+- [x] 〔轮1〕摄像头:点小人**不再强行缩放**,只开详情(Office.tsx)
+- [x] 〔轮1〕弹窗提速 .35s→.16s + **点框外即收起**(ws-scrim,global.css/Office.tsx)
+- [x] 〔轮1〕决策流加血肉:每拍带 taskPrompt(派的具体活)+ 决策依据(在途/上限/排队/预算)(manager.rs ManagerDecisionEvent + ManagerDesk situation/detail)
+- [x] 〔轮1〕**经理记忆接通**:ManagerContext.brief 从 quiver-memory 真简报来(facts+episodes,manager.rs memory_brief)——"记忆→决策"的接缝通了
+- [x] 〔轮1〕治玩具感:fake-claude happy 脚本重写成可信工作弧(读码→搜索→说明→双改→跑测→汇报,13 行+相位思考停顿,默认 ~5s,settings fakeDelayMs 等比放慢)
+
+## 路线图(从上往下做,一轮一项,做完测了再勾)
+
+- [x] **A1. 经理复核裁决**(轮2) — 完工 worker 进待复核队(PendingReview:node/task/终态,先入队再释放名额防漏裁);RuleBrain **先裁后派**(verified/done→Deliver,其余→Block 带原因);执行层裁决出队+带 taskPrompt 进决策流;循环退出条件加"复核队列空"。真合并列车接 Deliver 后面留 §5.7(审计就位后)。
+- [x] **B1. 人事部 schema + IPC**(轮3) — `agent_role` 表(brain/model/system_prompt/budget_usd/max_turns/version,§20 裁剪)+seed 经理/员工(brain=rule 安全默认);store roles.rs(list/get/update,version+1);`list_roles`/`update_role` IPC(debug+release 两块都注册);前端 wire/commands 服务层就位。**经理大脑显式开关接通**:manager_brain() 唯一依据=role('manager').brain——'claude' 才构造 ClaudeBrain(用 role.model),ClaudeBrain dead_code 豁免摘除。
+- [x] **B2. 人事部 UI**(轮4) — 叠层「人事部」(⌘K):经理卡(大脑 rule/claude 切换+烧钱警示)+员工卡(模型/单任务预算/轮数);useRoles hook;**配置不是摆设**:① 经理循环改为**每拍现场选脑**(删 per-project brain 缓存,改 brain 下一拍即生效,轮3 注意点解决);② real worker 真用员工角色配置(run.rs:model 用 role 的、budget_usd→--max-budget-usd、max_turns→--max-turns);③ resume_all 顺手戳醒等待中的循环。
+- [x] **C1. 决策留痕回记忆**(轮5) — 真落地的派活/交付/拦下/升级写成 episode(record_decision_episode,best-effort 不挡编排;Noop/Refresh 不写防刷屏)。真 app 实测:memory.sqlite 有「经理·派活「…」(理由)」「经理·交付「…」」带 node-0;时间线穿插显示组织决策与 worker 交付;brief 取同表 → 经理记得自己之前的裁决,记忆↔决策闭环。
+- [x] **A2. ClaudeBrain 拆活**(轮6-9) — ManagerContext 加 next_task(队首任务原文,peek 与 claim 同序)+ QUEUE_NEXT_PLACEHOLDER 常量(RuleBrain 占位=原样认领);ClaudeBrain 决策 prompt 嵌队首原文+改写指示(补背景/边界/验收标准)+待复核清单;执行层:经理给非占位 prompt → worker 跑经理改写后的任务描述。单测 build_prompt 嵌入;94 测试全过。
+- [x] **C2. 工作台显示简报**(轮10) — 工作台「记忆」行+「经理在想什么 ▾(N 条)」折叠段:get_brief 前端封装(wire Brief/BriefFact+commands.getBrief+useManagerDesk),展开显示事实(可信度/重要度)与近期经历(含经理裁决留痕)。真 app 实测 10 条全显。注意:App.tsx 改动是 HMR 边界,验证前要整页 reload。
+- [x] **A3. 打回重做·组织回流**(轮11,插队于 D1 前——失败任务是死胡同是"一直跑下去"的真缺口,§12) — `requeue_task_cmd`:已终结任务作为**新任务**入队(新 task_id 绕开 agent_event (task_id,seq) 主键冲突,老行留档;进行中的拒绝);决策流「拦下」行带「打回重做 ↻」按钮。真 app 实测完整回流:verify_failed→经理拦下→点打回→新任务→经理再派→再拦(打回是人工动作,不自动循环)。verify_command 测试后已还原空。
+- [x] **A4. 自治模式的启动恢复**(轮12-14) — 发现:setup 的崩溃恢复 reconcile **只走旧 scheduler**,自治模式重启一次组织就"失忆降级"成无脑流水线。修:ManagerLoop::reconcile(requeue+sweep 孤儿+经理接管)+setup 按 autonomous 分流。端到端实测:造 running 残留→pkill 干净→起 app→reconcile requeue→「经理·派活「崩溃恢复测试任务」」→verified。测试数据已清。
+- [x] **D1. 完工驻留**(轮15) — workers.ts 加 LingeringTask 驻留位(在途优先占工位,驻留用剩余,绝不挤新活);useWorkers diff 出"刚完工"任务驻留 4s,气泡报「✓ 验收通过/✗ 没过验收」再回休息室。真 app 实测抓到驻留瞬间:`✓ 验收通过|经理|审计`。escalate 高亮决策流已有(st-bad)。桥接器经验:eval 输出是多行 pretty JSON,Monitor 里要 `tr -d '\n'` 拍平再 grep,`tail -1` 只会拿到 `]`。
+
+## 轮26:并发上限实时生效 + 批量派活(协作)
+- [x] **max_workers 实时生效**(轮3 缓存坑彻底修) — InFlight::set_max + Orchestrator::set_max_inflight,manager_loop **每拍**把当前 settings.max_workers 同步进 orchestrator(像轮4 修经理大脑那样)。改并发不必重建经理循环。64 单测绿(orchestrator+app)。
+- [x] **批量派活命令**「派一批活」— 一次下 3 个目标(enqueueBatch),经理按并发上限并行调度。体现 §3「协作」。
+- ⚠️→✅ 轮26 撞出的两个真 bug 已修(轮27)。
+
+## 轮27:修两个真 bug(重启瘫痪 + 假成功)
+- [x] **bug1 重启项目自愈** — current_project(lib.rs)内存没当前项目时,从持久化 last_project 恢复并回填内存。根因:进程重启后内存 project_path 清空,getInitialState 要前端调才设,这之间任何 IPC 都瘫痪。真 app 实测:落 last_project→**重启不手动选项目→派一批 3 件全部入队+跑通**(自愈生效)。
+- [x] **bug2 不再假报成功** — enqueueBatch 统计真实成败,caption 报"X/N 成功"+错误原因,绝不静默吞异常假报"已派"(违背质量的假成功)。
+- 教训记档:**前端 catch 块绝不能空吞** —— 要么反馈用户要么至少 console;"假成功"比"明确失败"更伤(用户以为派了活,其实什么没发生)。tsc+app 34 测试绿。
+
+## 轮28:并行协作画面闭合(补验轮26欠的诚实债)
+- [x] **3 worker 真并行实测拿到** — 干净环境(项目自愈)+max=3+自治,派一批 → 后端 **Monitor 抓到同时 running=3**;决策流坐实经理**连续派 3 件不同活**(给看板加暗色模式/修登录态丢失/做转写导出),即 §3「协作」:经理并行调动多员工干不同任务。max_workers 实时生效(轮26)+批量派活(轮26)+项目自愈(轮27)三者合起来验证通过。配置已还原(autonomous=0/max=1/fake_delay=30)。
+- 验证技巧记档:抓"瞬时并行态"用 Monitor until-loop 查 DB running 计数(前端 .worker.working 是实时的,eval 查询时机晚了任务已跑完);后端 DB 计数 + 决策流是更可靠的并行证据。
+
+## 路线图·下一阶段(骨架后的深化,按价值排)
+
+- [x] **C3. 图书管理员·claude 提炼器**(轮16) — 勘察修正:quiver-memory 的 librarian.rs 是**矛盾裁决器**(reconcile),"从 episode 提炼事实"的提炼器根本不存在 → 事实层永远 0 的根因。落地:① 删 QwenJudge+smoke example(千问思考违蓝图;parse_verdict 转 pub 留给将来 ClaudeJudge);② 新建 src-tauri/src/librarian.rs:claude 提炼器(读近 12 条 episode→提炼≤3 条事实→insert_fact 员工汇报档/kind=提炼/provenance=librarian·claude),30min 限频+<3 条 episode 不提+坏输出安全跳过,4 个 parse 单测;③ seed librarian 角色(brain=rule=休眠),人事部第三卡「图书管理员·档案室」(休眠·不提炼/claude·提炼事实+烧钱警示);④ 触发:经理 Deliver 后 best-effort 后台跑。真 app 实测:三卡渲染✓、seed 补进既有 DB✓、默认休眠交付后不起 claude✓。真提炼留用户显式开(烧钱)。测试 104 过 0 失败。
+- [x] **A5. 带会话返工**(轮17) — 勘察发现 resume 链路其实已全通(worker_started 落 session_id、同任务再跑自动 --resume,reconcile 在用);真缺口是**打回重做开新 task_id 丢会话**。修:requeue_task_cmd 把老任务 session_id 复制给新任务 + prompt 加「(返工)上次成果未通过验收…」指引 → worker 在原会话续跑(记得自己改过什么),不是裸重跑。端到端实测:新任务 prompt 带返工前缀 + session_id 传承(fake-session-0001)。Decision::Continue 对**在途** worker 的注入受进程模型限制(claude -p 跑完即退,stdin 未接),engine 对已完工节点也会校验拒——保持现状,文档化。
+- [x] **P0 硬化之 decision_log 落库**(轮18) — store/decisions.rs(§20 裁剪:每拍真实决策一行只追加,record+list 最新在前)+schema 建表带索引;emit_decision 同步落库(best-effort);get_decisions IPC;useManagerDesk 打开时回填历史(与 live 按 tsMs+seq 去重合并)。端到端实测:派活落 5 拍(spawn/noop/deliver)→**重启**→工作台打开即回填完整决策弧——决策历史跨重启存活。测试 70 过。
+- [x] **P0 硬化·序号单调 + 急停核查 + 升级可感**(轮19) — ① 决策序号跨重启续编:SagaLedger::starting_at + Orchestrator::with_seq_start + store.max_decision_seq,经理循环建时从日志 max+1 接着编;实测重启后从 #5 续(不回卷)。② §8.4 急停核查:**已是 killpg**(lib.rs kill_pid 负 pid 杀整组 + ClaudeRunner process_group(0) 自成组),蓝图点名洞早已修,记档。③ escalate 可感:经理升级时状态条立刻喊人(「⚠ 经理升级等你拍板:…按 M 处理」),useManagerDesk onEscalate→App caption。测试 99 过。
+- [ ] **P0 硬化·余项(降级为低优)** — saga 序号与日志同事务的原子分配:当前无"决策重放"机制(决策不从日志重放副作用),原子性暂无消费方;等做崩溃重放时一并上。栅栏三验(PID+启动时间+run-id):蓝图针对 detached 进程对账,当前 worker 是进程内 tokio task、fence 已足,等 worker 真 detached 化再做。
+
+## 蓝图对照地图(autonomous-org.md,轮19 盘点;✓=已建 ◐=部分 ✗=未建)
+
+**甲部·机房**
+- §4 Agent 运行时:◐ ClaudeRunner(spawn/resume/process_group)+AgentRunner trait;✗ --json-schema 结构化输出、--mcp-config 自定义工具、权限回调、hooks
+- §5 编排:✓ 经理循环/决策→Effect→执行/复核裁决/唤醒/熔断/序号单调;◐ 崩溃恢复(requeue+经理接管✓,saga 重放✗);✗ 子经理递归、§5.6 注入封顶、决策税完整版
+- §5.7 合并列车:✗(merge_and_reverify 已建但休眠;**依赖沙箱**)
+- §6 记忆:✓ episode 机械绑定/双时间事实表/简报/决策留痕/claude 提炼器(显式开)/矛盾裁决机制(FakeJudge);✗ 作废接运行路径(ClaudeJudge)、sqlite-vec 混合检索接线、实体词表、待审区流转、信任档自动升级
+- §7 权能分权:✓ 思想上贯彻(worker 无合并权、AI 不设可信度);◐ 工具白/黑名单未接 --allowedTools
+- §8 安全:✗ **沙箱(蓝图说"最优先,现在一行没写"——下一个大刀)**、独立审计变异式(有 clean_clone_verify 简版)、员工断网、记忆注入面;✓ 急停 killpg
+- §9 成本:✓ 预算闸(滚动窗)/烧钱显式开关/熔断;✗ 配额感知串行、模型分工自动化、--max-budget-usd 进程级(worker 角色已接!)
+**乙部·给人用的**
+- §10 复盘:✓ decision_log+工作台回放/episode 时间线;✗ 因果树视图、注入快照逐回合、OTel 导出
+- §11 测试:◐ fake-claude 桩+全套单测;✗ 铁律对抗测试、崩溃混沌测试、指标闸
+- §12 验收台:◑ 晨报按结局三分类(轮24)+**晨报内一站式打回按钮(轮25:卡住/升级的任务直接打回,点后真产生新活被经理领走;onRequeue 抽成 App 共享回调,晨报+工作台复用)**、escalate 状态条喊人;✗ 验收"接受/合并"按钮(real 才有分支可合)、人机边界策略配置、叫醒模型
+- §13 回滚:✗(撤单次合并外的粒度、记忆级联失效、命名还原点)
+- §14 人事:✓ 三角色配置+版本化+真接线;✗ 模板库导入导出、产出统计闭环
+- §15 自我升级 / §17 多仓库 / §16 开张引导:✗
+**下一个大刀建议**:§8 沙箱(Seatbelt)——它是合并列车、真自治放开手的总前置;单独规划一刀做穿。
+
+## §8 沙箱·进度(轮20 开工)
+
+- [x] **沙箱片1:verify 收进沙箱**(轮20) — 勘察纠正:`sandbox.rs` 的 SandboxPolicy 策略+渲染**早已完整**(蓝图"一行没写"过时),真缺口是没人调 `.wrap()`。① **profile 策略实测定调**(§24):纯 `(deny default)` 白名单在新版 macOS/SIP 下连 dyld 都放不全(`/usr/bin/true` 都跑不起来)→ 翻转为 `(allow default)` + 黑名单收死「写」(deny 全盘 / allow 回 worktree)和「网」(deny network*);② **canonicalize 坑**:seatbelt 按内核真实路径匹配,`/tmp`→`/private/tmp` 不归一会让写被误拒,for_worktree 已 canonicalize;③ verify.run_capturing 在 macOS 包 sandbox-exec;④ **保住 §7 区分**:包沙箱前预检程序可执行性(绝对路径不存在→VerifyError 而非被 sandbox-exec 吞成 VerifyFailed);⑤ 顺手修 2 个 fake-claude 序列积压回归测试(轮1 改脚本后没跑到的集成测试,断言改成形状而非固定下标)。真 app 实测:verify 写 worktree 外**被沙箱拦住**、正常 verify 仍 verified。core+app 124 测试全绿。
+- [x] **沙箱片2:worker(claude)进程收进沙箱**(轮21) — SandboxPolicy 扩展:加 deny_read_paths(§8.3 密钥黑名单:~/.ssh/.aws/.config/gh/.netrc/**.agents(千问 key)**/.config/gcloud/.kube)+ restrict_writes 开关 + for_worker()(allow default+留网+禁读密钥,**暂不收紧写**——claude 要写 ~/.claude 运行时,贸然禁写全盘会崩,写隔离留片2b 实测各路径后做)。ClaudeRunner 默认包沙箱(without_sandbox() 逃生舱);drive 包裹前预检 bin 可执行(保 SpawnFailed 语义,不被 sandbox-exec 吞成 NoResult)。真 app 实测:worker 经 sandbox-exec 包裹仍 verified(包裹不破坏)。125 测试全绿。**所有 claude 进程(经理/员工/图书管理员)现在都禁读密钥(§8.6 I7)**。
+- [ ] **沙箱片2b:worker 写隔离** — 实测真 claude 跑一单,确认它写哪些路径(~/.claude/?/tmp/?),再把 for_worker 的 restrict_writes 开起来 + allow worktree + allow claude 必需的运行时写路径。需真 claude(烧钱),留用户在时做。
+- [x] **沙箱片3:git「检出即执行」口子封堵**(轮22,§8.2 蓝图最狠一条) — `SAFE_GIT_FLAGS`(git/mod.rs 导出):`core.hooksPath=/dev/null`(钩子)+`core.fsmonitor=false`+`core.attributesFile=/dev/null`(filter/diff driver 触发点)+`core.symlinks=false`(符号链接逃逸)。注入两处会检出的命令:audit clean_clone(clone+checkout,另加 `--no-recurse-submodules`)、GitGuard.worktree_add(检出新分支也触发 smudge)。**坑(实测纠正)**:`protocol.file.allow=never` 会误杀可信本地主仓库 clone(file 源),且现代 git≥2.38 默认已禁子模块 file 协议(CVE-2022-39253)——故去掉它,子模块靠 `--no-recurse-submodules` 挡。新增对抗测试:恶意 .gitattributes smudge 过滤器在审计克隆时**不执行**(PWNED 文件不出现)。core 91+集成 14+app 34 全绿。
+
+## §8 沙箱·三片完工小结(轮20-22)
+verify 进沙箱(写隔离✓) → worker/经理/图书管理员进沙箱(禁读密钥+留网✓,写隔离待片2b实测) → git 检出即执行口子封堵(钩子/属性过滤器/子模块/符号链接✓)。**§8 安全本体从"一行没写"到三道防线就位**:进程被 seatbelt 罩 + 密钥读不到 + 恶意仓库检出不执行。剩:片2b worker 写隔离(需真 claude 实测)、独立审计变异式验证(有 clean_clone 简版)、员工真断网(本地转发器,大刀)。
+- [x] **真合并列车接通(§5.7)**(轮23,沙箱三片完工后前置满足) — 经理 Deliver real 任务(有分支)→ `merge_and_reverify`(冲突探测→merge_no_ff→合并后重验→绿保留/红 reset main)合进 main,按结果改状态(merged / needs_rebase 留人工)。ProjectManager 加 MergeLock(交付全局串行)。**simulate 无分支 → 跳过合并不破坏**(实测 verified 仍 verified、决策弧含交付)。merge_and_reverify 自带"重验红→reset main"护栏守「main 永不坏」。merge 3+app 34 单测全绿+release。**真合并端到端需 real(有真实代码改动+分支)实测,留用户开 real 时验**(护栏在,坏不了 main)。**至此"自治公司推进项目"闭环理论完整:派活→干活→复核→交付→合进 main**。
+
+## 验证方式(每轮)
+
+- `QUIVER_FAKE_DELAY_MS=0 cargo test -p quiver-app -p quiver-core -p quiver-store -p quiver-orchestrator -p fake-claude` 全绿
+- `yarn --cwd frontend tsc --noEmit` 干净
+- 桥接器:`scripts/agent-debug.sh up` → eval 驱动(开自治→派活→读决策流 DOM)→ down。**模式必须 simulate**。
+- ⚠️ 改了 Rust 必须重建二进制(`scripts/agent-debug.sh down && up` 会重建)才能在真 app 验证。
+- ⚠️ **down 可能没真停**:它只认"本脚本启动的实例记录",记录丢了就 no-op(报「没有由本脚本启动的实例记录」)——此时 up 也不会再起新的,probe READY 探到的是**旧二进制的 bridge**!重启敏感的验证(如 reconcile)前先 `pkill -9 -f target/debug/Quiver` 杀干净再 up,并核对 app 启动时刻 vs 测试数据写入时刻的先后。
+
+## 迭代日志
+
+- 〔轮1 2026-06-10〕接通记忆简报→经理上下文;决策流加血肉;fake-claude 可信工作弧;摄像头/弹窗/点外关三处交互修复。全套测试绿(fake 10/core 70/app 29)+tsc 干净。
+- 〔轮1·真 app 实测全过〕决策流:`派活 ▸「做转写的导出功能」· 有预算、在途未满、有排队 · 1/1在途 预算充裕`(血肉✓);worker 3.5s 仍在干活(fake_delay_ms=30 下全程 ~7.4s,玩具感✓);点小人 world transform 纹丝不动(摄像头✓);worksurf 秒开+点框外即收(交互✓)。
+- 〔轮1·⚠️事故+修复〕**经理循环曾连环起真 claude 烧额度**:旧 manager_brain 按 `default_mode=="real"` 自动选 ClaudeBrain,用户 default_mode 恰是 real → simulate 任务被真 claude 经理想,且 Escalate 不等待立即下一拍 → 连环起进程(实烧 2 次短决策调用,已杀干净)。**修复两刀**:① manager_brain 恒 RuleBrain,ClaudeBrain 等人事部显式「经理大脑」配置才接(烧钱大脑绝不搭别的设置便车);② manager_loop 只有 Spawn/Continue/Deliver/Block(真改变局面)才立即下拍,Nothing/Escalate/Refresh 一律等待 + 每循环 200 拍硬熔断(§5.8)。教训已写进 lib.rs manager_brain 注释。
+- 〔轮1·发现〕用户 DB:`default_mode=real`、`fake_delay_ms=30`(都是用户自己的设置,代码要适配它们,别动用户数据)。fake-claude 思考停顿已给 250ms 地板,与 fakeDelayMs 解耦。
+- 〔轮2 2026-06-10〕**A1 经理复核裁决落地**。真 app 实测完整决策弧(5 拍干净):`#0 派活▸「做转写的导出功能」→ #1-2 按兵不动(等工) → #3 交付「做转写的导出功能」→ #4 收工`——经理真的在"看产物终态、替你回 AI 的决策"了。顺手修:TICK_IDLE_TIMEOUT 800ms→5s(兜底超时拍曾把决策流刷出 6 拍 noop,真大脑下每拍都是钱;唤醒主靠 notify,超时只是防丢保险)。测试 59 通过 0 失败(orchestrator+app),tsc 干净。
+- 〔轮2·注意〕app 集成测试(run_task 套件)因 fake-claude 250ms think 地板变慢(~17s)——它走 settings 默认 fake_delay_ms=120 而非 env。能忍;若 CI 嫌慢,在测试 settings 里把 fake_delay_ms 设 0 即可(think 对 delay=0 整体跳过)。
+- 〔轮5-10 2026-06-10〕**C1+A2+C2 连续落地**(轮6-9 被 cron 切片,跨轮接力完成)。C1:决策留痕 episode 实测落库+时间线穿插显示;A2:经理拆活(next_task 进 ctx、ClaudeBrain prompt 嵌任务原文+改写指示+待复核清单、执行层用经理改写的 prompt 派工,QUEUE_NEXT_PLACEHOLDER 区分占位),94 测试过,RuleBrain 回归决策弧不变;C2:简报可见化(经理在想什么 ▾),实测 10 条记忆全显。**四支柱现状:A 自治(派活+复核裁决+风暴熔断)✓ B 配置(人事部 UI+真接线+显式烧钱开关)✓ C 记忆(brief 注入+决策留痕+可见化)✓ D 体感(决策流血肉+工作弧+交互三修)✓——骨架全通,后续是深化(D1 工位停留、真合并列车、librarian 换 claude、崩溃恢复硬化)。真 app 实测:⌘K→人事部渲染经理/员工两卡;改员工预算 1.5→落库 `worker|1.5|v2`(version+1✓)→显式清空→`worker||v3`(双层 Option 清除✓)。桥接器经验:**React onBlur 要 dispatch `focusout`**(不是 `blur`,React 17+ 委托 focusout)。测试 64 过(app 30/store 34)+tsc。已还原用户配置。
+- 〔轮3 2026-06-10〕**B1 人事部地基落地**。真 app 实测:agent_role seed 两行(`manager|经理|rule|sonnet|v1`/`worker|员工`)、派活无真 claude 进程(brain=rule 守住)、决策弧照常(派活→交付)。测试 93 通过 0 失败(store 34/app 30/orch 29)+tsc 干净+release check 过。**B2 注意**:UI 改经理 brain='claude' 后,经理循环是 per-project 缓存的(ProjectManager.brain 首次定)——改 brain 对已存在的 project 循环不生效,要么重启 app、要么 B2 顺手把 ManagerLoop 加"配置变了重建 brain"(update_role 后调,类似 resume_all 但换脑)。别忘这个,否则用户改了开关以为生效了。
