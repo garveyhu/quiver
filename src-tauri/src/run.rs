@@ -282,10 +282,27 @@ pub async fn run_streaming(
         }
     };
 
+    // §14 丰富配置生效:把这个员工的身份(专长)+ CEO 给 ta 的工作准则(system_prompt)注入任务
+    // 开头 —— 员工带着自己的专长和性格干活,而不是千篇一律。配了不生效就是假配置。
+    let role_intro = worker_role
+        .as_ref()
+        .map(|r| {
+            let mut lines = Vec::new();
+            let sp = r.specialty.trim();
+            if !sp.is_empty() && sp != "通用" {
+                lines.push(format!("你是「{}」,专长是「{sp}」,按你的专长把这件事做到位。", r.name));
+            }
+            let cfg = r.system_prompt.trim();
+            if !cfg.is_empty() {
+                lines.push(format!("CEO 给你的工作准则(优先遵守):{cfg}"));
+            }
+            if lines.is_empty() { String::new() } else { format!("{}\n\n", lines.join("\n")) }
+        })
+        .unwrap_or_default();
     // §5 双向协作(worker→经理):告诉 worker 卡住别硬猜 —— 遇到该上级拍板的点写 NEEDS_INPUT,
     // 经理会给指示;能自己合理决定的正常做完,不必事事请示。
     let prompt = format!(
-        "{prompt}\n\n[协作约定] 遇到需要上级拍板的点(架构选择、模糊或缺失的需求、重大取舍),\
+        "{role_intro}{prompt}\n\n[协作约定] 遇到需要上级拍板的点(架构选择、模糊或缺失的需求、重大取舍),\
          或缺关键信息做不下去时,别擅自硬做或瞎猜 —— 在输出末尾单独起一行写 \
          `NEEDS_INPUT: <你的具体问题>`,经理看到会给你指示后你再继续。能自己合理决定的就正常做完。"
     );
