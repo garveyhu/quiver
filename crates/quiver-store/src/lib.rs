@@ -24,9 +24,11 @@
 //! short (single statements over a tiny local file) so holding the lock briefly
 //! on the Tauri command thread is fine — no `.await` is held across it.
 
+mod decisions;
 mod events;
 mod history;
 mod projects;
+mod roles;
 mod schema;
 mod settings;
 mod tasks;
@@ -37,9 +39,11 @@ use std::sync::Mutex;
 use rusqlite::Connection;
 use serde::Serialize;
 
+pub use decisions::DecisionRecord;
 pub use events::{NewEvent, StoredEvent};
 pub use history::{NewRun, RunRecord};
 pub use projects::RecentProject;
+pub use roles::{AgentRole, RolePatch};
 pub use settings::{Settings, SettingsPatch};
 pub use tasks::{MetricSample, NewTask, TaskRecord};
 

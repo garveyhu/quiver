@@ -110,6 +110,9 @@ pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
     // The verify-gate command (DESIGN §7) — added after the original settings table,
     // so existing DBs gain it idempotently (default '' = no real gate / always-pass).
     add_column_if_absent(conn, "settings", "verify_command", "TEXT NOT NULL DEFAULT ''")?;
+    // 自治开关(DESIGN §5):on=经理控制循环驱动调度(基于决策派活),off=旧 scheduler 无脑流水线。
+    // 默认 0(关)——经理循环验证稳了用户再翻开,可随时回退。
+    add_column_if_absent(conn, "settings", "autonomous", "INTEGER NOT NULL DEFAULT 0")?;
 
     // P0 crash-recovery columns on `task` (DESIGN §20 / §23 P0). The supervisor's
     // reconcile keys off these; all NULLABLE so existing rows and the current
@@ -127,6 +130,50 @@ pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
     // (无则 get_metrics 退回墙钟代理 / 0)。
     add_column_if_absent(conn, "task", "tokens", "INTEGER")?;
     add_column_if_absent(conn, "task", "duration_ms", "INTEGER")?;
+
+    // 决策日志(DESIGN §20 decision_log 裁剪/§10 复盘室):经理每拍真实决策一行,只追加。
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS decision_log (
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            project              TEXT NOT NULL,
+            seq                  INTEGER NOT NULL,
+            action               TEXT NOT NULL,
+            reason               TEXT,
+            node_id              TEXT,
+            task_id              TEXT,
+            task_prompt          TEXT,
+            executed             INTEGER NOT NULL,
+            inflight             INTEGER NOT NULL,
+            queued               INTEGER NOT NULL,
+            max_inflight         INTEGER NOT NULL,
+            budget_remaining_usd REAL NOT NULL,
+            ts_ms                INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_decision_project ON decision_log(project, ts_ms);",
+    )?;
+
+    // 人事部(DESIGN §14):角色配置表 + 内置经理/员工 seed。经理的 brain 字段是
+    // 「烧钱大脑」的唯一显式开关(seed 必须是免费的 rule)。
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS agent_role (
+            id            TEXT PRIMARY KEY,
+            name          TEXT NOT NULL,
+            kind          TEXT NOT NULL,
+            brain         TEXT NOT NULL DEFAULT 'rule',
+            model         TEXT NOT NULL DEFAULT 'sonnet',
+            system_prompt TEXT NOT NULL DEFAULT '',
+            budget_usd    REAL,
+            max_turns     INTEGER,
+            version       INTEGER NOT NULL DEFAULT 1,
+            updated_at    INTEGER NOT NULL
+        );
+        INSERT OR IGNORE INTO agent_role (id, name, kind, brain, model, updated_at)
+            VALUES ('manager', '经理', 'manager', 'rule', 'sonnet', 0);
+        INSERT OR IGNORE INTO agent_role (id, name, kind, brain, model, updated_at)
+            VALUES ('worker', '员工', 'worker', 'rule', 'sonnet', 0);
+        INSERT OR IGNORE INTO agent_role (id, name, kind, brain, model, updated_at)
+            VALUES ('librarian', '图书管理员', 'librarian', 'rule', 'sonnet', 0);",
+    )?;
 
     // Seed the single settings row with defaults if absent, so `get_settings`
     // always returns a complete config. `INSERT OR IGNORE` keeps it idempotent

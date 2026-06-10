@@ -63,6 +63,9 @@ pub struct Settings {
     /// worktree before merge. Empty = no real gate (treated as always-pass, the
     /// original behavior) so existing setups are unchanged until a command is set.
     pub verify_command: String,
+    /// 自治开关(DESIGN §5):`true` = 经理控制循环驱动调度(经理拍决策派活/交付),`false` =
+    /// 旧 scheduler 无脑流水线。默认 `false`,可随时回退;翻开后 enqueue 走经理循环。
+    pub autonomous: bool,
 }
 
 impl Default for Settings {
@@ -78,6 +81,7 @@ impl Default for Settings {
             theme: DEFAULT_THEME.to_string(),
             ui_scale: DEFAULT_UI_SCALE,
             verify_command: String::new(),
+            autonomous: false,
         }
     }
 }
@@ -103,6 +107,7 @@ pub struct SettingsPatch {
     pub theme: Option<String>,
     pub ui_scale: Option<f64>,
     pub verify_command: Option<String>,
+    pub autonomous: Option<bool>,
 }
 
 /// Deserialize a present-but-maybe-null JSON field into `Some(Option<f64>)`,
@@ -133,7 +138,7 @@ impl Store {
             .query_row(
                 "SELECT default_mode, model, max_workers, monthly_credit_cap_usd,
                         nightly_budget_usd, agent_bin_override, fake_delay_ms, theme, ui_scale,
-                        verify_command
+                        verify_command, autonomous
                  FROM settings WHERE id = 1",
                 [],
                 |row| {
@@ -148,6 +153,7 @@ impl Store {
                         theme: row.get(7)?,
                         ui_scale: row.get(8)?,
                         verify_command: row.get(9)?,
+                        autonomous: row.get(10)?,
                     })
                 },
             )
@@ -168,7 +174,7 @@ impl Store {
             .query_row(
                 "SELECT default_mode, model, max_workers, monthly_credit_cap_usd,
                         nightly_budget_usd, agent_bin_override, fake_delay_ms, theme, ui_scale,
-                        verify_command
+                        verify_command, autonomous
                  FROM settings WHERE id = 1",
                 [],
                 |row| {
@@ -183,6 +189,7 @@ impl Store {
                         theme: row.get(7)?,
                         ui_scale: row.get(8)?,
                         verify_command: row.get(9)?,
+                        autonomous: row.get(10)?,
                     })
                 },
             )
@@ -219,13 +226,16 @@ impl Store {
         if let Some(v) = &patch.verify_command {
             current.verify_command = v.clone();
         }
+        if let Some(v) = patch.autonomous {
+            current.autonomous = v;
+        }
 
         conn.execute(
             "INSERT INTO settings
                 (id, default_mode, model, max_workers, monthly_credit_cap_usd,
                  nightly_budget_usd, agent_bin_override, fake_delay_ms, theme, ui_scale,
-                 verify_command)
-             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+                 verify_command, autonomous)
+             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
              ON CONFLICT(id) DO UPDATE SET
                 default_mode           = excluded.default_mode,
                 model                  = excluded.model,
@@ -236,7 +246,8 @@ impl Store {
                 fake_delay_ms          = excluded.fake_delay_ms,
                 theme                  = excluded.theme,
                 ui_scale               = excluded.ui_scale,
-                verify_command         = excluded.verify_command",
+                verify_command         = excluded.verify_command,
+                autonomous             = excluded.autonomous",
             params![
                 current.default_mode,
                 current.model,
@@ -248,6 +259,7 @@ impl Store {
                 current.theme,
                 current.ui_scale,
                 current.verify_command,
+                current.autonomous,
             ],
         )?;
         Ok(current)
