@@ -71,8 +71,30 @@ impl VerifyCommand {
             .split_first()
             .expect("argv is non-empty by construction");
 
-        let output = tokio::process::Command::new(program)
-            .args(args)
+        // 程序是绝对/相对路径却不可执行 → 这是**配错的 gate**(VerifyError),不是测试红。
+        // 必须在包沙箱前判:否则 `sandbox-exec` 自己能 spawn、execvp 目标失败只会非 0 退出,
+        // 把"配置错误"误吞成"测试红"(VerifyFailed),丢掉 §7 的这层区分。PATH 名(无 '/')
+        // 交给执行层解析,不在这里拦。
+        if program.contains('/') && !is_executable_file(Path::new(program)) {
+            anyhow::bail!("verify command program is not executable: {program:?}");
+        }
+
+        // §8 沙箱:verify 跑的是 **worker 改过的代码**(测试/构建脚本可任意执行),最该关进
+        // 沙箱 —— 写只限 `dir`(这个 worktree)、默认不出网。macOS 用 seatbelt 包一层;其它
+        // 平台 SandboxPolicy::is_supported()=false,原样跑(不静默假装安全,见 §8.2)。
+        let policy = crate::sandbox::SandboxPolicy::for_worktree(dir);
+        let mut cmd = if crate::sandbox::SandboxPolicy::is_supported() {
+            let (wprog, wargs) = policy.wrap(program, args);
+            let mut c = tokio::process::Command::new(wprog);
+            c.args(wargs);
+            c
+        } else {
+            let mut c = tokio::process::Command::new(program);
+            c.args(args);
+            c
+        };
+
+        let output = cmd
             .current_dir(dir)
             .stdin(std::process::Stdio::null())
             .output()
@@ -93,6 +115,26 @@ impl VerifyCommand {
             combined.push_str(&stderr);
         }
         Ok((result, tail(&combined, 2000)))
+    }
+}
+
+/// 路径是否指向一个可执行文件(存在 + 普通文件 + 任一执行位)。用于在包沙箱前甄别
+/// "gate 程序配错"。非 Unix 退化为"存在即可"。
+fn is_executable_file(p: &Path) -> bool {
+    let Ok(meta) = std::fs::metadata(p) else {
+        return false;
+    };
+    if !meta.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        return meta.permissions().mode() & 0o111 != 0;
+    }
+    #[cfg(not(unix))]
+    {
+        true
     }
 }
 
@@ -173,6 +215,8 @@ mod tests {
     #[tokio::test]
     async fn unspawnable_command_is_an_error_not_a_red_test() {
         let dir = TempDir::new().expect("tempdir");
+        // 绝对路径程序不存在 = 配错的 gate。包沙箱前的可执行性预检把它甄别成 Err
+        // (VerifyError),不是测试红(VerifyFailed)—— 沙箱包裹也不丢这层区分(§7)。
         let cmd = VerifyCommand::new(["/nonexistent/quiver/definitely-not-a-program"])
             .expect("argv");
         assert!(

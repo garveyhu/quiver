@@ -17,6 +17,29 @@ use std::time::Duration;
 
 use tokio::sync::Mutex;
 
+/// §8.2 防御性 git 配置(作为 `git -c K=V …` 前缀注入到任何会 **clone/checkout** 的命令)。
+/// 恶意仓库能在检出**那一瞬间**就执行代码 —— 比 git 钩子更隐蔽的几个口子全堵上:
+/// - `core.hooksPath=/dev/null`:关掉仓库钩子(post-checkout 等)。
+/// - `core.fsmonitor=false`:关掉可被劫持的 fsmonitor 程序。
+/// - `core.attributesFile=/dev/null`:不读用户全局 `.gitattributes`(filter/diff driver 触发点)。
+/// - `core.symlinks=false`:检出符号链接当普通文件,挡符号链接逃逸。
+///
+/// 子模块 `update=!cmd` 注入靠**调用方加 `--no-recurse-submodules`** 挡(子模块根本不检出);
+/// 子模块的 `file://` 协议在现代 git(≥2.38,CVE-2022-39253)默认已禁,故**不**显式设
+/// `protocol.file.allow=never`——那会连可信的本地主仓库 clone(`file` 源)一起误杀。
+/// 仓库内 `.gitattributes` 仍可能声明 filter,但没有 config 里的 driver 命令就执行不了;
+/// 这组 flag + 沙箱(进程被 seatbelt 罩住)是 §8.2「克隆前就位」的双保险。
+pub const SAFE_GIT_FLAGS: &[&str] = &[
+    "-c",
+    "core.hooksPath=/dev/null",
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.attributesFile=/dev/null",
+    "-c",
+    "core.symlinks=false",
+];
+
 /// Bounded retry + exponential backoff for transient git lock contention
 /// (DESIGN §6.3). Concurrent ops behind the metadata lock shouldn't collide, but
 /// background tooling (or a not-yet-released `index.lock`) can still cause a
@@ -217,8 +240,12 @@ impl GitGuard {
     ) -> anyhow::Result<WorktreePath> {
         let _lock = self.meta_lock.lock().await;
         let dir_str = path_arg(dir)?;
-        self.run_meta(&["worktree", "add", dir_str, "-b", branch])
-            .await?;
+        // §8.2:worktree add 会 checkout 新分支 → 触发 .gitattributes 的 smudge 过滤器,
+        // 同 clone 一样是"检出即执行"的口子。前置防御 flags(它们紧跟 `-C <repo>` 之后、
+        // 子命令 `worktree` 之前,正是 git 全局选项的位置)。
+        let mut args: Vec<&str> = SAFE_GIT_FLAGS.to_vec();
+        args.extend_from_slice(&["worktree", "add", dir_str, "-b", branch]);
+        self.run_meta(&args).await?;
         Ok(WorktreePath(dir.to_path_buf()))
     }
 

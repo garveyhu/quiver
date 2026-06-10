@@ -38,6 +38,9 @@ const ENV_ALLOWLIST: &[&str] = &["PATH", "HOME", "USER", "TERM", "QUIVER_FAKE_DE
 pub struct ClaudeRunner {
     task_id: String,
     extra_args: Vec<String>,
+    /// 是否把 claude 进程关进沙箱(§8.3 for_worker:留网、禁读密钥)。默认 `true`。
+    /// 经理大脑/图书管理员这类**只读思考**的轻量调用可关(它们不改 worktree、cwd 是 repo 根)。
+    sandbox: bool,
 }
 
 impl ClaudeRunner {
@@ -45,7 +48,15 @@ impl ClaudeRunner {
         Self {
             task_id: task_id.into(),
             extra_args: Vec::new(),
+            sandbox: true,
         }
+    }
+
+    /// 关掉沙箱包裹(经理大脑/图书管理员等只读思考调用用 —— 它们 cwd 是 repo 根、不改码,
+    /// 包 for_worker 反而会因 cwd≠worktree 误伤)。
+    pub fn without_sandbox(mut self) -> Self {
+        self.sandbox = false;
+        self
     }
 
     /// Append extra CLI args (e.g. `["--permission-mode", "acceptEdits",
@@ -61,14 +72,31 @@ impl ClaudeRunner {
     /// Build the base `claude` invocation (flags + env allowlist + piped stdout)
     /// shared by [`spawn`](AgentRunner::spawn) and [`resume`](AgentRunner::resume).
     fn base_command(&self, prompt: &str, cwd: &Path, bin: &Path) -> Command {
-        let mut command = Command::new(bin);
+        // claude 的固定调用参数(沙箱包裹时作为 sandbox-exec 之后的"原命令")。
+        let mut claude_args: Vec<String> = vec![
+            "-p".into(),
+            prompt.into(),
+            "--output-format".into(),
+            "stream-json".into(),
+            "--verbose".into(),
+        ];
+        claude_args.extend(self.extra_args.iter().cloned());
+
+        // §8.3 worker 沙箱:macOS + sandbox 开 → 把 claude 关进 for_worker 策略(留网、禁读
+        // 密钥)。其它平台/关沙箱 → 直起 claude。`program/argv` 二选一拼好,统一 spawn。
+        let bin_str = bin.to_string_lossy().to_string();
+        let policy = crate::sandbox::SandboxPolicy::for_worker(cwd);
+        let mut command = if self.sandbox && crate::sandbox::SandboxPolicy::is_supported() {
+            let (prog, args) = policy.wrap(&bin_str, &claude_args);
+            let mut c = Command::new(prog);
+            c.args(args);
+            c
+        } else {
+            let mut c = Command::new(bin);
+            c.args(&claude_args);
+            c
+        };
         command
-            .arg("-p")
-            .arg(prompt)
-            .arg("--output-format")
-            .arg("stream-json")
-            .arg("--verbose")
-            .args(&self.extra_args)
             .current_dir(cwd)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -87,6 +115,12 @@ impl ClaudeRunner {
     /// normalized [`AgentEvent`] channel. `bin` is only used for the error message.
     /// Returns the event stream + the child PID for cancellation.
     fn drive(&self, mut command: Command, bin: &Path) -> Result<SpawnedAgent> {
+        // bin 是路径却不可执行 → spawn 失败语义(SpawnFailed)。必须在(可能的)sandbox-exec
+        // 包裹之前判:否则 `sandbox-exec` 自己 spawn 成功、目标 bin 不存在只会让它退出无输出,
+        // 把"agent 二进制缺失"误吞成 NoResult。沙箱包裹不该模糊这个错误来源。
+        if bin.to_string_lossy().contains('/') && !is_executable_file(bin) {
+            anyhow::bail!("agent binary is not executable: {}", bin.display());
+        }
         let mut child = command
             .spawn()
             .with_context(|| format!("failed to spawn agent binary {}", bin.display()))?;
@@ -144,6 +178,26 @@ impl AgentRunner for ClaudeRunner {
 
     fn kind(&self) -> RunnerKind {
         RunnerKind::ClaudeCli
+    }
+}
+
+/// 路径是否指向一个可执行文件(存在 + 普通文件 + 任一执行位)。用于在沙箱包裹前甄别
+/// "agent 二进制缺失"。非 Unix 退化为"存在即可"。
+fn is_executable_file(p: &Path) -> bool {
+    let Ok(meta) = std::fs::metadata(p) else {
+        return false;
+    };
+    if !meta.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        return meta.permissions().mode() & 0o111 != 0;
+    }
+    #[cfg(not(unix))]
+    {
+        true
     }
 }
 

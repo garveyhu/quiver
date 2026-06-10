@@ -25,10 +25,12 @@ pub fn clean_clone_verify(
         .to_str()
         .ok_or_else(|| anyhow::anyhow!("源仓库路径非 UTF-8"))?;
     let dst = dest.to_str().ok_or_else(|| anyhow::anyhow!("目标路径非 UTF-8"))?;
-    // 1. 本地完整克隆(独立于源工作树)。
-    run_git(&["clone", "--quiet", src, dst])?;
+    // 1. 本地完整克隆(独立于源工作树)。§8.2:clone/checkout 都带防御 flags —— 恶意仓库
+    //    能在检出瞬间靠 .gitattributes 过滤器/钩子/子模块执行代码,审计副本绝不能中招。
+    //    `--no-recurse-submodules` 单独加(子模块是检出代码执行的经典口子)。
+    run_git_safe(&["clone", "--quiet", "--no-recurse-submodules", src, dst])?;
     // 2. 检出目标 commit(detached HEAD)。
-    run_git_in(dest, &["checkout", "--quiet", commit])?;
+    run_git_in_safe(dest, &["checkout", "--quiet", commit])?;
     // 3. 在干净副本里跑 verify。
     let (program, args) = verify
         .argv()
@@ -42,9 +44,11 @@ pub fn clean_clone_verify(
     Ok(status.success())
 }
 
-fn run_git(args: &[&str]) -> anyhow::Result<()> {
+/// 跑 git,前置 §8.2 防御 flags(见 [`SAFE_GIT_FLAGS`](crate::git::SAFE_GIT_FLAGS))。
+fn run_git_safe(args: &[&str]) -> anyhow::Result<()> {
+    let full: Vec<&str> = crate::git::SAFE_GIT_FLAGS.iter().copied().chain(args.iter().copied()).collect();
     let out = Command::new("git")
-        .args(args)
+        .args(&full)
         .output()
         .with_context(|| format!("git {args:?} 启动失败"))?;
     if !out.status.success() {
@@ -53,10 +57,12 @@ fn run_git(args: &[&str]) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn run_git_in(dir: &Path, args: &[&str]) -> anyhow::Result<()> {
+/// 同 [`run_git_safe`] 但带 `current_dir`。
+fn run_git_in_safe(dir: &Path, args: &[&str]) -> anyhow::Result<()> {
+    let full: Vec<&str> = crate::git::SAFE_GIT_FLAGS.iter().copied().chain(args.iter().copied()).collect();
     let out = Command::new("git")
         .current_dir(dir)
-        .args(args)
+        .args(&full)
         .output()
         .with_context(|| format!("git -C {} {args:?} 启动失败", dir.display()))?;
     if !out.status.success() {
@@ -213,5 +219,35 @@ mod tests {
         )
         .unwrap();
         assert!(!fail, "verify 失败返回 false");
+    }
+
+    #[test]
+    fn malicious_gitattributes_filter_does_not_execute_on_clone() {
+        // §8.2:恶意仓库用 .gitattributes 声明一个 smudge 过滤器,过滤器命令写一个"中招"
+        // 文件。审计 clean_clone(带 SAFE_GIT_FLAGS:core.attributesFile=/dev/null 等)检出时
+        // **绝不能**执行它 —— pwned 文件不该出现。
+        use crate::verify::VerifyCommand;
+        use tempfile::TempDir;
+
+        let src = TempDir::new().unwrap();
+        let p = src.path();
+        let pwned = src.path().join("PWNED");
+        let git = |args: &[&str]| {
+            let o = Command::new("git").current_dir(p).args(args).output().unwrap();
+            assert!(o.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&o.stderr));
+        };
+        git(&["init", "--quiet"]);
+        git(&["config", "user.email", "t@t"]);
+        git(&["config", "user.name", "t"]);
+        // 仓库内声明: *.txt 走 evil 过滤器;过滤器在 config 里写一个外部命令(touch PWNED)。
+        std::fs::write(p.join(".gitattributes"), "*.txt filter=evil\n").unwrap();
+        git(&["config", "filter.evil.smudge", &format!("sh -c 'touch {}'; cat", pwned.display())]);
+        std::fs::write(p.join("marker.txt"), "ok").unwrap();
+        git(&["add", "."]);
+        git(&["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "init"]);
+
+        let dst = TempDir::new().unwrap();
+        let _ = clean_clone_verify(p, "HEAD", &VerifyCommand::shell("true"), &dst.path().join("clone"));
+        assert!(!pwned.exists(), "smudge 过滤器在审计克隆时被执行了(§8.2 防御失效!)");
     }
 }

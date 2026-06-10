@@ -113,10 +113,21 @@ async fn run_task_streams_events_and_leaves_repo_clean() {
         assert_eq!(ev.seq, i as u64);
     }
     let kinds: Vec<&AgentEventPayload> = outcome.events.iter().map(|e| &e.payload).collect();
-    assert!(matches!(kinds[0], AgentEventPayload::WorkerStarted { .. }));
-    assert!(matches!(kinds[1], AgentEventPayload::ToolUse { .. }));
-    assert!(matches!(kinds[2], AgentEventPayload::OutputChunk { .. }));
-    assert!(matches!(kinds[3], AgentEventPayload::Result { ok: true, .. }));
+    // fake-claude 的 happy 工作弧:首事件 WorkerStarted、尾事件 Result{ok}、其间至少有
+    // 一次 ToolUse 和一次 OutputChunk(具体步骤数随脚本演进,断言形状而非固定下标)。
+    assert!(matches!(kinds[0], AgentEventPayload::WorkerStarted { .. }), "首事件开工");
+    assert!(
+        matches!(kinds.last(), Some(AgentEventPayload::Result { ok: true, .. })),
+        "尾事件是成功 Result"
+    );
+    assert!(
+        kinds.iter().any(|k| matches!(k, AgentEventPayload::ToolUse { .. })),
+        "工作弧里有工具调用"
+    );
+    assert!(
+        kinds.iter().any(|k| matches!(k, AgentEventPayload::OutputChunk { .. })),
+        "工作弧里有文本输出"
+    );
 
     // Verify-gate: Result{ok:true} AND a passing verify command → Verified.
     assert_eq!(outcome.status, FinishStatus::Verified);

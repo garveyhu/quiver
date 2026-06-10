@@ -64,29 +64,28 @@ async fn streams_ordered_events_from_fake_claude() {
 
     // Ordered payload sequence: WorkerStarted → ToolUse → OutputChunk → Result.
     let kinds: Vec<&AgentEventPayload> = events.iter().map(|e| &e.payload).collect();
+    // fake-claude 的 happy 工作弧(读→搜→改→测→报):首 WorkerStarted、尾成功 Result,
+    // 其间有工具调用与文本输出。断言**形状**而非固定下标 —— 脚本步骤数会随演进变。
     assert!(
         matches!(kinds[0], AgentEventPayload::WorkerStarted { .. }),
         "first event should be WorkerStarted, got {:?}",
         kinds[0]
     );
-    assert!(
-        matches!(kinds[1], AgentEventPayload::ToolUse { .. }),
-        "second event should be ToolUse, got {:?}",
-        kinds[1]
-    );
-    assert!(
-        matches!(kinds[2], AgentEventPayload::OutputChunk { .. }),
-        "third event should be OutputChunk, got {:?}",
-        kinds[2]
-    );
-    match kinds[3] {
-        AgentEventPayload::Result { ok, cost_usd, .. } => {
-            assert!(*ok, "Result should be ok");
+    match kinds.last() {
+        Some(AgentEventPayload::Result { ok, cost_usd, .. }) => {
+            assert!(*ok, "final Result should be ok");
             assert!(cost_usd.is_some(), "Result should carry a cost_usd");
         }
-        other => panic!("fourth event should be Result, got {other:?}"),
+        other => panic!("last event should be a successful Result, got {other:?}"),
     }
-    assert_eq!(events.len(), 4, "exactly four mapped events expected");
+    assert!(
+        kinds.iter().any(|k| matches!(k, AgentEventPayload::ToolUse { .. })),
+        "work arc should include at least one ToolUse"
+    );
+    assert!(
+        kinds.iter().any(|k| matches!(k, AgentEventPayload::OutputChunk { .. })),
+        "work arc should include at least one OutputChunk"
+    );
 }
 
 #[tokio::test]
