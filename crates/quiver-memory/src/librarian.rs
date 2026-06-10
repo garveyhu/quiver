@@ -138,6 +138,63 @@ impl MemoryStore {
             .optional()?;
         Ok(t)
     }
+
+    /// **机械矛盾消解**(§6.4 无 AI):新事实 `new_id` 有 `entity` 时,作废同 (project, entity)
+    /// 的所有**可信度严格更低**的旧当前事实 —— 同一主题/模块上,更可信的新事实顶替不那么
+    /// 可信的旧事实(如 CEO 权威事实顶替员工汇报)。纯按可信度档比较,不做语义判断,所以免费、
+    /// 确定、可单测。返回被作废的 id。新事实无 entity → 不动(无法机械框定"同一主题")。
+    pub fn supersede_lower_same_entity(
+        &self,
+        new_id: i64,
+        at_ms: i64,
+    ) -> anyhow::Result<Vec<i64>> {
+        let (project, entity, trust): (String, Option<String>, String) = {
+            let conn = self.conn.lock().expect("memory store lock");
+            let row = conn
+                .query_row(
+                    "SELECT project, entity, trust FROM memory_fact WHERE id = ?1 AND invalid_at IS NULL",
+                    params![new_id],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                )
+                .optional()?;
+            match row {
+                Some(v) => v,
+                None => return Ok(Vec::new()), // 新事实不存在/已失效
+            }
+        };
+        let Some(entity) = entity else {
+            return Ok(Vec::new());
+        };
+        let new_rank = trust_rank(&trust);
+        let candidates: Vec<i64> = self
+            .current_facts(&project)?
+            .into_iter()
+            .filter(|f| {
+                f.id != new_id
+                    && f.entity.as_deref() == Some(entity.as_str())
+                    && trust_rank(&f.trust) < new_rank
+            })
+            .map(|f| f.id)
+            .collect();
+        let mut retired = Vec::new();
+        for cid in candidates {
+            if self.retire_fact(cid, new_id, at_ms)? {
+                retired.push(cid);
+            }
+        }
+        Ok(retired)
+    }
+}
+
+/// 可信度档的机械排序(§6.2,数字大=更可信)。未知档当最低。
+fn trust_rank(t: &str) -> u8 {
+    match t {
+        "权威" => 5,
+        "已验证·机械" => 4,
+        "已验证·印证" => 3,
+        "员工汇报" => 2,
+        _ => 1, // 不可信 / 未知
+    }
 }
 
 #[cfg(test)]
@@ -161,6 +218,41 @@ mod tests {
             source_commit: None,
             source_episode_id: None,
         }
+    }
+
+    fn fact_et(project: &str, text: &str, entity: &str, trust: &str) -> NewFact {
+        NewFact {
+            entity: Some(entity.into()),
+            trust: trust.into(),
+            ..fact(project, text)
+        }
+    }
+
+    #[test]
+    fn supersede_lower_same_entity_retires_only_lower_trust_same_entity() {
+        let store = MemoryStore::open_in_memory().unwrap();
+        // 同主题「数据库」:一条员工汇报的旧事实 + 一条别主题的 + 一条同主题但已验证·机械(更高)。
+        let old_low = store.insert_fact(&fact_et("/r", "数据库用 RocksDB", "数据库", "员工汇报")).unwrap();
+        let other = store.insert_fact(&fact_et("/r", "前端用 React", "前端", "员工汇报")).unwrap();
+        let old_high = store.insert_fact(&fact_et("/r", "数据库已机械验证用 X", "数据库", "已验证·机械")).unwrap();
+        // CEO 权威事实(同主题「数据库」)进来。
+        let new = store.insert_fact(&fact_et("/r", "数据库迁到 SQLite", "数据库", "权威")).unwrap();
+        let retired = store.supersede_lower_same_entity(new, 100).unwrap();
+        // 只作废同主题、可信度更低的(员工汇报);别主题不动;同主题但≥的(已验证·机械<权威 → 也作废)。
+        assert!(retired.contains(&old_low), "同主题低档旧事实被作废");
+        assert!(retired.contains(&old_high), "同主题更低于权威的也被作废");
+        let current: Vec<i64> = store.current_facts("/r").unwrap().into_iter().map(|f| f.id).collect();
+        assert!(current.contains(&new) && current.contains(&other), "新事实+别主题保留");
+        assert!(!current.contains(&old_low) && !current.contains(&old_high), "同主题旧的失效");
+    }
+
+    #[test]
+    fn supersede_noop_without_entity() {
+        let store = MemoryStore::open_in_memory().unwrap();
+        store.insert_fact(&fact("/r", "数据库用 RocksDB")).unwrap(); // 无 entity
+        let new = store.insert_fact(&fact("/r", "数据库用 SQLite")).unwrap(); // 无 entity
+        assert!(store.supersede_lower_same_entity(new, 100).unwrap().is_empty(), "无 entity 不作废");
+        assert_eq!(store.current_facts("/r").unwrap().len(), 2);
     }
 
     #[test]

@@ -9,8 +9,8 @@ interface ManagerDeskProps {
   brief: Brief | null;
   autonomous: boolean;
   onToggleAutonomous: (on: boolean) => void;
-  /** CEO 录入一条权威事实给公司。 */
-  onAddFact: (text: string) => void;
+  /** CEO 录入一条权威事实给公司(可带主题,同主题旧事实会被作废)。 */
+  onAddFact: (text: string, topic?: string) => void;
   /** §12 回流:把被拦下/升级的任务打回重做(新任务入队,经理带记忆再派)。 */
   onRequeue: (taskId: string) => void;
   onClose: () => void;
@@ -100,20 +100,30 @@ export function ManagerDesk({ open, decisions, preview, brief, autonomous, onTog
           <b>注入知识</b>
           <span>
             <input
+              className="field role-num"
+              style={{ width: 90, minWidth: 90 }}
+              placeholder="主题(如 数据库)"
+              id="md-fact-topic"
+            />
+            <input
               className="field"
-              placeholder="告诉公司一条事实(如:数据库用 SQLite),回车录入"
+              style={{ marginLeft: 6 }}
+              placeholder="一条事实(如:数据库迁到 SQLite),回车录入"
               onKeyDown={e => {
                 if (e.key === 'Enter') {
                   const v = (e.target as HTMLInputElement).value.trim();
                   if (v) {
-                    onAddFact(v);
+                    const topicEl = document.getElementById('md-fact-topic') as HTMLInputElement | null;
+                    const topic = topicEl?.value.trim() || undefined;
+                    onAddFact(v, topic);
                     (e.target as HTMLInputElement).value = '';
+                    if (topicEl) topicEl.value = '';
                   }
                 }
               }}
             />
             <span className="st-meta" style={{ marginLeft: 8 }}>
-              权威档,进经理简报、影响决策
+              权威档·同主题旧事实会被作废
             </span>
           </span>
         </div>

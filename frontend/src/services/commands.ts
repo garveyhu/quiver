@@ -76,9 +76,10 @@ export const getDecisions = (limit = 40): Promise<ManagerDecision[]> =>
 /** 经理的记忆简报(当前事实+近期 episode,§6)——注入经理决策上下文的内容。 */
 export const getBrief = (): Promise<Brief> => call<Brief>('get_brief');
 
-/** CEO 给公司注入一条权威事实(§6.2):进记忆、注入经理简报,影响后续决策。 */
-export const addAuthoritativeFact = (text: string): Promise<void> =>
-  call<void>('add_authoritative_fact', { text });
+/** CEO 给公司注入一条权威事实(§6.2):进记忆、注入经理简报,影响后续决策。
+ * `topic`(可选):同主题的旧低档事实会被这条机械作废(§6.4 矛盾消解)。 */
+export const addAuthoritativeFact = (text: string, topic?: string): Promise<void> =>
+  call<void>('add_authoritative_fact', { text, topic });
 
 /** 人事部:全部角色配置(经理在前,§14)。 */
 export const listRoles = (): Promise<AgentRole[]> => call<AgentRole[]>('list_roles');

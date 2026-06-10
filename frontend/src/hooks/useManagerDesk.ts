@@ -25,8 +25,8 @@ export interface ManagerDeskState {
   autonomous: boolean;
   /** 翻自治开关(写回 settings;经理循环据此接管/退场)。 */
   toggleAutonomous: (on: boolean) => void;
-  /** CEO 录入一条权威事实,成功后刷新简报让它立刻出现在「经理在想什么」。 */
-  addFact: (text: string) => Promise<void>;
+  /** CEO 录入一条权威事实(可带主题,同主题旧事实会被作废),成功后刷新简报。 */
+  addFact: (text: string, topic?: string) => Promise<void>;
 }
 
 /**
@@ -104,9 +104,9 @@ export function useManagerDesk(
       .catch(() => setAutonomous(!on));
   }, []);
 
-  const addFact = useCallback(async (text: string) => {
-    await addAuthoritativeFact(text);
-    const b = await getBrief(); // 录入后刷新,新事实立刻出现在简报里
+  const addFact = useCallback(async (text: string, topic?: string) => {
+    await addAuthoritativeFact(text, topic);
+    const b = await getBrief(); // 录入后刷新,新事实立刻出现在简报里(旧矛盾事实已被作废)
     setBrief(b);
   }, []);
 

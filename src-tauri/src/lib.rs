@@ -479,30 +479,39 @@ const BRIEF_EPISODE_LIMIT: usize = 10;
 fn add_authoritative_fact(
     state: State<'_, AppState>,
     text: String,
+    topic: Option<String>,
     importance: Option<i64>,
 ) -> Result<(), String> {
     let text = text.trim().to_string();
     if text.is_empty() {
         return Err("事实内容不能为空".to_string());
     }
+    // 主题(entity):同主题的旧低档事实会被这条权威事实机械作废(§6.4)。空 → 不框定主题、不作废。
+    let entity = topic.map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
     let project = current_project(&state)?.display().to_string();
     let mem = state.memory()?;
-    mem.insert_fact(&NewFact {
-        project,
-        scope: None,
-        kind: "知识".to_string(),
-        text,
-        entities: None,
-        entity: None,
-        importance: Some(importance.unwrap_or(9).clamp(1, 9)),
-        valid_at: None,
-        recorded_at: now_ms(),
-        provenance: Some("CEO".to_string()),
-        trust: "权威".to_string(),
-        source_commit: None,
-        source_episode_id: None,
-    })
-    .map_err(|e| format!("{e:#}"))?;
+    let now = now_ms();
+    let new_id = mem
+        .insert_fact(&NewFact {
+            project,
+            scope: None,
+            kind: "知识".to_string(),
+            text,
+            entities: None,
+            entity: entity.clone(),
+            importance: Some(importance.unwrap_or(9).clamp(1, 9)),
+            valid_at: None,
+            recorded_at: now,
+            provenance: Some("CEO".to_string()),
+            trust: "权威".to_string(),
+            source_commit: None,
+            source_episode_id: None,
+        })
+        .map_err(|e| format!("{e:#}"))?;
+    // §6.4 机械矛盾消解:带主题时,作废同主题更低可信度的旧事实(如旧的员工汇报"用 RocksDB")。
+    if entity.is_some() {
+        let _ = mem.supersede_lower_same_entity(new_id, now);
+    }
     Ok(())
 }
 

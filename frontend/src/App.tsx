@@ -210,10 +210,10 @@ export function App() {
         brief={managerDesk.brief}
         autonomous={managerDesk.autonomous}
         onToggleAutonomous={managerDesk.toggleAutonomous}
-        onAddFact={text =>
+        onAddFact={(text, topic) =>
           void managerDesk
-            .addFact(text)
-            .then(() => setCaption(`已录入权威事实:「${text}」—— 进了经理简报,会影响后续决策。`))
+            .addFact(text, topic)
+            .then(() => setCaption(`已录入权威事实:「${text}」${topic ? `(主题:${topic},同主题旧事实已作废)` : ''} —— 进了经理简报。`))
             .catch(e => setCaption(`录入失败:${e instanceof Error ? e.message : String(e)}`))
         }
         onRequeue={onRequeue}
