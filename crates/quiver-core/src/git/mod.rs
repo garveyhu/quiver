@@ -321,7 +321,29 @@ impl GitGuard {
     /// Registered worktrees (incl. kept real-mode ones) are never touched.
     pub async fn sweep_orphan_worktrees(&self) -> anyhow::Result<usize> {
         let _lock = self.meta_lock.lock().await;
+        let mut removed = 0usize;
+        // (a) 崩溃遗留:worktree 目录还在、git 标 `prunable`(上个会话被强杀,其 worker 没正常
+        // 收尾)→ `worktree remove --force`。否则它一直被 git registered,下面 (c) 的"删未注册
+        // 裸目录"碰不到它 → 每次崩溃累积一个、占磁盘。(崩溃后立即 sweep 时孤儿进程可能还在写、
+        // remove 失败;但它退出后下次启动 sweep 必清,不再无限累积。)
+        if let Ok(listed) = self.run_meta(&["worktree", "list", "--porcelain"]).await {
+            let text = String::from_utf8_lossy(&listed.stdout).to_string();
+            let mut cur: Option<String> = None;
+            for line in text.lines() {
+                if let Some(p) = line.strip_prefix("worktree ") {
+                    cur = Some(p.to_string());
+                } else if line.starts_with("prunable") {
+                    if let Some(p) = cur.take() {
+                        if self.run_meta(&["worktree", "remove", "--force", &p]).await.is_ok() {
+                            removed += 1;
+                        }
+                    }
+                }
+            }
+        }
+        // (b) prune 掉"目录已删、记录还在"的失效条目。
         let _ = self.run_meta(&["worktree", "prune"]).await;
+        // (c) 删 worktrees_root 下 git 完全不认识的裸目录。
         let listed = self.run_meta(&["worktree", "list", "--porcelain"]).await?;
         let text = String::from_utf8_lossy(&listed.stdout);
         let registered: Vec<PathBuf> = text
@@ -329,9 +351,8 @@ impl GitGuard {
             .filter_map(|l| l.strip_prefix("worktree "))
             .filter_map(|p| std::fs::canonicalize(p).ok())
             .collect();
-        let mut removed = 0usize;
         let Ok(entries) = std::fs::read_dir(&self.worktrees_root) else {
-            return Ok(0);
+            return Ok(removed);
         };
         for entry in entries.filter_map(Result::ok) {
             let path = entry.path();

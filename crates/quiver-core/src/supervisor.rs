@@ -686,6 +686,28 @@ mod tests {
         );
     }
 
+    /// 崩溃恢复卫生:上个会话留下的 prunable worktree(目录失效、git 记录还在)应被 sweep 清掉,
+    /// 否则每次崩溃累积一个。固化真跑(强杀 app)挖出的孤儿 worktree 泄漏修复。
+    #[tokio::test]
+    async fn sweep_removes_prunable_worktree() {
+        let repo = temp_repo();
+        let wt_root = TempDir::new().expect("wt root");
+        let guard = GitGuard::new(repo.path()).with_worktrees_root(wt_root.path());
+        let wt = guard.create("crash-1", 1).await.expect("worktree");
+        // 模拟崩溃残留:worktree 目录失效 → git 标它 prunable。
+        std::fs::remove_dir_all(wt.as_path()).expect("rm worktree dir");
+        let _ = guard.sweep_orphan_worktrees().await.expect("sweep");
+        let out = std::process::Command::new("git")
+            .args(["-C", repo.path().to_str().unwrap(), "worktree", "list"])
+            .output()
+            .expect("git worktree list");
+        let listed = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            !listed.contains("crash-1"),
+            "prunable worktree 应被 sweep 清掉,实际仍在:\n{listed}"
+        );
+    }
+
     /// The streaming variant fires `on_event` for EACH event AS it arrives —
     /// before the run finishes — and the callback sees the same ordered events
     /// that end up in the outcome. Live-ness: with a per-line delay in
