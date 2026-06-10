@@ -51,12 +51,9 @@ export function Worker({ worker, onDive }: WorkerProps) {
           <div className="legs" />
           {role === 'mgr' && (
             <>
-              {/* 自带椅子:椅背在身后(z 低)、椅座在身下(z 高,遮住袍子下摆 → 像坐进去)。 */}
-              <div className="chairback" />
               <div className="crown" />
               <div className="mantle" />
               <div className="robe" />
-              <div className="chairseat" />
             </>
           )}
         </div>
