@@ -47,13 +47,13 @@ export function PersonnelDesk({ open, roles, onPatch, onHire, onFire, onClose }:
           <div className="rev">读取中…</div>
         ) : (
           roles.map(r => (
-            <div className="rev role-card" key={r.id}>
+            <div className="role-card" key={r.id}>
               <div className="role-head">
                 <b>{r.name}</b>
-                <span className="st-meta"> {KIND_CN[r.kind] ?? r.kind} · v{r.version}</span>
+                <span className="st-meta">{KIND_CN[r.kind] ?? r.kind} · v{r.version}</span>
                 {/* 只能裁员工,且至少留一个(不能裁到没人干活)。 */}
                 {r.kind === 'worker' && workerCount > 1 && (
-                  <button className="pbtn" type="button" style={{ float: 'right' }} onClick={() => onFire(r.id)}>
+                  <button className="pbtn fire" type="button" onClick={() => onFire(r.id)}>
                     裁员 ✕
                   </button>
                 )}
