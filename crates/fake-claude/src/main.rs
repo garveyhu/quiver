@@ -208,50 +208,114 @@ fn emit_init(session: &str, delay: Duration) {
     );
 }
 
-/// Print the happy-path `stream-json` sequence:
-/// init → tool_use → tool_result → assistant text → result/success.
+/// An extra "thinking" pause between work phases, so the simulated worker
+/// visibly dwells on each phase (read → search → edit → test) instead of
+/// strobing through. The pause unit has a floor (250ms) independent of the
+/// per-line delay — a small `fakeDelayMs` setting compresses line pacing but a
+/// run should still feel like real work (several seconds), not a blink. A zero
+/// base delay (tests) skips entirely so CI stays fast.
+fn think(delay: Duration, times: u32) {
+    if delay.is_zero() {
+        return;
+    }
+    let unit = delay.max(Duration::from_millis(250));
+    std::thread::sleep(unit * times);
+}
+
+/// Emit one assistant tool_use line + its matching user tool_result line.
+fn emit_tool(session: &str, id: &str, name: &str, input: &str, result: &str, delay: Duration) {
+    emit_line(
+        &format!(
+            r#"{{"type":"assistant","session_id":"{session}","message":{{"id":"msg_{id}","role":"assistant","model":"{MODEL}","content":[{{"type":"tool_use","id":"toolu_{id}","name":"{name}","input":{input}}}]}}}}"#
+        ),
+        delay,
+    );
+    emit_line(
+        &format!(
+            r#"{{"type":"user","session_id":"{session}","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"toolu_{id}","is_error":false,"content":"{result}"}}]}}}}"#
+        ),
+        delay,
+    );
+}
+
+/// Emit one assistant text line.
+fn emit_text(session: &str, id: &str, text: &str, delay: Duration) {
+    emit_line(
+        &format!(
+            r#"{{"type":"assistant","session_id":"{session}","message":{{"id":"msg_{id}","role":"assistant","model":"{MODEL}","content":[{{"type":"text","text":"{text}"}}]}}}}"#
+        ),
+        delay,
+    );
+}
+
+/// Print the happy-path `stream-json` sequence — a believable work arc rather
+/// than an instant 5-line dump: init → 读相关代码(Read/Grep) → 中途说明 → 改代码
+/// (Edit) → 跑测试(Bash) → 汇报 → result. Phase pauses (`think`) make the office
+/// character visibly dwell on each step, so a simulate run feels like real work
+/// (several seconds at the default pacing) instead of a toy that blinks.
 ///
-/// `prompt` is the user's task text; it is echoed back in the assistant text and
-/// the final `result` so the free demo visibly reflects what the user typed.
-/// Each line is paced by `delay` so the office animates live.
+/// `prompt` is the user's task text; it is echoed in the narration and the final
+/// `result` so the free demo visibly reflects what the user typed.
 fn emit_happy(session: &str, prompt: &str, delay: Duration) {
-    const TOOL_USE_ID: &str = "toolu_fake_0001";
     let echo = json_escape(prompt);
-    // The text the agent "says" back — quotes the user's prompt verbatim.
     let reply = format!("Simulated run for your task: \\\"{echo}\\\". (No real agent ran.)");
 
-    // 1. system / init line — carries session_id + model.
+    // 1. init — the worker clocks in.
     emit_init(session, delay);
+    think(delay, 3);
 
-    // 2. assistant line containing a tool_use (Edit).
-    emit_line(
-        &format!(
-            r#"{{"type":"assistant","session_id":"{session}","message":{{"id":"msg_fake_0001","role":"assistant","model":"{MODEL}","content":[{{"type":"tool_use","id":"{TOOL_USE_ID}","name":"Edit","input":{{"file_path":"src/main.rs","old_string":"foo","new_string":"bar"}}}}]}}}}"#
-        ),
+    // 2. orient: read the entry point, then search for the relevant code.
+    emit_tool(
+        session, "fake_0001", "Read",
+        r#"{"file_path":"src/main.rs"}"#,
+        "src/main.rs: 212 lines.",
         delay,
     );
-
-    // 3. user line containing the matching tool_result.
-    emit_line(
-        &format!(
-            r#"{{"type":"user","session_id":"{session}","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"{TOOL_USE_ID}","is_error":false,"content":"The file src/main.rs has been edited."}}]}}}}"#
-        ),
+    think(delay, 4);
+    emit_tool(
+        session, "fake_0002", "Grep",
+        r#"{"pattern":"handle_request","path":"src/"}"#,
+        "3 matches in src/server.rs, src/routes.rs.",
         delay,
     );
+    think(delay, 3);
 
-    // 4. assistant line with text — echoes the user's prompt.
-    emit_line(
-        &format!(
-            r#"{{"type":"assistant","session_id":"{session}","message":{{"id":"msg_fake_0002","role":"assistant","model":"{MODEL}","content":[{{"type":"text","text":"{reply}"}}]}}}}"#
-        ),
+    // 3. narrate the plan mid-flight — quotes the task so it's visibly yours.
+    emit_text(
+        session, "fake_0003",
+        &format!("正在处理:\\\"{echo}\\\" — 已定位相关代码,开始修改。"),
         delay,
     );
+    think(delay, 4);
 
-    // 5. result / success line — total_cost_usd, num_turns, usage. Its `result`
-    // text also echoes the prompt.
+    // 4. do the work: two edits, then run the test suite.
+    emit_tool(
+        session, "fake_0004", "Edit",
+        r#"{"file_path":"src/server.rs","old_string":"foo","new_string":"bar"}"#,
+        "The file src/server.rs has been edited.",
+        delay,
+    );
+    think(delay, 3);
+    emit_tool(
+        session, "fake_0005", "Edit",
+        r#"{"file_path":"src/routes.rs","old_string":"baz","new_string":"qux"}"#,
+        "The file src/routes.rs has been edited.",
+        delay,
+    );
+    think(delay, 4);
+    emit_tool(
+        session, "fake_0006", "Bash",
+        r#"{"command":"cargo test"}"#,
+        "test result: ok. 42 passed; 0 failed.",
+        delay,
+    );
+    think(delay, 5);
+
+    // 5. report + result/success (cost, turns, usage).
+    emit_text(session, "fake_0007", &reply, delay);
     emit_line(
         &format!(
-            r#"{{"type":"result","subtype":"success","is_error":false,"session_id":"{session}","total_cost_usd":0.01,"num_turns":2,"duration_ms":1234,"duration_api_ms":1000,"result":"{reply}","usage":{{"input_tokens":120,"output_tokens":45,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}}"#
+            r#"{{"type":"result","subtype":"success","is_error":false,"session_id":"{session}","total_cost_usd":0.01,"num_turns":5,"duration_ms":6234,"duration_api_ms":5200,"result":"{reply}","usage":{{"input_tokens":480,"output_tokens":160,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}}"#
         ),
         delay,
     );
