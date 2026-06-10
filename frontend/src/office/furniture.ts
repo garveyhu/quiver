@@ -95,10 +95,9 @@ export function plant(b: SceneBuilder, c: number, r: number): void {
   b.contactShadow(c + 0.16, r + 0.16, 18, 9);
   b.isoBox(c, r, 0.32, 0.32, 8, { top: '#9a6a48', l: '#4a3422', r: '#7a4e30' });
   b.southPanel(c, r, 0.32, 6, 8, 'rgba(210,150,110,.5)', zidx(c + 0.32, r) + 4);
-  // 三层叶子标记 leafsway → 轻微摆动(让盆栽"活",不再呆板得像静止的人;错相位更自然)。
-  b.isoBox(c - 0.02, r - 0.02, 0.36, 0.36, 20, { top: '#4f8a5a', l: '#2f5a3a', r: '#418a4e' }, 'leafsway');
-  b.isoBox(c + 0.02, r + 0.02, 0.28, 0.28, 27, { top: '#5b9a66', l: '#356a44', r: '#4f8a5a' }, 'leafsway s2');
-  b.isoBox(c + 0.07, r + 0.07, 0.18, 0.18, 32, { top: '#6aab74', l: '#3c7a4e', r: '#58a064' }, 'leafsway s3');
+  b.isoBox(c - 0.02, r - 0.02, 0.36, 0.36, 20, { top: '#4f8a5a', l: '#2f5a3a', r: '#418a4e' });
+  b.isoBox(c + 0.02, r + 0.02, 0.28, 0.28, 27, { top: '#5b9a66', l: '#356a44', r: '#4f8a5a' });
+  b.isoBox(c + 0.07, r + 0.07, 0.18, 0.18, 32, { top: '#6aab74', l: '#3c7a4e', r: '#58a064' });
   ['#8ec98e', '#7cbf86', '#9ad19a'].forEach((cl, i) => b.speck(c + 0.1 + i * 0.05, r + 0.06 + i * 0.04, 30 + i * 2, cl, zidx(c, r) + 12));
 }
 

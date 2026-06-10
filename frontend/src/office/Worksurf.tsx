@@ -141,6 +141,10 @@ function EventRow({ ev }: { ev: StoredEvent }) {
 export function Worksurf({ worker, events, roles, managerThinking, onClose, onOpenTrace }: WorksurfProps) {
   const hasTrace = !!worker?.taskId && events.length > 0;
   const specialty = worker ? specialtyOf(worker, roles) : undefined;
+  // 这个小人对应的员工角色配置(休息员工身份卡用:专长/模型/大脑)。
+  const role = worker?.workerRole ? roles.find(r => r.name === worker.workerRole) : undefined;
+  // 休息中的员工(emp + 没在干活):点开看 ta 是谁、能力、怎么配 —— 不再只一句待命。
+  const idleEmp = worker?.role === 'emp' && !worker.taskId;
   // 经理:点开看实时思考流(claude 决策过程),而非任务事件 —— 经理不绑单个任务。
   // 剥掉难读的决策 JSON,只留自然语言思路(规则经理/fake 只吐 JSON → 滤后为空,显示提示)。
   const isMgr = worker?.role === 'mgr';
@@ -194,8 +198,25 @@ export function Worksurf({ worker, events, roles, managerThinking, onClose, onOp
               ))}
             </div>
           )}
+          {idleEmp && (
+            <div className="ws-id">
+              <div className="ws-id-row">
+                <span>专长</span>
+                <b>{specialty ?? '通用'}</b>
+              </div>
+              <div className="ws-id-row">
+                <span>模型</span>
+                <b>{role?.model ?? '—'}</b>
+              </div>
+              <div className="ws-id-row">
+                <span>大脑</span>
+                <b>{role?.brain === 'claude' ? 'claude · 真思考(烧额度)' : '规则 · 免费'}</b>
+              </div>
+              <div className="ws-id-hint">没活时在休息室待命。去人事部能改 ta 的专长 / 模型 / 预算 / 大脑;有活时它会被派到对口的任务上。</div>
+            </div>
+          )}
           <div className="wfoot">
-            {worker.taskId && onOpenTrace && (
+            {((worker.taskId && onOpenTrace) || idleEmp) && onOpenTrace && (
               <button
                 className="pbtn"
                 type="button"
@@ -204,7 +225,7 @@ export function Worksurf({ worker, events, roles, managerThinking, onClose, onOp
                   onOpenTrace();
                 }}
               >
-                完整档案 →
+                {idleEmp ? 'ta 干过的活 →' : '完整档案 →'}
               </button>
             )}
             <button className="pbtn go" type="button" onClick={onClose}>

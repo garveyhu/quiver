@@ -93,6 +93,7 @@ export function placeWorkers(
   bubbles: Record<string, string> = {},
   lingering: LingeringTask[] = [],
   mgrThinking = false,
+  empNames: string[] = [],
 ): PlacedWorker[] {
   const cells = loungeCells();
   const workers: PlacedWorker[] = [];
@@ -129,7 +130,17 @@ export function placeWorkers(
     } else {
       const [c, r] = cells[(i * 5 + 2) % cells.length];
       const p = iso(layout, c, r);
-      workers.push({ id: `emp${i}`, role: 'emp', x: p.x, y: p.y, z: zidx(c, r) + 5, hood, awaiting: i === EMP_COUNT - 1 && busy === 0 });
+      // 休息中的员工也绑到一个员工角色(按 index),这样点它能看到 ta 是谁、专长、配置 —— 黄金入口。
+      workers.push({
+        id: `emp${i}`,
+        role: 'emp',
+        x: p.x,
+        y: p.y,
+        z: zidx(c, r) + 5,
+        hood,
+        awaiting: i === EMP_COUNT - 1 && busy === 0,
+        workerRole: empNames.length ? empNames[i % empNames.length] : undefined,
+      });
     }
   }
 

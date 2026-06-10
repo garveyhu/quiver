@@ -24,7 +24,7 @@ function short(text: string): string {
  * - 订阅 `agent-event`,把每个任务最新的工具活动喂进对应工位工人的气泡(实时"在敲啥")。
  * 任务进出 → 重算布局,员工 id 稳定故由 CSS 过渡平滑滑行。
  */
-export function useWorkers(layout: Layout): PlacedWorker[] {
+export function useWorkers(layout: Layout, empNames: string[] = []): PlacedWorker[] {
   const [active, setActive] = useState<TaskRecord[]>([]);
   const [bubbles, setBubbles] = useState<Record<string, string>>({});
   const [lingering, setLingering] = useState<LingeringTask[]>([]);
@@ -105,8 +105,11 @@ export function useWorkers(layout: Layout): PlacedWorker[] {
     };
   }, []);
 
+  const empKey = empNames.join(',');
   return useMemo(
-    () => placeWorkers(layout, active, bubbles, lingering, mgrThinking),
-    [layout, active, bubbles, lingering, mgrThinking],
+    () => placeWorkers(layout, active, bubbles, lingering, mgrThinking, empNames),
+    // empNames 是数组每帧新引用 → 用其内容 join 当依赖键,避免无谓重算。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [layout, active, bubbles, lingering, mgrThinking, empKey],
   );
 }

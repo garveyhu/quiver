@@ -56,7 +56,10 @@ interface OfficeProps {
 /** 等距像素办公室。静态场景 + 实时工人 + 滚轮缩放 + 点小人下钻 + 交付特效 + 点建筑开面板。 */
 export function Office({ completionFx, onOpenTrace, onOpenPanel }: OfficeProps) {
   const scene = useMemo(() => buildScene(), []);
-  const workers = useWorkers(scene.layout);
+  // 角色配置先拿:关联专长 + 给休息员工绑角色(点它能看 ta 是谁/专长/配置)。
+  const { roles } = useRoles(true);
+  const empNames = useMemo(() => roles.filter(r => r.kind === 'worker').map(r => r.name), [roles]);
+  const workers = useWorkers(scene.layout, empNames);
   const camera = useCamera(scene.layout.worldW, scene.layout.worldH);
   const [focused, setFocused] = useState<PlacedWorker | null>(null);
   const events = useTaskEvents(focused?.taskId ?? null);
@@ -75,8 +78,6 @@ export function Office({ completionFx, onOpenTrace, onOpenPanel }: OfficeProps) 
   }, []);
   // 点开经理时订阅它的思考流(claude 决策的实时思路);点别人时不订阅,省开销。
   const managerThinking = useManagerThinking(focused?.role === 'mgr');
-  // 角色配置:点小人时用 workerRole 关联专长(§14 专长分工可见)。常驻拉一次。
-  const { roles } = useRoles(true);
 
   // 点小人只打开详情(Worksurf),**不强行缩放摄像头** —— 想看近景自己滚轮,别夺镜头。
   const dive = useCallback((w: PlacedWorker) => {

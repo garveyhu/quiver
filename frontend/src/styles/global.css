@@ -457,3 +457,10 @@ body {
 .poly.leafsway.s2 { animation-duration: 5s; animation-delay: -1.3s; }
 .poly.leafsway.s3 { animation-duration: 3.6s; animation-delay: -.6s; }
 @keyframes leafsway { 0%,100% { transform: rotate(-1.4deg); } 50% { transform: rotate(1.4deg); } }
+
+/* 休息员工身份卡:点空闲员工 → 看 ta 专长/模型/大脑,不再只一句待命。 */
+.ws-id { margin: 6px 0 2px; padding: 9px 11px; background: var(--tint-hi); border: 1px solid var(--bd-soft); border-radius: 9px; }
+.ws-id-row { display: flex; gap: 10px; font-size: 12.5px; line-height: 1.7; }
+.ws-id-row > span { color: var(--tx-3); min-width: 38px; }
+.ws-id-row > b { color: var(--tx-1); font-weight: 500; }
+.ws-id-hint { margin-top: 6px; padding-top: 7px; border-top: 1px solid var(--bd-soft); color: var(--tx-3); font-size: 11.5px; line-height: 1.55; }
