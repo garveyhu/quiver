@@ -5,11 +5,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCompletionFx } from '@/hooks/useCompletionFx';
 import { useEpisodes } from '@/hooks/useEpisodes';
 import { useHud } from '@/hooks/useHud';
+import { useManagerDesk } from '@/hooks/useManagerDesk';
 import { useMetrics } from '@/hooks/useMetrics';
 import { useMorningReport } from '@/hooks/useMorningReport';
+import { useRoles } from '@/hooks/useRoles';
 import { useSettings } from '@/hooks/useSettings';
 import { Office } from '@/office/Office';
-import { cancelActiveTasks, enqueueTask, getInitialState } from '@/services/commands';
+import { cancelActiveTasks, enqueueTask, getInitialState, requeueTask } from '@/services/commands';
 import { Atmosphere } from '@/shell/Atmosphere';
 import { BriefCard } from '@/shell/BriefCard';
 import { Caption } from '@/shell/Caption';
@@ -17,7 +19,9 @@ import { CommandPalette } from '@/shell/CommandPalette';
 import type { QuiverCommand } from '@/shell/commandRegistry';
 import { Ctrls } from '@/shell/Ctrls';
 import { Hud } from '@/shell/Hud';
+import { ManagerDesk } from '@/shell/ManagerDesk';
 import { MorningReport } from '@/shell/MorningReport';
+import { PersonnelDesk } from '@/shell/PersonnelDesk';
 import { Timeline } from '@/shell/Timeline';
 import { TrustCard } from '@/shell/TrustCard';
 
@@ -27,7 +31,7 @@ const DEFAULT_CAPTION = '你是 CEO。经理在领导区待命 —— 点「CEO 
 const GOALS = ['做转写的导出功能', '修登录态丢失', '给看板加暗色模式', '把召回准确率提上去', '补端到端测试', '清掉废弃依赖'];
 
 /** 当前打开的叠层(同一时刻至多一个)。 */
-type Overlay = 'none' | 'cmdk' | 'report' | 'brief' | 'trust' | 'timeline';
+type Overlay = 'none' | 'cmdk' | 'report' | 'brief' | 'trust' | 'timeline' | 'manager' | 'personnel';
 
 /** 应用根:等距办公室舞台 + 叠层 + 画面后期。叠层开合、派活握手、状态条文案在此编排。 */
 export function App() {
@@ -41,7 +45,20 @@ export function App() {
   const report = useMorningReport(overlay === 'report');
   const metrics = useMetrics(overlay === 'trust');
   const episodes = useEpisodes(overlay === 'timeline');
+  // 经理升级给人 → 状态条立刻喊人(§12「等你拍板」可感);M 打开工作台看详情。
+  const onEscalate = useCallback((reason: string) => {
+    setCaption(`⚠ 经理升级等你拍板:${reason} —— 按 M 打开经理工作台处理。`);
+  }, []);
+  const managerDesk = useManagerDesk(overlay === 'manager', onEscalate);
+  const personnel = useRoles(overlay === 'personnel');
   const completionFx = useCompletionFx();
+
+  // §12 一站式打回:晨报/工作台共用 —— 把卡住/升级的任务作为新任务重派(经理带记忆)。
+  const onRequeue = useCallback((taskId: string) => {
+    void requeueTask(taskId)
+      .then(t => setCaption(`已打回重做 —— 新任务 ${t.id} 入队,经理会带着上次的记忆再派。`))
+      .catch(e => setCaption(`打回失败:${e instanceof Error ? e.message : String(e)}`));
+  }, []);
   const goalIdx = useRef(0);
 
   // 交付完成 → 状态条同步报喜/报忧(脉冲叠层在下方渲染)。
@@ -62,6 +79,9 @@ export function App() {
         setOverlay(o => (o === 'cmdk' ? 'none' : 'cmdk'));
       } else if (e.key === 'Escape') {
         setOverlay('none');
+      } else if (e.key.toLowerCase() === 'm' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        // 仅在没有叠层打开时切「经理工作台」—— 避免和 Brief 输入框里打 m 冲突。
+        setOverlay(o => (o === 'none' ? 'manager' : o === 'manager' ? 'none' : o));
       }
     };
     document.addEventListener('keydown', onKey);
@@ -80,6 +100,27 @@ export function App() {
     } catch (e) {
       setCaption(`派活失败:${e instanceof Error ? e.message : String(e)}`);
     }
+  }, []);
+
+  // 一次下一批目标(§3 协作):经理按并发上限(人事部 maxWorkers)并行调动多个员工。
+  // 上限=1 时仍串行 —— 把人事部并发调高才看得到多个工位同时敲键。
+  const enqueueBatch = useCallback(async () => {
+    const goals = Array.from({ length: 3 }, () => GOALS[goalIdx.current++ % GOALS.length]);
+    let ok = 0;
+    let lastErr = '';
+    for (const g of goals) {
+      try {
+        await enqueueTask(g, 'simulate');
+        ok += 1;
+      } catch (e) {
+        lastErr = e instanceof Error ? e.message : String(e); // 不静默吞:报真成败,绝不假报"已派"
+      }
+    }
+    setCaption(
+      ok === goals.length
+        ? `CEO → 经理：一批 ${ok} 件事已派 —— 经理按并发上限并行调度(上限=1 则串行)。`
+        : `派活失败:${ok}/${goals.length} 成功${lastErr ? ` —— ${lastErr}` : ''}`,
+    );
   }, []);
 
   const confirmBrief = useCallback(
@@ -120,6 +161,14 @@ export function App() {
         setOverlay('timeline');
         return;
       }
+      if (cmd.id === 'manager') {
+        setOverlay('manager');
+        return;
+      }
+      if (cmd.id === 'personnel') {
+        setOverlay('personnel');
+        return;
+      }
       if (cmd.id === 'estop') {
         void estop();
         return;
@@ -130,10 +179,14 @@ export function App() {
         void enqueueGoal(GOALS[goalIdx.current++ % GOALS.length]);
         return;
       }
+      if (cmd.id === 'dispatch-batch') {
+        void enqueueBatch();
+        return;
+      }
       // 其余命令的真实动作随对应面板/流程建好再接;先给状态条反馈,不留死按钮。
       setCaption(`「${cmd.label}」即将接入 —— 对应面板 / 流程建设中。`);
     },
-    [openBrief, enqueueGoal, estop],
+    [openBrief, enqueueGoal, enqueueBatch, estop],
   );
 
   return (
@@ -146,10 +199,26 @@ export function App() {
       <Caption text={caption} />
       <div className={`scrim${overlay !== 'none' ? ' on' : ''}`} onClick={() => setOverlay('none')} />
       <CommandPalette open={overlay === 'cmdk'} onRun={runCommand} />
-      <MorningReport open={overlay === 'report'} data={report} onClose={() => setOverlay('none')} />
+      <MorningReport open={overlay === 'report'} data={report} onRequeue={onRequeue} onClose={() => setOverlay('none')} />
       <BriefCard open={overlay === 'brief'} defaultGoal={briefGoal} onClose={() => setOverlay('none')} onConfirm={confirmBrief} />
       <TrustCard open={overlay === 'trust'} metrics={metrics} onClose={() => setOverlay('none')} />
       <Timeline open={overlay === 'timeline'} episodes={episodes} onClose={() => setOverlay('none')} />
+      <ManagerDesk
+        open={overlay === 'manager'}
+        decisions={managerDesk.decisions}
+        preview={managerDesk.preview}
+        brief={managerDesk.brief}
+        autonomous={managerDesk.autonomous}
+        onToggleAutonomous={managerDesk.toggleAutonomous}
+        onRequeue={onRequeue}
+        onClose={() => setOverlay('none')}
+      />
+      <PersonnelDesk
+        open={overlay === 'personnel'}
+        roles={personnel.roles}
+        onPatch={(id, patch) => void personnel.patchRole(id, patch).catch(() => {})}
+        onClose={() => setOverlay('none')}
+      />
       <Atmosphere spentUsd={hud.spentUsd} budgetCapUsd={budgetCap} />
       <div id="flashfx" className={completionFx ?? ''} />
       <div id="vignette" />

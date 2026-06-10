@@ -1,9 +1,13 @@
 import { call } from '@/services/ipc';
 import type {
+  AgentRole,
+  Brief,
   EpisodeRecord,
   InitialState,
+  ManagerDecision,
   ManagerPreview,
   MetricsDto,
+  RolePatch,
   RunMode,
   Settings,
   SettingsPatch,
@@ -31,6 +35,10 @@ export const getInitialState = (): Promise<InitialState> => call<InitialState>('
 /** 派一件事给公司:入队任务并自动 kick 调度器跑(simulate 走 fake-claude,免费)。 */
 export const enqueueTask = (prompt: string, mode: RunMode = 'simulate'): Promise<TaskRecord> =>
   call<TaskRecord>('enqueue_task_cmd', { prompt, mode });
+
+/** 打回重做(§12 回流):已终结任务作为新任务重新入队(老行留档),经理会带记忆再派。 */
+export const requeueTask = (taskId: string): Promise<TaskRecord> =>
+  call<TaskRecord>('requeue_task_cmd', { taskId });
 
 /** 取消一个任务(queued 删除 / running·verifying 杀进程 / 已结束报错)。 */
 export const cancelTask = (id: string): Promise<void> => call<void>('cancel_task_cmd', { id });
@@ -60,3 +68,17 @@ export const getSettings = (): Promise<Settings> => call<Settings>('get_settings
 
 /** 应用设置补丁,返回更新后的完整设置。 */
 export const updateSettings = (patch: SettingsPatch): Promise<Settings> => call<Settings>('update_settings', { patch });
+
+/** 当前项目最近的经理决策(decision_log,最新在前;§10)。工作台回填决策流历史。 */
+export const getDecisions = (limit = 40): Promise<ManagerDecision[]> =>
+  call<ManagerDecision[]>('get_decisions', { limit });
+
+/** 经理的记忆简报(当前事实+近期 episode,§6)——注入经理决策上下文的内容。 */
+export const getBrief = (): Promise<Brief> => call<Brief>('get_brief');
+
+/** 人事部:全部角色配置(经理在前,§14)。 */
+export const listRoles = (): Promise<AgentRole[]> => call<AgentRole[]>('list_roles');
+
+/** 人事部:增量改一个角色(version+1)。改经理 brain 即切换经理大脑。 */
+export const updateRole = (id: string, patch: RolePatch): Promise<AgentRole> =>
+  call<AgentRole>('update_role', { id, patch });

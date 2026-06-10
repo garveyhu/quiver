@@ -23,7 +23,15 @@ export interface Stats {
  * 任务生命周期状态。以 src-tauri/src/run.rs 实际写入为准:成功终态是 `verified`(run.rs 验证通过写它),
  * `verifying` 是过渡态;`done` 亦在用。`queued | running | verifying | verified | done | failed | needs_rebase`。
  */
-export type TaskStatus = 'queued' | 'running' | 'verifying' | 'verified' | 'done' | 'failed' | 'needs_rebase';
+export type TaskStatus =
+  | 'queued'
+  | 'running'
+  | 'verifying'
+  | 'verified'
+  | 'done'
+  | 'merged'
+  | 'failed'
+  | 'needs_rebase';
 
 /** 运行模式(§4.2):simulate=免费 fake-claude 默认,real=真 claude。Rust 侧小写序列化。 */
 export type RunMode = 'simulate' | 'real';
@@ -41,6 +49,8 @@ export interface Settings {
   theme: string;
   uiScale: number;
   verifyCommand: string;
+  /** 自治开关(§5):true=经理控制循环驱动调度(基于决策派活),false=旧 scheduler 流水线。 */
+  autonomous: boolean;
 }
 
 /** 设置增量补丁(update_settings):字段都可选,只改给到的。 */
@@ -50,6 +60,7 @@ export interface SettingsPatch {
   verifyCommand?: string;
   defaultMode?: string;
   model?: string;
+  autonomous?: boolean;
 }
 
 /**
@@ -135,6 +146,71 @@ export interface ManagerPreview {
   maxInflight: number;
   budgetRemainingUsd: number;
   decision: Decision;
+}
+
+/** 记忆简报里的一条当前事实(get_brief,§6;只取展示需要的字段)。 */
+export interface BriefFact {
+  id: number;
+  text: string;
+  /** 可信度档(权威/已验证·机械/员工汇报/不可信…)。 */
+  trust: string;
+  importance: number;
+}
+
+/** 经理的记忆简报(get_brief,§6):注入经理上下文的就是这份内容的文本化。 */
+export interface Brief {
+  project: string;
+  facts: BriefFact[];
+  recentEpisodes: EpisodeRecord[];
+}
+
+/** 人事部:一个角色(人物)的完整配置(agent_role,§14)。 */
+export interface AgentRole {
+  id: string;
+  name: string;
+  kind: 'manager' | 'worker';
+  /** 经理大脑:rule(免费规则) | claude(真 claude 想,走 headless 额度)。仅经理生效。 */
+  brain: 'rule' | 'claude';
+  model: string;
+  systemPrompt: string;
+  budgetUsd: number | null;
+  maxTurns: number | null;
+  /** 配置版本,改一次 +1(§14)。 */
+  version: number;
+  updatedAt: number;
+}
+
+/** 人事部增量改动:只写给到的字段;budgetUsd/maxTurns 传 null 表示显式清除。 */
+export interface RolePatch {
+  name?: string;
+  brain?: 'rule' | 'claude';
+  model?: string;
+  systemPrompt?: string;
+  budgetUsd?: number | null;
+  maxTurns?: number | null;
+}
+
+/** 经理控制循环每一拍 emit 的决策(manager-decision 事件,§5)。前端工作台累积成决策流。 */
+export interface ManagerDecision {
+  project: string;
+  /** 决策序号(去重钥匙,也是时间线单调序)。 */
+  seq: number;
+  action: Decision['action'];
+  reason: string | null;
+  /** 这拍作用的抽象节点(有则)。 */
+  nodeId: string | null;
+  /** 抽象节点翻译成的真任务(有则)——经理因此调动了哪个活。 */
+  taskId: string | null;
+  /** effect 是否真落地(被满载/未知节点等校验拒掉则 false)。 */
+  executed: boolean;
+  /** spawn 时派的具体任务文本(派的是什么活,让"派活"不再抽象)。 */
+  taskPrompt: string | null;
+  inflight: number;
+  queued: number;
+  /** 决策依据:并发上限(设置)+ 经理这拍看到的预算剩余。 */
+  maxInflight: number;
+  budgetRemainingUsd: number;
+  tsMs: number;
 }
 
 /** 看板任务行(list_tasks)。 */

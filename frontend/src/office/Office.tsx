@@ -41,18 +41,14 @@ export function Office({ completionFx }: OfficeProps) {
   const [focused, setFocused] = useState<PlacedWorker | null>(null);
   const events = useTaskEvents(focused?.taskId ?? null);
 
-  const dive = useCallback(
-    (w: PlacedWorker) => {
-      setFocused(w);
-      camera.diveTo(w.x, w.y);
-    },
-    [camera],
-  );
+  // 点小人只打开详情(Worksurf),**不强行缩放摄像头** —— 想看近景自己滚轮,别夺镜头。
+  const dive = useCallback((w: PlacedWorker) => {
+    setFocused(w);
+  }, []);
 
   const closeDive = useCallback(() => {
     setFocused(null);
-    camera.reset();
-  }, [camera]);
+  }, []);
 
   // Esc 退出下钻(相机由 useCamera 自身的 Esc 复位,这里清掉 worksurf)。
   useEffect(() => {
@@ -79,6 +75,8 @@ export function Office({ completionFx }: OfficeProps) {
         </div>
       </div>
       <div className={`zoomhint${camera.zoomed || focused ? ' on' : ''}`}>滚轮缩放 · Esc / 双击 复位</div>
+      {/* 详情弹出时:点框外任意处即收起,交互更顺手(不必非点「收起」按钮)。 */}
+      {focused && <div className="ws-scrim" onClick={closeDive} />}
       <Worksurf worker={focused} events={events} onClose={closeDive} />
     </>
   );

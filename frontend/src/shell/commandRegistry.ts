@@ -9,9 +9,12 @@ export interface QuiverCommand {
 
 export const COMMANDS: QuiverCommand[] = [
   { id: 'new-task', label: '新任务', hint: '下一个目标交给公司', kbd: '⌘N' },
+  { id: 'manager', label: '经理工作台', hint: '看经理逐拍决策 / 开自治', kbd: 'M' },
+  { id: 'personnel', label: '人事部', hint: '经理/员工配置 · 大脑/模型/硬限' },
   { id: 'report', label: '晨报 / 验收', hint: '看昨晚结果' },
   { id: 'trust', label: '信任设置', hint: '调某个经理的规划自由度' },
   { id: 'dispatch', label: '派活', hint: '让经理开一个任务' },
+  { id: 'dispatch-batch', label: '派一批活', hint: '一次下 3 个目标,看经理并行调度' },
   { id: 'estop', label: '急停 · 全公司', hint: '冻结并停掉所有 AI', kbd: '⌃.' },
   { id: 'timeline', label: '看整夜时间线', hint: '回放过夜运行' },
 ];

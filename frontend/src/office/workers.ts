@@ -64,17 +64,32 @@ function shortLabel(prompt: string): string {
   return prompt.length > 10 ? prompt.slice(0, 10) + '…' : prompt;
 }
 
+/** 刚完工、在工位驻留收尾的任务(D1:不瞬移,气泡报结果几秒再走)。 */
+export interface LingeringTask {
+  task: TaskRecord;
+  /** 终态是否验收通过(✓/✗ 气泡)。 */
+  ok: boolean;
+}
+
 /**
  * 按在途任务摆工人(移植原型 build() 的三类工人 + 派活落工位):
  * 休息室 EMP_COUNT 个员工,有几件在途任务就把前几个移到工位敲键(其余在休息室待命,末一个待命时冒思考点);
+ * 刚完工的在工位**驻留收尾**(不敲键,气泡报 ✓/✗,几秒后才回休息室,D1);
  * 领导区 1 个经理 + 质检台 1 个独立审计常驻。
  * 员工 id 稳定(emp0..),React 复用同一 DOM → 位置变化由 .worker 的 left/top 过渡平滑滑行。
- * 走廊寻路 / agent-event 细粒度姿态(逐工具气泡)留后续刀;本刀用真实在途任务驱动落位。
+ * 在途优先占工位,驻留用剩余工位(不够就直接回休息室,绝不挤新活)。
  */
-export function placeWorkers(layout: Layout, active: TaskRecord[], bubbles: Record<string, string> = {}): PlacedWorker[] {
+export function placeWorkers(
+  layout: Layout,
+  active: TaskRecord[],
+  bubbles: Record<string, string> = {},
+  lingering: LingeringTask[] = [],
+): PlacedWorker[] {
   const cells = loungeCells();
   const workers: PlacedWorker[] = [];
-  const busy = Math.min(active.length, EMP_COUNT, DESKS.length);
+  const deskCap = Math.min(EMP_COUNT, DESKS.length);
+  const busy = Math.min(active.length, deskCap);
+  const lingerCount = Math.max(0, Math.min(lingering.length, deskCap - busy));
 
   for (let i = 0; i < EMP_COUNT; i++) {
     const hood = HOODS[i % HOODS.length];
@@ -85,6 +100,21 @@ export function placeWorkers(layout: Layout, active: TaskRecord[], bubbles: Reco
       // 气泡优先用 agent-event 的实时工具摘要,缺时退回任务目标。
       const label = bubbles[task.id] ?? shortLabel(task.prompt);
       workers.push({ id: `emp${i}`, role: 'emp', x: p.x, y: p.y, z: zidx(dc, dr) + 5, hood, working: true, lean: true, label, taskId: task.id });
+    } else if (i < busy + lingerCount) {
+      // 完工驻留(D1):还在工位但不敲键,气泡报结果;到点(useWorkers 计时)回休息室。
+      const linger = lingering[i - busy];
+      const [dc, dr] = DESKS[i];
+      const p = iso(layout, dc, dr);
+      workers.push({
+        id: `emp${i}`,
+        role: 'emp',
+        x: p.x,
+        y: p.y,
+        z: zidx(dc, dr) + 5,
+        hood,
+        label: linger.ok ? '✓ 验收通过' : '✗ 没过验收',
+        taskId: linger.task.id,
+      });
     } else {
       const [c, r] = cells[(i * 5 + 2) % cells.length];
       const p = iso(layout, c, r);
