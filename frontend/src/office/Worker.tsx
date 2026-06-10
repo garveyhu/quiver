@@ -58,7 +58,6 @@ export function Worker({ worker, onDive }: WorkerProps) {
           )}
         </div>
       </div>
-      <div className="bubble">{label}</div>
       <div className="pop">+100 XP</div>
       <div className="think" />
     </div>

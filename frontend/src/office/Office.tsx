@@ -131,6 +131,23 @@ export function Office({ completionFx, onOpenTrace, onOpenPanel }: OfficeProps) 
           );
         })}
       </div>
+      {/* 人物名字气泡:同样移出 .world,屏幕空间 1:1 渲染 —— 经理/审计/员工的名字在 2K/DPR 下也清晰,
+          不再是 transform:scale 放大的糊字。位置由相机 project 跟着小人走,头顶上方固定偏移。 */}
+      <div className="worker-labels">
+        {workers.map(w => {
+          if (!w.label) return null;
+          const p = camera.project(w.x, w.y);
+          return (
+            <div
+              key={w.id}
+              className={`wlabel${w.role === 'mgr' ? ' mgr' : ''}${w.role === 'aud' ? ' aud' : ''}${w.thinking ? ' think' : ''}`}
+              style={{ left: p.x, top: p.y - 36 }}
+            >
+              {w.label}
+            </div>
+          );
+        })}
+      </div>
       <div className={`zoomhint${camera.zoomed || focused ? ' on' : ''}`}>滚轮缩放 · Esc / 双击 复位</div>
       {/* 详情弹出时:点框外任意处即收起,交互更顺手(不必非点「收起」按钮)。 */}
       {focused && <div className="ws-scrim" onClick={closeDive} />}
