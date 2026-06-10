@@ -8,7 +8,6 @@ import {
   crateStack,
   deskLamp,
   deskUnit,
-  managerChair,
   memoryBook,
   patternRug,
   plant,
@@ -109,9 +108,9 @@ function furnishRightColumn(b: SceneBuilder): void {
   plant(b, 12.8, 0.3);
   wallClock(b, 11.1, 0.2, 30);
   deskLamp(b, 11.0, 0.95);
-  // 领导区(经理 + 记忆书):给经理一把矮背椅坐着办公。椅座中心对准经理脚(经理 sprite 锚 11.5,3.3)。
+  // 领导区(经理 + 记忆书)。经理的椅子改成 sprite 自带(CSS,见 Worker.tsx)→ 永远和经理对齐、
+  // 绝不错位(独立家具椅总对不准经理)。
   board(b, 11.2, 2.4);
-  managerChair(b, 11.32, 3.12);
   memoryBook(b, 12.6, 2.6);
   plant(b, 12.9, 3.5);
   wallPoster(b, 11.05, 2.0, 1.0, ['#3a2e1a', '#e6bd6c', '#ffd27a']);

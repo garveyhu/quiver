@@ -137,9 +137,9 @@ export function Office({ completionFx, onOpenTrace, onOpenPanel }: OfficeProps) 
       <div className="worker-labels">
         {workers.map(w => {
           if (!w.label) return null;
-          // 锚到头顶上方的 world 点再 project → 偏移随相机缩放走、名字浮头顶不挡脸。经理坐姿头顶
-          // 更低,用更小偏移让名字贴着 ta、不飘远;其余站姿用大偏移。
-          const p = camera.project(w.x, w.y - (w.role === 'mgr' ? 26 : 42));
+          // 锚到头顶上方的 world 点再 project → 偏移随相机缩放走、名字浮头顶不挡脸。名字到人物的
+          // 间距对齐审计(站姿 42);经理坐姿头顶略低,补偿 4px 用 38 → 与审计视觉间距一致。
+          const p = camera.project(w.x, w.y - (w.role === 'mgr' ? 38 : 42));
           return (
             <div
               key={w.id}

@@ -465,12 +465,18 @@ body {
 .ws-id-row > b { color: var(--tx-1); font-weight: 500; }
 .ws-id-hint { margin-top: 6px; padding-top: 7px; border-top: 1px solid var(--bd-soft); color: var(--tx-3); font-size: 11.5px; line-height: 1.55; }
 
-/* 经理坐姿:整体下沉(从站立 -40 → 坐到椅上),身体压低、袍子下摆收短,看起来坐着办公而非站着。
-   保留轻微 sway 呼吸,不僵硬(之前 animation:none 太死板)。 */
-.worker.mgr { margin-top: -30px; }
-.worker.mgr .body { bottom: 0; }
-.worker.mgr .robe { top: 23px; height: 11px; }
+/* 经理坐着办公:sprite 自带椅子(椅背在身后、椅座在身下遮袍摆),椅子永远跟经理对齐、不错位。
+   身体略下沉、袍摆收短被椅座遮 → 像坐进去;保留轻微 sway 呼吸不僵硬。 */
+.worker.mgr { margin-top: -34px; }
 .worker.mgr .stack { animation: sway 4s ease-in-out infinite; }
+.worker.mgr .robe { top: 24px; height: 9px; }
+/* 椅背:经理躯干正后方,z 低于身体(被经理挡住下半截,只露肩后一截高背)。 */
+.worker.mgr .chairback { position: absolute; left: 4px; top: 9px; width: 16px; height: 22px; z-index: 0;
+  background: linear-gradient(90deg,#6a5238 0 4px,#5a4632 4px 12px,#473628 12px 16px); border-radius: 5px 5px 0 0;
+  box-shadow: inset 0 1px 0 rgba(255,220,150,.3); }
+/* 椅座:经理身下,z 高于身体(遮住袍子下摆 + 腿底 → 像坐进座位)。 */
+.worker.mgr .chairseat { position: absolute; left: 1px; top: 31px; width: 22px; height: 8px; z-index: 8;
+  background: linear-gradient(180deg,#5a4632,#3a2c20); border-radius: 3px; box-shadow: 0 2px 4px rgba(0,0,0,.45); }
 
 /* 菜单入口分组:按职责(看公司/配公司)用竖分隔线分块,不再一长条平铺 → 有层级、不繁琐。 */
 .ctrl-div { width: 1px; height: 16px; background: var(--bd-strong); margin: 0 3px; flex: none; opacity: .6; }
