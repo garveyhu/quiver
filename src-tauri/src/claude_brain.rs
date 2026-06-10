@@ -139,6 +139,9 @@ fn build_prompt(ctx: &ManagerContext, system_prompt: &str) -> String {
          局面:在途 {}/{},排队 {} 个任务,预算剩余 ${:.2}。\n项目简报:\n{brief}{team}{reviews}{next}\n\n\
          输出一个 JSON,action 取其一:\n\
          - {{\"action\":\"spawn\",\"prompt\":\"给新 worker 的任务描述\"}} —— 派新活(仅当在途未满且有预算)\n\
+         - {{\"action\":\"plan\",\"subtasks\":[\"子任务1\",\"子任务2\"]}} —— **拆活分工**:当队首任务\
+           包含多件可独立完成的事时,把它拆成若干子任务,各自入队、分给多个 worker 并行协作;\
+           每条 subtask 写成给 worker 的完整任务描述(同样可点明所需专长词)\n\
          - {{\"action\":\"continue\",\"node_id\":\"...\",\"prompt\":\"追加指令\"}} —— 让在途 worker 继续\n\
          - {{\"action\":\"deliver\",\"node_id\":\"...\"}} —— 交付某节点成果\n\
          - {{\"action\":\"block\",\"node_id\":\"...\",\"reason\":\"...\"}} —— 拦下某节点\n\
