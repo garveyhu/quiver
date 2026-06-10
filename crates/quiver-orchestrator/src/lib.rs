@@ -259,10 +259,7 @@ mod tests {
             queued: 3,
             max_inflight: 4,
             budget_remaining_usd: 5.0,
-            brief: String::new(),
-            pending_reviews: vec![],
-            next_task: None,
-            team: vec![],
+            ..ManagerContext::default()
         };
         assert!(matches!(brain.decide(&ctx).await.unwrap(), Decision::Spawn { .. }));
         // 在途已满 → 不动
