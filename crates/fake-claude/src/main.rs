@@ -272,8 +272,22 @@ fn decide_from_prompt(prompt: &str) -> String {
             return format!(r#"{{"action":"deliver","node_id":"{node}"}}"#);
         }
     }
-    // 否则有队首任务就派活(原样派,worker 会真干)。
+    // 否则看队首任务:列举多个子目标(用「、」分隔)→ 拆活分工(§5 协作);单个 → 原样派活。
     if let Some(task) = extract_next_task(prompt) {
+        let parts: Vec<String> = task
+            .split(['、', '，'])
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .collect();
+        if parts.len() > 1 {
+            let arr = parts
+                .iter()
+                .map(|p| format!("\"{}\"", json_escape(p)))
+                .collect::<Vec<_>>()
+                .join(",");
+            return format!(r#"{{"action":"plan","subtasks":[{arr}]}}"#);
+        }
         return format!(r#"{{"action":"spawn","prompt":"{}"}}"#, json_escape(&task));
     }
     r#"{"action":"noop"}"#.to_string()

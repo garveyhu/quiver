@@ -13,6 +13,7 @@ interface BriefCardProps {
 
 const ACTION_CN: Record<Decision['action'], string> = {
   spawn: '派员工开干 ▸',
+  plan: '拆活分工 ⑃',
   continue: '续跑在途 worker',
   deliver: '推进交付',
   block: '拦下别交付',

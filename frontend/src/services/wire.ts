@@ -134,7 +134,7 @@ export interface MetricsDto {
 
 /** 经理一拍的决策(§21,action 标签)。本前端主要用 action;字段按需。 */
 export interface Decision {
-  action: 'spawn' | 'continue' | 'deliver' | 'block' | 'escalate' | 'refresh_memory' | 'noop';
+  action: 'spawn' | 'plan' | 'continue' | 'deliver' | 'block' | 'escalate' | 'refresh_memory' | 'noop';
   prompt?: string;
   reason?: string;
 }

@@ -35,6 +35,13 @@ pub enum Decision {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
     },
+    /// 拆活(§5 协作):把一个复杂目标拆成多个子任务入队,交给多个员工分工并行。子任务进队列,
+    /// 后续由经理逐个 spawn(按并发/专长)。这是"多 agent 协同完成一件复杂事"的入口。
+    Plan {
+        subtasks: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
+    },
     /// 续跑某个在途 worker(追加指令)。
     Continue { node_id: String, prompt: String },
     /// 交付:某 worker 成果验收通过,推进交付(合并/发货)。

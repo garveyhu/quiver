@@ -240,7 +240,7 @@ async fn manager_loop(app: AppHandle, store: Arc<Store>, pm: Arc<ProjectManager>
         //    - 有在途 → 等某个 worker 完成唤醒(或超时兜底)再 tick。
         let progressed = matches!(
             step.effect,
-            Effect::Spawn { .. } | Effect::Continue { .. } | Effect::Deliver { .. } | Effect::Block { .. }
+            Effect::Spawn { .. } | Effect::Plan { .. } | Effect::Continue { .. } | Effect::Deliver { .. } | Effect::Block { .. }
         );
         if !progressed {
             if pm.orch.lock().await.inflight_len() == 0 {
@@ -303,6 +303,32 @@ async fn execute_effect(
                     pm.orch.lock().await.on_complete(node_id, *fence);
                 }
             }
+        }
+        // 拆活(§5 协作):经理把一个复杂目标拆成子任务,这里把子任务入队。后续经理逐拍 spawn
+        // 它们(按并发/专长),实现"多 agent 分工并行"。入队后认领下一个待办的拆解原任务出队。
+        Effect::Plan { subtasks } => {
+            // 先把拆解的原任务(队首)认领掉,免得它又被当普通活派出去(它的角色已变成"被拆")。
+            let _ = store.claim_next_queued(project_key, crate::now_ms());
+            let mode = store
+                .get_settings()
+                .ok()
+                .map(|s| s.default_mode)
+                .unwrap_or_else(|| "simulate".to_string());
+            let now = crate::now_ms();
+            for (i, sub) in subtasks.iter().enumerate() {
+                let id = format!("task-sub-{i}-{now}");
+                let _ = store.enqueue_task(&quiver_store::NewTask {
+                    id,
+                    project: project_key.to_string(),
+                    prompt: sub.clone(),
+                    mode: mode.clone(),
+                    status: "queued".to_string(),
+                    created_at: now,
+                });
+            }
+            task_prompt_out = Some(format!("拆成 {} 个子任务分工", subtasks.len()));
+            pm.wake.notify_one(); // 唤醒经理来 spawn 这些子任务
+            let _ = app.emit(TASK_EVENT_CHANNEL, project_key);
         }
         // 裁决(§5 复核):经理对完工 worker 拍交付/拦下 → 这单复核出队。
         Effect::Deliver { node_id } | Effect::Block { node_id, .. } => {
@@ -390,6 +416,11 @@ fn record_decision_episode(
     let summary = match decision {
         Decision::Spawn { reason, .. } => format!(
             "经理·派活{task}{}",
+            reason.as_deref().map(|r| format!("({r})")).unwrap_or_default()
+        ),
+        Decision::Plan { subtasks, reason } => format!(
+            "经理·拆活成 {} 个子任务分工{}",
+            subtasks.len(),
             reason.as_deref().map(|r| format!("({r})")).unwrap_or_default()
         ),
         Decision::Deliver { .. } => format!("经理·交付{task}"),
@@ -591,6 +622,10 @@ async fn emit_decision(
 fn describe(decision: &Decision) -> (String, Option<String>) {
     match decision {
         Decision::Spawn { reason, .. } => ("spawn".into(), reason.clone()),
+        Decision::Plan { subtasks, reason } => (
+            "plan".into(),
+            Some(reason.clone().unwrap_or_else(|| format!("拆成 {} 个子任务分工", subtasks.len()))),
+        ),
         Decision::Continue { .. } => ("continue".into(), None),
         Decision::Deliver { .. } => ("deliver".into(), None),
         Decision::Block { reason, .. } => ("block".into(), Some(reason.clone())),

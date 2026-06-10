@@ -14,6 +14,8 @@ use crate::{Decision, ManagerBrain, ManagerContext};
 pub enum Effect {
     /// 开 worker:用分配好的 `node_id` + 栅栏 `fence` 跑 `prompt`。
     Spawn { node_id: String, fence: Fence, prompt: String },
+    /// 拆活:把这些子任务入队(§5 协作)。不占在途名额(只入队列),后续逐个 spawn。
+    Plan { subtasks: Vec<String> },
     /// 给在途 worker 追加指令。
     Continue { node_id: String, prompt: String },
     /// 交付某节点成果(合并/发货)。
@@ -95,6 +97,14 @@ impl Orchestrator {
                         Effect::Spawn { node_id, fence, prompt: prompt.clone() }
                     }
                     None => Effect::Nothing, // 满载 → 拒掉(经理不该派,兜底)
+                }
+            }
+            // 拆活只是把子任务入队,不占在途名额、不分配 node/fence —— 直通给执行层 enqueue。
+            Decision::Plan { subtasks, .. } => {
+                if subtasks.is_empty() {
+                    Effect::Nothing
+                } else {
+                    Effect::Plan { subtasks: subtasks.clone() }
                 }
             }
             Decision::Continue { node_id, prompt } => {

@@ -27,6 +27,7 @@ function brainLabel(brain: string | null, mode: 'simulate' | 'real'): string {
 
 const ACTION_CN: Record<Decision['action'], string> = {
   spawn: '派活 ▸',
+  plan: '拆活分工 ⑃',
   continue: '续跑',
   deliver: '交付',
   block: '拦下',
@@ -44,7 +45,7 @@ function hhmmss(ms: number): string {
 /** 决策的状态色:落地的派活/续跑=绿,拦下/升级=红,其余(noop/未落地)=中性。 */
 function actionClass(d: ManagerDecision): string {
   if (!d.executed) return 'st-meta';
-  if (d.action === 'spawn' || d.action === 'continue' || d.action === 'deliver') return 'st-ok';
+  if (d.action === 'spawn' || d.action === 'plan' || d.action === 'continue' || d.action === 'deliver') return 'st-ok';
   if (d.action === 'block' || d.action === 'escalate') return 'st-bad';
   return 'st-meta';
 }
