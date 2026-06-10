@@ -1,8 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { MarkdownLite } from '@/components/MarkdownLite';
 import { TaskJourney } from '@/components/TaskJourney';
+import { listTasks } from '@/services/commands';
 import type { AgentRole, StoredEvent } from '@/services/wire';
+
+const OK = new Set(['verified', 'merged', 'done']);
+
+/** 一个员工的历史战绩(从所有任务里按 workerRole 聚合)。 */
+interface Perf {
+  total: number;
+  ok: number;
+  cost: number;
+}
 import type { PlacedWorker } from '@/office/workers';
 
 /** 经理思考流里剥掉决策 JSON 对象(原生难读;决策已在「— 决策 —」分隔处人话显示),
@@ -145,6 +155,30 @@ export function Worksurf({ worker, events, roles, managerThinking, onClose, onOp
   const role = worker?.workerRole ? roles.find(r => r.name === worker.workerRole) : undefined;
   // 休息中的员工(emp + 没在干活):点开看 ta 是谁、能力、怎么配 —— 不再只一句待命。
   const idleEmp = worker?.role === 'emp' && !worker.taskId;
+  // 这个员工的历史战绩:干过多少件、成了多少、花了多少 —— 让 CEO 看团队每个人的真实表现。
+  const [perf, setPerf] = useState<Perf | null>(null);
+  const empName = idleEmp ? worker?.workerRole : undefined;
+  useEffect(() => {
+    if (!empName) {
+      setPerf(null);
+      return;
+    }
+    let alive = true;
+    void listTasks()
+      .then(ts => {
+        if (!alive) return;
+        const mine = ts.filter(t => t.workerRole === empName);
+        setPerf({
+          total: mine.length,
+          ok: mine.filter(t => OK.has(t.status)).length,
+          cost: mine.reduce((s, t) => s + (t.costUsd ?? 0), 0),
+        });
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [empName]);
   // 经理:点开看实时思考流(claude 决策过程),而非任务事件 —— 经理不绑单个任务。
   // 剥掉难读的决策 JSON,只留自然语言思路(规则经理/fake 只吐 JSON → 滤后为空,显示提示)。
   const isMgr = worker?.role === 'mgr';
@@ -211,6 +245,14 @@ export function Worksurf({ worker, events, roles, managerThinking, onClose, onOp
               <div className="ws-id-row">
                 <span>大脑</span>
                 <b>{role?.brain === 'claude' ? 'claude · 真思考(烧额度)' : '规则 · 免费'}</b>
+              </div>
+              <div className="ws-id-row">
+                <span>战绩</span>
+                <b>
+                  {perf && perf.total > 0
+                    ? `干过 ${perf.total} 件 · 成 ${perf.ok}(${Math.round((perf.ok / perf.total) * 100)}%) · 花 $${perf.cost.toFixed(2)}`
+                    : '还没干过活'}
+                </b>
               </div>
               <div className="ws-id-hint">没活时在休息室待命。去人事部能改 ta 的专长 / 模型 / 预算 / 大脑;有活时它会被派到对口的任务上。</div>
             </div>
