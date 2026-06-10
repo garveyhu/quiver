@@ -33,6 +33,9 @@ pub struct AgentRole {
     pub budget_usd: Option<f64>,
     /// 单任务轮数上限(`--max-turns`)。NULL=不限。
     pub max_turns: Option<i64>,
+    /// 专长标签(§14 智能协作):如「测试」「前端」「安全」「通用」。任务按专长派给对的人。
+    /// 仅 kind=worker 有意义。空=通用。
+    pub specialty: String,
     /// 配置版本:每次 update +1(§14)。
     pub version: i64,
     pub updated_at: i64,
@@ -51,6 +54,7 @@ pub struct RolePatch {
     pub budget_usd: Option<Option<f64>>,
     #[serde(default, deserialize_with = "de_opt_i64")]
     pub max_turns: Option<Option<i64>>,
+    pub specialty: Option<String>,
 }
 
 fn de_opt_f64<'de, D>(d: D) -> Result<Option<Option<f64>>, D::Error>
@@ -68,7 +72,7 @@ where
 }
 
 const ROLE_COLUMNS: &str =
-    "id, name, kind, brain, model, system_prompt, budget_usd, max_turns, version, updated_at";
+    "id, name, kind, brain, model, system_prompt, budget_usd, max_turns, specialty, version, updated_at";
 
 fn row_to_role(row: &rusqlite::Row<'_>) -> rusqlite::Result<AgentRole> {
     Ok(AgentRole {
@@ -80,8 +84,9 @@ fn row_to_role(row: &rusqlite::Row<'_>) -> rusqlite::Result<AgentRole> {
         system_prompt: row.get(5)?,
         budget_usd: row.get(6)?,
         max_turns: row.get(7)?,
-        version: row.get(8)?,
-        updated_at: row.get(9)?,
+        specialty: row.get(8)?,
+        version: row.get(9)?,
+        updated_at: row.get(10)?,
     })
 }
 
@@ -145,12 +150,15 @@ impl Store {
         if let Some(v) = patch.max_turns {
             role.max_turns = v;
         }
+        if let Some(v) = &patch.specialty {
+            role.specialty = v.clone();
+        }
         role.version += 1;
         role.updated_at = updated_at;
 
         conn.execute(
             "UPDATE agent_role SET name=?2, brain=?3, model=?4, system_prompt=?5,
-                    budget_usd=?6, max_turns=?7, version=?8, updated_at=?9
+                    budget_usd=?6, max_turns=?7, specialty=?8, version=?9, updated_at=?10
              WHERE id=?1",
             params![
                 role.id,
@@ -160,6 +168,7 @@ impl Store {
                 role.system_prompt,
                 role.budget_usd,
                 role.max_turns,
+                role.specialty,
                 role.version,
                 role.updated_at,
             ],

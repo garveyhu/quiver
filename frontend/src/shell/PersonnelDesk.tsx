@@ -89,6 +89,25 @@ export function PersonnelDesk({ open, roles, onPatch, onClose }: PersonnelDeskPr
               </div>
               {r.kind === 'worker' && (
                 <div className="kv">
+                  <b>专长</b>
+                  <span>
+                    <input
+                      className="field"
+                      defaultValue={r.specialty}
+                      placeholder="通用 / 测试 / 前端 / 安全…"
+                      onBlur={e => {
+                        const v = e.target.value.trim();
+                        if (v !== r.specialty) onPatch(r.id, { specialty: v });
+                      }}
+                    />
+                    <span className="st-meta" style={{ marginLeft: 8 }}>
+                      任务描述含此词 → 经理派给他
+                    </span>
+                  </span>
+                </div>
+              )}
+              {r.kind === 'worker' && (
+                <div className="kv">
                   <b>硬限</b>
                   <span>
                     单任务 $

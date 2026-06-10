@@ -175,6 +175,8 @@ export interface AgentRole {
   systemPrompt: string;
   budgetUsd: number | null;
   maxTurns: number | null;
+  /** 专长标签(§14):测试/前端/安全/通用…任务按专长派给对的人。仅员工有意义。 */
+  specialty: string;
   /** 配置版本,改一次 +1(§14)。 */
   version: number;
   updatedAt: number;
@@ -188,6 +190,7 @@ export interface RolePatch {
   systemPrompt?: string;
   budgetUsd?: number | null;
   maxTurns?: number | null;
+  specialty?: string;
 }
 
 /** 经理控制循环每一拍 emit 的决策(manager-decision 事件,§5)。前端工作台累积成决策流。 */

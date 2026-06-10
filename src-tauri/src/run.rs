@@ -245,7 +245,7 @@ pub async fn run_streaming(
             // 人事部员工角色配置接到真实 run(§14,配置不是摆设):**每个员工独立配置**——
             // 在所有 kind='worker' 角色间按 task_id 稳定分配(同任务总是同一个员工,不同任务
             // 散开到不同员工),用那个员工的模型/预算/轮数。回退:无员工角色 → 全局 settings。
-            let worker_role = store.and_then(|s| pick_worker_role(s, &task_id));
+            let worker_role = store.and_then(|s| pick_worker_role(s, &task_id, &prompt));
             let model = worker_role
                 .as_ref()
                 .map(|r| r.model.clone())
@@ -463,19 +463,36 @@ fn assert_no_forbidden_env(is_present: impl Fn(&str) -> bool) -> anyhow::Result<
 
 /// Resolve the agent binary honoring the saved `agent_bin_override` (Phase B)
 /// before the per-mode auto-resolution.
-/// 在所有「员工」角色间按 `task_id` 稳定分配一个(§14 每个员工独立配置):同任务总选同一员工,
-/// 不同任务散开到不同员工 —— 于是并行任务真的各用自己员工的模型/预算/轮数,配置不是摆设。
-/// 无员工角色时返回 `None`(调用方回退全局 settings)。
-fn pick_worker_role(store: &Store, task_id: &str) -> Option<quiver_store::AgentRole> {
+/// 给一个任务挑员工(§14 智能协作):**先按专长匹配** —— 任务描述里出现某员工的专长标签
+/// (如「测试」「前端」)就派给他;没有专长命中再按 task_id 稳定散开到通用员工。于是
+/// "配前端专长的员工接前端活、配测试的接测试活",配置 + 调度接起来。无员工角色 → `None`。
+fn pick_worker_role(store: &Store, task_id: &str, prompt: &str) -> Option<quiver_store::AgentRole> {
     let workers: Vec<quiver_store::AgentRole> = store
         .list_roles()
         .ok()?
         .into_iter()
         .filter(|r| r.kind == "worker")
         .collect();
+    pick_worker_from(workers, task_id, prompt)
+}
+
+/// 纯逻辑(可单测):从一组员工里按"专长命中任务描述 > task_id 稳定散开"挑一个。
+fn pick_worker_from(
+    workers: Vec<quiver_store::AgentRole>,
+    task_id: &str,
+    prompt: &str,
+) -> Option<quiver_store::AgentRole> {
     if workers.is_empty() {
         return None;
     }
+    // 专长匹配:任务描述包含某员工的(非空、非"通用")专长标签 → 派给他。
+    if let Some(hit) = workers.iter().find(|r| {
+        let s = r.specialty.trim();
+        !s.is_empty() && s != "通用" && prompt.contains(s)
+    }) {
+        return Some(hit.clone());
+    }
+    // 无专长命中:按 task_id 稳定散开(同任务总同员工,不同任务散开),倾向通用/任意员工。
     let idx = task_id.bytes().map(usize::from).sum::<usize>() % workers.len();
     workers.into_iter().nth(idx)
 }
@@ -606,6 +623,39 @@ fn is_executable(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn worker(id: &str, specialty: &str) -> quiver_store::AgentRole {
+        quiver_store::AgentRole {
+            id: id.into(),
+            name: id.into(),
+            kind: "worker".into(),
+            brain: "rule".into(),
+            model: "sonnet".into(),
+            system_prompt: String::new(),
+            budget_usd: None,
+            max_turns: None,
+            specialty: specialty.into(),
+            version: 1,
+            updated_at: 0,
+        }
+    }
+
+    #[test]
+    fn pick_worker_prefers_specialty_match() {
+        let team = vec![worker("w1", "通用"), worker("w2", "测试"), worker("w3", "前端")];
+        // 任务描述含"测试" → 派给测试专长的 w2(不管 task_id)。
+        let r = pick_worker_from(team.clone(), "task-abc", "给登录补端到端测试").unwrap();
+        assert_eq!(r.id, "w2", "专长命中优先");
+        // 含"前端" → w3。
+        let r = pick_worker_from(team.clone(), "task-abc", "给看板加前端暗色模式").unwrap();
+        assert_eq!(r.id, "w3");
+        // 无专长命中 → 按 task_id 稳定散开(同 id 总同一人)。
+        let a = pick_worker_from(team.clone(), "task-xyz", "清理废弃依赖").unwrap();
+        let b = pick_worker_from(team.clone(), "task-xyz", "清理废弃依赖").unwrap();
+        assert_eq!(a.id, b.id, "同任务稳定到同一员工");
+        // 空团队 → None。
+        assert!(pick_worker_from(vec![], "t", "x").is_none());
+    }
 
     #[test]
     fn run_mode_deserializes_lowercase() {

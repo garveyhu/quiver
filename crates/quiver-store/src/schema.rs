@@ -154,6 +154,8 @@ pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
 
     // 人事部(DESIGN §14):角色配置表 + 内置经理/员工 seed。经理的 brain 字段是
     // 「烧钱大脑」的唯一显式开关(seed 必须是免费的 rule)。
+    // 先只建表(新 DB 含 specialty 列),再幂等补列(既有 DB),**最后**才 seed —— seed 的
+    // INSERT 引用了 specialty 列,必须等列存在后再跑,否则既有 DB 上 INSERT 引用不存在的列会崩。
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS agent_role (
             id            TEXT PRIMARY KEY,
@@ -164,17 +166,22 @@ pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
             system_prompt TEXT NOT NULL DEFAULT '',
             budget_usd    REAL,
             max_turns     INTEGER,
+            specialty     TEXT NOT NULL DEFAULT '',
             version       INTEGER NOT NULL DEFAULT 1,
             updated_at    INTEGER NOT NULL
-        );
-        INSERT OR IGNORE INTO agent_role (id, name, kind, brain, model, updated_at)
+        );",
+    )?;
+    // 既有 DB(在 specialty 列之前建的 agent_role)幂等补列(§14 每个员工的专长标签)。
+    add_column_if_absent(conn, "agent_role", "specialty", "TEXT NOT NULL DEFAULT ''")?;
+    conn.execute_batch(
+        "INSERT OR IGNORE INTO agent_role (id, name, kind, brain, model, updated_at)
             VALUES ('manager', '经理', 'manager', 'rule', 'sonnet', 0);
-        INSERT OR IGNORE INTO agent_role (id, name, kind, brain, model, updated_at)
-            VALUES ('worker', '员工 1', 'worker', 'rule', 'sonnet', 0);
-        INSERT OR IGNORE INTO agent_role (id, name, kind, brain, model, updated_at)
-            VALUES ('worker-2', '员工 2', 'worker', 'rule', 'sonnet', 0);
-        INSERT OR IGNORE INTO agent_role (id, name, kind, brain, model, updated_at)
-            VALUES ('worker-3', '员工 3', 'worker', 'rule', 'sonnet', 0);
+        INSERT OR IGNORE INTO agent_role (id, name, kind, brain, model, specialty, updated_at)
+            VALUES ('worker', '员工 1', 'worker', 'rule', 'sonnet', '通用', 0);
+        INSERT OR IGNORE INTO agent_role (id, name, kind, brain, model, specialty, updated_at)
+            VALUES ('worker-2', '员工 2', 'worker', 'rule', 'sonnet', '测试', 0);
+        INSERT OR IGNORE INTO agent_role (id, name, kind, brain, model, specialty, updated_at)
+            VALUES ('worker-3', '员工 3', 'worker', 'rule', 'sonnet', '前端', 0);
         INSERT OR IGNORE INTO agent_role (id, name, kind, brain, model, updated_at)
             VALUES ('librarian', '图书管理员', 'librarian', 'rule', 'sonnet', 0);",
     )?;
