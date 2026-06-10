@@ -670,6 +670,22 @@ mod tests {
         assert_eq!(guard.head_sha(&wt).await.unwrap(), after, "无改动时 HEAD 不动");
     }
 
+    /// quiver 的私有 worktree 根 `.quiver/` 不该污染用户项目的 git status:创建 worktree 时
+    /// 自动把 `/.quiver/` 写进 `.git/info/exclude`(本地忽略,不碰用户 .gitignore)。
+    #[tokio::test]
+    async fn worktree_creation_excludes_quiver_dir() {
+        let repo = temp_repo();
+        let wt_root = TempDir::new().expect("wt root");
+        let guard = GitGuard::new(repo.path()).with_worktrees_root(wt_root.path());
+        let _wt = guard.create("ign-1", 1).await.expect("worktree");
+        let exclude =
+            std::fs::read_to_string(repo.path().join(".git/info/exclude")).unwrap_or_default();
+        assert!(
+            exclude.lines().any(|l| l.trim() == "/.quiver/"),
+            "/.quiver/ 应写进 .git/info/exclude,实际:\n{exclude}"
+        );
+    }
+
     /// The streaming variant fires `on_event` for EACH event AS it arrives —
     /// before the run finishes — and the callback sees the same ordered events
     /// that end up in the outcome. Live-ness: with a per-line delay in

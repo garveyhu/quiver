@@ -238,6 +238,9 @@ impl GitGuard {
         dir: &Path,
         branch: &str,
     ) -> anyhow::Result<WorktreePath> {
+        // `.quiver/`(worktree 根)是 quiver 的私有目录,不该出现在用户项目的 `git status` ——
+        // 本地忽略它(写 .git/info/exclude,不碰用户的 .gitignore、不在工作区留文件)。
+        self.ensure_quiver_ignored();
         let _lock = self.meta_lock.lock().await;
         let dir_str = path_arg(dir)?;
         // §8.2:worktree add 会 checkout 新分支 → 触发 .gitattributes 的 smudge 过滤器,
@@ -247,6 +250,25 @@ impl GitGuard {
         args.extend_from_slice(&["worktree", "add", dir_str, "-b", branch]);
         self.run_meta(&args).await?;
         Ok(WorktreePath(dir.to_path_buf()))
+    }
+
+    /// 把 `/.quiver/` 写进 `<repo>/.git/info/exclude`,让 quiver 的私有 worktree 根目录不污染
+    /// 用户的 `git status`。本地忽略 —— 不碰用户 `.gitignore`、不在工作区留任何文件。
+    /// best-effort:已忽略则跳过;写失败不影响 worktree 创建(顶多 status 多一行)。
+    fn ensure_quiver_ignored(&self) {
+        let needle = "/.quiver/";
+        let info_dir = self.repo.join(".git").join("info");
+        let exclude = info_dir.join("exclude");
+        if let Ok(content) = std::fs::read_to_string(&exclude) {
+            if content.lines().any(|l| l.trim() == needle) {
+                return; // 已忽略
+            }
+        }
+        let _ = std::fs::create_dir_all(&info_dir);
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&exclude) {
+            use std::io::Write;
+            let _ = writeln!(f, "{needle}");
+        }
     }
 
     /// Remove a worktree, gating on its cleanliness (DESIGN §6.3).
