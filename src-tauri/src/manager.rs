@@ -451,6 +451,35 @@ fn record_decision_episode(
     });
 }
 
+/// §5 协作汇总:一个子任务完成后调。若它属于某协作目标(parent_goal),且该目标下**所有**
+/// 子任务都到完成态(verified/merged/done) → 把那个停在 `planned` 的父目标标 `done`,表示
+/// "公司协作把这个复杂目标搞定了"。非子任务 / 还有兄弟没完成 → 不动。best-effort。
+fn maybe_complete_parent_goal(store: &Arc<Store>, project: &str, task_id: &str) {
+    let Some(goal) = store
+        .get_task(task_id)
+        .ok()
+        .flatten()
+        .and_then(|t| t.parent_goal)
+    else {
+        return; // 不是子任务
+    };
+    let Ok(all) = store.list_tasks(Some(project), None) else {
+        return;
+    };
+    let siblings: Vec<_> = all
+        .iter()
+        .filter(|t| t.parent_goal.as_deref() == Some(goal.as_str()))
+        .collect();
+    let done = |s: &str| matches!(s, "verified" | "merged" | "done");
+    if siblings.is_empty() || !siblings.iter().all(|t| done(&t.status)) {
+        return; // 还有兄弟子任务没完成
+    }
+    // 全部子任务完成 → 父目标(prompt==goal 且停在 planned)标「协作完成」done。
+    if let Some(parent) = all.iter().find(|t| t.prompt == goal && t.status == "planned") {
+        let _ = store.update_task_status(&parent.id, "done", crate::now_ms());
+    }
+}
+
 /// 起一个 worker 异步跑 `run_one_task`,完成后回流:释放在途名额(`on_complete` 凭栅栏对账)、
 /// 清 node↔task 映射、刷新看板、`notify` 唤醒经理再 tick(§5.6)。
 #[allow(clippy::too_many_arguments)]
@@ -479,6 +508,8 @@ fn spawn_worker(
             .flatten()
             .map(|t| t.status)
             .unwrap_or_else(|| "failed".to_string());
+        // §5 协作汇总:子任务完成后,若它所属协作目标的所有子任务都完成了 → 标父目标「协作完成」。
+        maybe_complete_parent_goal(&store, &project_key, &task_id);
         pm.reviews.lock().await.push(PendingReview {
             node_id: node_id.clone(),
             task_id,

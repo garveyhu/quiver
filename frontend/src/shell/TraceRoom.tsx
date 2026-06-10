@@ -271,12 +271,17 @@ export function TraceRoom({ open, onClose }: TraceRoomProps) {
               // 协作树:同 parentGoal 的子任务前插一个目标组头,子任务缩进 —— 一眼看出"这几个
               // 是同一个目标拆出来分工的"(§5 协作)。
               const groupHead = t.parentGoal && t.parentGoal !== shown[i - 1]?.parentGoal;
-              const siblings = t.parentGoal ? shown.filter(x => x.parentGoal === t.parentGoal).length : 0;
+              const sibs = t.parentGoal ? shown.filter(x => x.parentGoal === t.parentGoal) : [];
+              const sibDone = sibs.filter(x => ['verified', 'merged', 'done'].includes(x.status)).length;
+              const allDone = sibs.length > 0 && sibDone === sibs.length;
               return (
                 <Fragment key={t.id}>
                   {groupHead && (
                     <div className="trc-goal-head">
-                      ⑃ 协作目标：{t.parentGoal!.length > 26 ? `${t.parentGoal!.slice(0, 26)}…` : t.parentGoal} · {siblings} 个子任务分工
+                      ⑃ 协作目标：{t.parentGoal!.length > 24 ? `${t.parentGoal!.slice(0, 24)}…` : t.parentGoal} ·{' '}
+                      <span className={allDone ? 'st-ok' : 'st-meta'}>
+                        {sibDone}/{sibs.length} 子任务{allDone ? '完成 ✓' : '完成'}
+                      </span>
                     </div>
                   )}
                   <div className={`trc-task${t.parentGoal ? ' trc-sub' : ''}`}>
