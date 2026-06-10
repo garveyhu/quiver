@@ -98,8 +98,10 @@ export function useCamera(worldW: number, worldH: number): Camera {
     };
   }, [reset]);
 
-  const tx = (-(cam.fx - worldW / 2) * cam.s).toFixed(1);
-  const ty = (-(cam.fy - worldH / 2) * cam.s).toFixed(1);
+  // 整数像素对齐:DPR=1(非 retina)屏上,小数 translate 让内容子像素渲染 → 文字/像素发糊。
+  // round 到整数物理像素能让平移不引入额外模糊。
+  const tx = Math.round(-(cam.fx - worldW / 2) * cam.s);
+  const ty = Math.round(-(cam.fy - worldH / 2) * cam.s);
   const transition = anim === 'none' ? 'none' : anim === 'fast' ? 'transform .13s ease-out' : 'transform .6s cubic-bezier(.45,.02,.2,1)';
 
   return {

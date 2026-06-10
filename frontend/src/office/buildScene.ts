@@ -81,9 +81,10 @@ export function buildScene(): Scene {
   return { layout, nodes: b.nodes };
 }
 
-/** 全场浮尘:26 粒随机散布在网格上空，暖白错落，慢速上浮淡出(移植原型 build() 尾段)。 */
+/** 全场浮尘:8 粒随机散布在网格上空，暖白错落，慢速上浮淡出。原型 26 粒,但每粒是 z-index
+ * 最上层的永动动画+合成层,数量大会拖累整机合成,减到 8 粒保留氛围、省 GPU。 */
 function ambientDust(b: SceneBuilder): void {
-  for (let i = 0; i < 26; i++) {
+  for (let i = 0; i < 8; i++) {
     const c = Math.random() * C;
     const r = Math.random() * R;
     const h = 20 + Math.random() * 34;

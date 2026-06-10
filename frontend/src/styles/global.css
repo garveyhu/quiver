@@ -94,7 +94,9 @@ body {
 
 /* ===== 家具/道具像素细节 ===== */
 .pled { position: absolute; width: 2px; height: 2px; margin-left: -1px; margin-top: -1px; border-radius: 1px; pointer-events: none; }
-.pled.b { animation: blink2 1.4s steps(1) infinite; }
+/* LED 静态点亮 —— 原本 45 个灯各自 blink 永动动画,纯装饰却 45 个合成层持续重绘。
+   常亮的服务器灯一样有"在运转"感,省掉 45 个永动动画。 */
+.pled.b { opacity: .9; }
 .pspeck { position: absolute; width: 2px; height: 2px; border-radius: 1px; pointer-events: none; }
 .pcshadow { position: absolute; border-radius: 50%; background: rgba(0,0,0,.3); pointer-events: none; }
 .pscan { position: absolute; pointer-events: none; opacity: .5; background: repeating-linear-gradient(0deg, rgba(255,255,255,.10) 0 1px, transparent 1px 3px); }
