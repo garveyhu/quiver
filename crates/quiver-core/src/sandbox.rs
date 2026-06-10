@@ -196,6 +196,20 @@ mod tests {
     }
 
     #[test]
+    fn every_secret_dir_is_denied_read_in_worker_profile() {
+        // §8.3 安全回归网:secret_dirs 里**每一个**密钥目录都必须进禁读 profile —— 防有人
+        // 误删/漏掉某条(如 .aws / .kube / .config/gcloud),让 real worker 读到用户凭据。
+        if std::env::var_os("HOME").is_none() {
+            return; // 无 HOME(CI 沙箱)→ for_worker 不加密钥禁读,跳过
+        }
+        let sb = SandboxPolicy::for_worker(std::env::temp_dir()).to_seatbelt();
+        for dir in secret_dirs() {
+            let entry = format!("(deny file-read* (subpath \"{}\"))", dir.display());
+            assert!(sb.contains(&entry), "密钥目录 {dir:?} 必须禁读,但不在 seatbelt profile 里");
+        }
+    }
+
+    #[test]
     fn network_is_opt_in() {
         let sb = SandboxPolicy::for_worktree(std::env::temp_dir())
             .with_network()
