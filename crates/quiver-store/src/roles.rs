@@ -177,7 +177,12 @@ mod tests {
         let store = Store::open_in_memory().unwrap();
         let roles = store.list_roles().unwrap();
         let ids: Vec<&str> = roles.iter().map(|r| r.id.as_str()).collect();
-        assert_eq!(ids, vec!["manager", "librarian", "worker"], "seed 经理在前,共三内置角色");
+        // 经理在前;其余按 id:librarian + 三个独立员工(worker/worker-2/worker-3)。
+        assert_eq!(ids[0], "manager", "seed 经理在前");
+        assert!(ids.contains(&"worker") && ids.contains(&"worker-2") && ids.contains(&"worker-3"), "三个独立员工");
+        assert!(ids.contains(&"librarian"));
+        let workers = roles.iter().filter(|r| r.kind == "worker").count();
+        assert_eq!(workers, 3, "每个员工独立配置:seed 三个 worker 角色");
         // 安全默认:会烧钱的大脑(经理决策/图书管理员提炼)必须 seed 成免费 rule(休眠),
         // claude 只能在人事部显式打开。
         for id in ["manager", "librarian"] {

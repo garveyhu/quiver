@@ -242,9 +242,10 @@ pub async fn run_streaming(
         RunMode::Real => {
             let bin = resolve_agent_bin(&settings, mode)?;
             assert_subscription_env()?;
-            // 人事部「员工」角色配置接到真实 run(§14,配置不是摆设):模型用角色的
-            // (回退全局 settings.model),预算/轮数上限有则真传给 claude 进程硬限。
-            let worker_role = store.and_then(|s| s.get_role("worker").ok().flatten());
+            // 人事部员工角色配置接到真实 run(§14,配置不是摆设):**每个员工独立配置**——
+            // 在所有 kind='worker' 角色间按 task_id 稳定分配(同任务总是同一个员工,不同任务
+            // 散开到不同员工),用那个员工的模型/预算/轮数。回退:无员工角色 → 全局 settings。
+            let worker_role = store.and_then(|s| pick_worker_role(s, &task_id));
             let model = worker_role
                 .as_ref()
                 .map(|r| r.model.clone())
@@ -462,6 +463,23 @@ fn assert_no_forbidden_env(is_present: impl Fn(&str) -> bool) -> anyhow::Result<
 
 /// Resolve the agent binary honoring the saved `agent_bin_override` (Phase B)
 /// before the per-mode auto-resolution.
+/// 在所有「员工」角色间按 `task_id` 稳定分配一个(§14 每个员工独立配置):同任务总选同一员工,
+/// 不同任务散开到不同员工 —— 于是并行任务真的各用自己员工的模型/预算/轮数,配置不是摆设。
+/// 无员工角色时返回 `None`(调用方回退全局 settings)。
+fn pick_worker_role(store: &Store, task_id: &str) -> Option<quiver_store::AgentRole> {
+    let workers: Vec<quiver_store::AgentRole> = store
+        .list_roles()
+        .ok()?
+        .into_iter()
+        .filter(|r| r.kind == "worker")
+        .collect();
+    if workers.is_empty() {
+        return None;
+    }
+    let idx = task_id.bytes().map(usize::from).sum::<usize>() % workers.len();
+    workers.into_iter().nth(idx)
+}
+
 pub(crate) fn resolve_agent_bin(settings: &Settings, mode: RunMode) -> anyhow::Result<PathBuf> {
     if let Some(override_path) = settings
         .agent_bin_override

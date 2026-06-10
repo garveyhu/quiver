@@ -170,7 +170,11 @@ pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
         INSERT OR IGNORE INTO agent_role (id, name, kind, brain, model, updated_at)
             VALUES ('manager', '经理', 'manager', 'rule', 'sonnet', 0);
         INSERT OR IGNORE INTO agent_role (id, name, kind, brain, model, updated_at)
-            VALUES ('worker', '员工', 'worker', 'rule', 'sonnet', 0);
+            VALUES ('worker', '员工 1', 'worker', 'rule', 'sonnet', 0);
+        INSERT OR IGNORE INTO agent_role (id, name, kind, brain, model, updated_at)
+            VALUES ('worker-2', '员工 2', 'worker', 'rule', 'sonnet', 0);
+        INSERT OR IGNORE INTO agent_role (id, name, kind, brain, model, updated_at)
+            VALUES ('worker-3', '员工 3', 'worker', 'rule', 'sonnet', 0);
         INSERT OR IGNORE INTO agent_role (id, name, kind, brain, model, updated_at)
             VALUES ('librarian', '图书管理员', 'librarian', 'rule', 'sonnet', 0);",
     )?;
