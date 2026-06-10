@@ -195,7 +195,13 @@ export function App() {
         <Office completionFx={completionFx} />
       </div>
       <Hud data={hud} budgetCap={budgetCap} />
-      <Ctrls onCmdk={() => setOverlay('cmdk')} onReport={() => setOverlay('report')} onGoal={openBrief} />
+      <Ctrls
+        onCmdk={() => setOverlay('cmdk')}
+        onReport={() => setOverlay('report')}
+        onGoal={openBrief}
+        onManager={() => setOverlay('manager')}
+        onPersonnel={() => setOverlay('personnel')}
+      />
       <Caption text={caption} />
       <div className={`scrim${overlay !== 'none' ? ' on' : ''}`} onClick={() => setOverlay('none')} />
       <CommandPalette open={overlay === 'cmdk'} onRun={runCommand} />
