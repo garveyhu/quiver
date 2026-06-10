@@ -79,6 +79,18 @@ export function Office({ completionFx, onOpenTrace }: OfficeProps) {
           <WorldFx layout={scene.layout} fx={completionFx} />
         </div>
       </div>
+      {/* 房间标签:屏幕空间浮层(在 .world 外,不被 transform:scale 缩放)。用相机 project 跟着
+          办公室走,但文字本身 1:1 渲染 → DPR=1 显示器也清晰,不再是纹理放大的糊字。 */}
+      <div className="room-labels">
+        {scene.roomLabels.map((l, i) => {
+          const p = camera.project(l.wx, l.wy);
+          return (
+            <div key={i} className="roomlabel" style={{ left: p.x, top: p.y }}>
+              {l.text}
+            </div>
+          );
+        })}
+      </div>
       <div className={`zoomhint${camera.zoomed || focused ? ' on' : ''}`}>滚轮缩放 · Esc / 双击 复位</div>
       {/* 详情弹出时:点框外任意处即收起,交互更顺手(不必非点「收起」按钮)。 */}
       {focused && <div className="ws-scrim" onClick={closeDive} />}

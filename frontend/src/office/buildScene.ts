@@ -24,12 +24,14 @@ import {
   windowWall,
 } from '@/office/furniture';
 import { computeLayout, zidx, type Layout, C, R, WALLH } from '@/office/iso';
-import { SceneBuilder, type SceneNode } from '@/office/primitives';
+import { SceneBuilder, type RoomLabel, type SceneNode } from '@/office/primitives';
 import { DESKS, ROOMS, HALLS, roomAt, type RoomKey } from '@/office/rooms';
 
 export interface Scene {
   layout: Layout;
   nodes: SceneNode[];
+  /** 房间标签(屏幕空间浮层渲染,不进 world)。 */
+  roomLabels: RoomLabel[];
 }
 
 const HALL_TINT = 'rgba(255,255,255,.045)';
@@ -78,7 +80,7 @@ export function buildScene(): Scene {
   ceilingLights(b);
   ambientDust(b);
 
-  return { layout, nodes: b.nodes };
+  return { layout, nodes: b.nodes, roomLabels: b.roomLabels };
 }
 
 /** 全场浮尘:22 粒随机散布在网格上空，暖白错落，慢速上浮淡出。floaty 是 transform/opacity

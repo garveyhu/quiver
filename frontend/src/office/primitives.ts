@@ -39,8 +39,18 @@ const polygon = (pts: Point[]): string =>
  * 体素(isoBox/chip)、竖面(southPanel)、平面(rug/tile)、像素点(led/speck)、
  * 接触影、原始矩形(pxrect)、顶光(ceilLamp)、窗光(godray)。自动按序生成稳定 key。
  */
+/** 房间标签:文本 + 它在 world 局部的坐标。由 Office 在**屏幕空间浮层**渲染(不进 world,
+ * 不被相机 transform:scale 缩放)→ DPR=1 显示器上也不会因纹理上采样发糊。 */
+export interface RoomLabel {
+  text: string;
+  wx: number;
+  wy: number;
+}
+
 export class SceneBuilder {
   readonly nodes: SceneNode[] = [];
+  /** 房间标签数据(不画进 world,留给屏幕空间浮层用),见 [`RoomLabel`]。 */
+  readonly roomLabels: RoomLabel[] = [];
 
   constructor(private readonly layout: Layout) {}
 
@@ -78,10 +88,11 @@ export class SceneBuilder {
     );
   }
 
-  /** 房间标签(漂在房间中心上方)。 */
+  /** 房间标签(漂在房间中心上方)。**只收集坐标,不画进 world** —— Office 在屏幕空间浮层渲染,
+   * 字号固定、永不随相机缩放 → DPR=1 显示器也清晰(不再是 world 纹理放大的糊字)。 */
   label(c: number, r: number, text: string): void {
     const p = this.pt(c, r);
-    this.add({ className: 'roomlabel', style: { left: p.x, top: p.y - 6, zIndex: 8000 }, text });
+    this.roomLabels.push({ text, wx: p.x, wy: p.y - 6 });
   }
 
   /** 可扩展空位的斜线占位标记。 */

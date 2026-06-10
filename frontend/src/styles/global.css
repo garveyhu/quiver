@@ -86,10 +86,11 @@ body {
 .buildmark { position: absolute; width: var(--tw); height: var(--th); margin-left: calc(var(--tw)/-2); margin-top: calc(var(--th)/-2);
   clip-path: polygon(50% 0,100% 50%,50% 100%,0 50%); background: repeating-linear-gradient(45deg, transparent 0 5px, rgba(255,210,122,.10) 5px 7px); display: grid; place-items: center; }
 .buildmark b { color: #7c89ad; font-size: 13px; font-weight: 400; }
-/* world 不再放大(fit 上限 1),房间标签随 world 1:1 渲染即清晰,无需 counter-scale(它反而
-   让标签在 world 纹理里更小再放大、更糊)。 */
-.roomlabel { position: absolute; transform: translate(-50%,-50%); font-size: 10.5px; letter-spacing: 1.2px; color: var(--tx-2); background: rgba(10,14,26,.72);
-  padding: 3px 9px; border-radius: var(--r-1); white-space: nowrap; pointer-events: none; border: 1px solid var(--bd-soft); }
+/* 房间标签屏幕空间浮层:覆盖视口,不进 .world(不被 transform:scale 缩放)。每个标签由
+   Office 用相机 project 算出屏幕坐标定位 → 跟着办公室走,但文字 1:1 渲染,DPR=1 也清晰。 */
+.room-labels { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
+.roomlabel { position: absolute; transform: translate(-50%,-50%); font-size: 11.5px; letter-spacing: 1.2px; color: var(--tx-1); background: rgba(10,14,26,.82);
+  padding: 3px 10px; border-radius: var(--r-1); white-space: nowrap; pointer-events: none; border: 1px solid var(--bd-soft); }
 .poly { position: absolute; inset: 0; pointer-events: none; transition: background .3s; }
 .rect { position: absolute; pointer-events: none; transition: background .3s; }
 /* 灯光辉光:用 radial-gradient 模拟柔光,不用 filter:blur + mix-blend(两者在 macOS WebView

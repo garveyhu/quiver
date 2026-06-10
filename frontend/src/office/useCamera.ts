@@ -19,6 +19,9 @@ export interface Camera {
   diveTo: (x: number, y: number) => void;
   /** 复位到 fit */
   reset: () => void;
+  /** world 局部坐标 → 屏幕(视口)坐标。屏幕空间浮层(房间标签)据此定位 —— 跟着相机走但
+   * 文字本身不被 transform:scale 缩放,所以 DPR=1 也清晰。 */
+  project: (wx: number, wy: number) => { x: number; y: number };
 }
 
 /** 下钻聚焦的放大倍率(相对 fit)。 */
@@ -117,5 +120,10 @@ export function useCamera(worldW: number, worldH: number): Camera {
     zoomed: cam.s > fitRef.current * 1.02,
     diveTo,
     reset,
+    // .scene-fit 充满视口、world 居中: 屏幕坐标 = 视口中心 + (world点 - world中心)×缩放 + 平移。
+    project: (wx: number, wy: number) => ({
+      x: Math.round(window.innerWidth / 2 + (wx - worldW / 2) * cam.s + tx),
+      y: Math.round(window.innerHeight / 2 + (wy - worldH / 2) * cam.s + ty),
+    }),
   };
 }
