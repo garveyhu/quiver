@@ -38,6 +38,9 @@ const DECISION_CN: Record<string, string> = {
   noop: '按兵不动',
 };
 
+/** 一次展示的任务条数上限(防一屏渲染上千条卡死;超出靠搜索/筛选收窄)。 */
+const RENDER_CAP = 60;
+
 /** 安全解析事件 payload(坏数据不崩,返回空对象)。 */
 function parsePayload(raw: string): Record<string, unknown> {
   try {
@@ -46,6 +49,25 @@ function parsePayload(raw: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+/** claude 的思考输出:保留换行(markdown 原貌)、默认折叠、长文可展开 —— 一坨文本变可读。 */
+function ThinkText({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const long = text.length > 180;
+  return (
+    <div className="trc-ev">
+      <span className="trc-k think">💭 思考</span>
+      <div className="trc-t think">
+        <div className={`trc-think-body${expanded || !long ? ' open' : ''}`}>{text}</div>
+        {long && (
+          <button className="trc-more" type="button" onClick={() => setExpanded(e => !e)}>
+            {expanded ? '收起 ▴' : '展开全文 ▾'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 /** 一条事件渲染成人话:开工 / 思考 / 工具 / 结果 / 终态 / 错误。 */
@@ -69,12 +91,7 @@ function EventRow({ ev }: { ev: StoredEvent }) {
     case 'output_chunk': {
       const text = String(p.text ?? '').trim();
       if (!text) return null;
-      return (
-        <div className="trc-ev">
-          <span className="trc-k think">💭 思考</span>
-          <span className="trc-t think">{text}</span>
-        </div>
-      );
+      return <ThinkText text={text} />;
     }
     case 'result':
       return (
@@ -123,14 +140,26 @@ function TaskTrace({ taskId }: { taskId: string }) {
   );
 }
 
+type ModeFilter = 'all' | 'real' | 'simulate';
+type StatusFilter = 'all' | 'merged' | 'failed' | 'pending';
+
+const STATUS_BUCKETS: Record<Exclude<StatusFilter, 'all'>, string[]> = {
+  merged: ['merged'],
+  failed: ['failed', 'needs_rebase', 'cancelled'],
+  pending: ['queued', 'running', 'verifying', 'verified'],
+};
+
 /**
- * 追溯室(§10 复盘):系统跑过的每一个任务、每个员工干的每一步(claude 思考/工具/结果)、
- * 花了多少、最终结果如何 —— 一处可查、可追溯。回答"刚才那个任务到底发生了什么"。
+ * 追溯室(§10 复盘):系统跑过的每个任务、经理决策 + 每个员工干的每一步、花费与结果 ——
+ * 支持文本搜索 / 模式 / 状态筛选,思考输出折叠可读,渲染封顶防大数据卡死。
  */
 export function TraceRoom({ open, onClose }: TraceRoomProps) {
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [decisions, setDecisions] = useState<ManagerDecision[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [modeF, setModeF] = useState<ModeFilter>('all');
+  const [statusF, setStatusF] = useState<StatusFilter>('all');
 
   useEffect(() => {
     if (!open) return;
@@ -152,48 +181,100 @@ export function TraceRoom({ open, onClose }: TraceRoomProps) {
     return m;
   }, [decisions]);
 
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return tasks.filter(t => {
+      if (q && !t.prompt.toLowerCase().includes(q)) return false;
+      if (modeF !== 'all' && t.mode !== modeF) return false;
+      if (statusF !== 'all' && !STATUS_BUCKETS[statusF].includes(t.status)) return false;
+      return true;
+    });
+  }, [tasks, query, modeF, statusF]);
+
+  const shown = filtered.slice(0, RENDER_CAP);
+
   return (
     <div className={`panel wide${open ? ' on' : ''}`}>
       <h2>追溯室 · 运行档案</h2>
-      <div className="sub">系统跑过的每个任务、员工干的每一步、花费与结果 —— 点开看完整轨迹。</div>
+      <div className="sub">系统跑过的每个任务、经理决策 + 员工每一步、花费与结果。搜索 / 筛选 / 点开看轨迹。</div>
+      <div className="trc-filter">
+        <input
+          className="field trc-search"
+          placeholder="搜任务内容…"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+        />
+        <div className="trc-chips">
+          {(['all', 'real', 'simulate'] as ModeFilter[]).map(m => (
+            <button
+              key={m}
+              className={`trc-chip${modeF === m ? ' on' : ''}`}
+              type="button"
+              onClick={() => setModeF(m)}
+            >
+              {m === 'all' ? '全部' : m === 'real' ? '真实' : '模拟'}
+            </button>
+          ))}
+          <span className="trc-chip-sep" />
+          {(['all', 'merged', 'pending', 'failed'] as StatusFilter[]).map(s => (
+            <button
+              key={s}
+              className={`trc-chip${statusF === s ? ' on' : ''}`}
+              type="button"
+              onClick={() => setStatusF(s)}
+            >
+              {s === 'all' ? '全部' : s === 'merged' ? '已合并' : s === 'pending' ? '进行中' : '失败'}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="body">
         {tasks.length === 0 ? (
           <div className="rev st-meta">还没有任务。CEO 下个目标,跑完就能在这追溯每一步。</div>
+        ) : filtered.length === 0 ? (
+          <div className="rev st-meta">没有匹配的任务,换个搜索词或筛选。</div>
         ) : (
-          tasks.map(t => (
-            <div className="trc-task" key={t.id}>
-              <button
-                className={`trc-head${selected === t.id ? ' on' : ''}`}
-                type="button"
-                onClick={() => setSelected(selected === t.id ? null : t.id)}
-              >
-                <span className="trc-arrow">{selected === t.id ? '▾' : '▸'}</span>
-                <span className="grow">{t.prompt}</span>
-                <span className={statusClass(t.status)}>{STATUS_CN[t.status] ?? t.status}</span>
-                <span className="st-meta">
-                  {t.mode === 'real' ? '真实' : '模拟'}
-                  {t.costUsd ? ` · $${t.costUsd.toFixed(2)}` : ''}
-                </span>
-              </button>
-              {selected === t.id && (
-                <div className="trc-events">
-                  {(decisionsByTask[t.id]?.length ?? 0) > 0 && (
-                    <>
-                      <div className="trc-sec">经理</div>
-                      {decisionsByTask[t.id].map(d => (
-                        <div className="trc-ev" key={`d${d.seq}-${d.tsMs}`}>
-                          <span className="trc-k mgr">🧠 {DECISION_CN[d.action] ?? d.action}</span>
-                          <span className="trc-t">{d.reason || (d.taskPrompt ?? '')}</span>
-                        </div>
-                      ))}
-                      <div className="trc-sec">员工</div>
-                    </>
-                  )}
-                  <TaskTrace taskId={t.id} />
-                </div>
-              )}
+          <>
+            <div className="trc-count">
+              {filtered.length} 条
+              {filtered.length > RENDER_CAP ? `(显示前 ${RENDER_CAP},搜索缩小范围)` : ''}
+              {filtered.length !== tasks.length ? ` · 共 ${tasks.length}` : ''}
             </div>
-          ))
+            {shown.map(t => (
+              <div className="trc-task" key={t.id}>
+                <button
+                  className={`trc-head${selected === t.id ? ' on' : ''}`}
+                  type="button"
+                  onClick={() => setSelected(selected === t.id ? null : t.id)}
+                >
+                  <span className="trc-arrow">{selected === t.id ? '▾' : '▸'}</span>
+                  <span className="grow">{t.prompt}</span>
+                  <span className={statusClass(t.status)}>{STATUS_CN[t.status] ?? t.status}</span>
+                  <span className="st-meta">
+                    {t.mode === 'real' ? '真实' : '模拟'}
+                    {t.costUsd ? ` · $${t.costUsd.toFixed(2)}` : ''}
+                  </span>
+                </button>
+                {selected === t.id && (
+                  <div className="trc-events">
+                    {(decisionsByTask[t.id]?.length ?? 0) > 0 && (
+                      <>
+                        <div className="trc-sec">经理</div>
+                        {decisionsByTask[t.id].map(d => (
+                          <div className="trc-ev" key={`d${d.seq}-${d.tsMs}`}>
+                            <span className="trc-k mgr">🧠 {DECISION_CN[d.action] ?? d.action}</span>
+                            <span className="trc-t">{d.reason || (d.taskPrompt ?? '')}</span>
+                          </div>
+                        ))}
+                        <div className="trc-sec">员工</div>
+                      </>
+                    )}
+                    <TaskTrace taskId={t.id} />
+                  </div>
+                )}
+              </div>
+            ))}
+          </>
         )}
       </div>
       <div className="foot">
