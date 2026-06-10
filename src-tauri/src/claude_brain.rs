@@ -115,7 +115,18 @@ fn extract_json_object(s: &str) -> Option<&str> {
 /// 组装喂给 claude 的决策 prompt(§21):局面 + 待复核 + 队首任务全文(§5 A2) + 决策 schema,
 /// 要求只输出一个 JSON 对象、不改文件。
 fn build_prompt(ctx: &ManagerContext, system_prompt: &str) -> String {
-    let brief = if ctx.brief.is_empty() { "(无)" } else { ctx.brief.as_str() };
+    // 简报每条事实带可信度档(brief.to_text 标的)。点明怎么用 → 经理按可信度分级采信、别被低可信
+    // 的「员工汇报/不可信」带偏(§6 强大记忆决策:可信度真正影响决策权重,不只是个标签)。
+    let brief = if ctx.brief.is_empty() {
+        "(无)".to_string()
+    } else {
+        format!(
+            "{}\n(每条事实标了可信度:「权威 / 已验证·机械」是硬事实、可放心依赖;「已验证·印证」\
+             较可靠;「员工汇报」是 AI 自述、参考即可;「不可信」需存疑核实。按可信度分级采信、\
+             冲突时信高档的。)",
+            ctx.brief.trim()
+        )
+    };
     // §14 CEO 给经理的工作指令/性格:塑造经理的判断风格,放在最前(最高优先)。
     let style = if system_prompt.trim().is_empty() {
         String::new()
