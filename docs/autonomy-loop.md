@@ -342,3 +342,21 @@ simulate 能做的核心全做透、可见性全覆盖、安全护栏有测试�
 空转修复/过夜多目标。**正常+异常+工作流全部真 claude 端到端验证通过**。
 方法论:每轮真跑都挖出 simulate 发现不了的真 bug —— "达不到"的根源是 simulate 假象盖住了
 真路径断裂。真跑逐一逼出、修掉。
+
+## 轮 81-82:真冲突 + 崩溃恢复真跑(2026-06-10)
+
+- **真合并冲突护栏** — 2 并发任务改 main.py 同处:一个 merged、一个 needs_rebase(冲突挡住),
+  main 干净无冲突标记、不自动解决。merge 护栏真路径与单测一致。
+- **.quiver/ 污染用户项目(修)** — worktree 建在 <repo>/.quiver 却从不 gitignore → 用户真实
+  项目 git status 多 ?? .quiver/(realtime-voice 残留 25 项)。修:创建 worktree 时写
+  /.quiver/ 进 .git/info/exclude。已清 realtime-voice 残留。
+- **崩溃恢复(核心 OK + 孤儿 worktree 泄漏修)** — 强杀 app(worker 跑一半):重启 reconcile
+  requeue → 中断任务自动重试 → binary_search 合进 main(任务不丢,核心成立)。但孤儿 worktree
+  泄漏:sweep 时孤儿进程还在写、remove 失败,退出后变 prunable 而 sweep 碰不到 → 累积。
+  修:sweep 先 force remove prunable worktree。已知留:孤儿 worker **进程**跑到自然结束(成果
+  不采纳),进程级清理需 PID 追踪。
+
+### 连续 8 轮真跑(75-82)总结
+真交付/真拆活协作/真记忆决策/真自愈+main永不坏/空转修复/过夜多目标/真冲突护栏/.quiver污染/
+崩溃恢复+孤儿清理。**正常+异常+工作流+冲突+崩溃全部真 claude 端到端验证**。8 轮挖出 6 个
+simulate 发现不了的真 bug(交付/拆活/空转/.quiver/孤儿worktree + 崩溃恢复粗糙)。
