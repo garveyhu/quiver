@@ -178,3 +178,43 @@ claude 经理真思考/真拆活/按专长真指派、真合并列车端到端�
 - **GPU 性能**:杀手是 filter:blur / backdrop-filter / mix-blend-mode(每帧重新模糊采样),
   不是 opacity/transform 动画(合成器层面便宜)。别误砍动画牺牲生命力。
 - **用户视角**:基础可用性(设置入口/模式生效/看得到结果/不卡)和深层能力一样重要,且更先暴露。
+
+## 轮 48-55 进度补记(2026-06-10)
+
+> 主线:让 **claude 经理(真"聪明"的载体)从"建好待开、怕烧钱不敢验"变成"免费可跑可验证可
+> 预演"** + 失败自愈/调度台(自治更可控) + 一批体验根因修复(尤其字糊)。
+
+- **CEO 调教经理工作风格** — system_prompt 建好但 claude 没读/UI 没暴露。接通:人事部经理卡
+  「工作准则」→ 注入 claude 经理决策最前。CEO 一句话塑造经理判断风格(谨慎/激进)。
+- **失败自愈(绝对自治硬核)** — 验证失败的活,公司自己再试一轮(带返工会话续跑),到上限
+  (MAX_AUTO_RETRY=2,首跑+重试1次)才停手等 CEO。task 加 attempt 列。实测 verify 红→拦下→
+  自动重试1次(task-retry-2)→再失败停手。
+- **调度台(自治可控)** — CEO 看排队/在跑的活,调优先级(经理按 position 认领)、取消/叫停。
+  随 task-updated 实时刷新。"绝对自治"不等于 CEO 失控。
+- **小人真实身份+专长** — 办公室小人/Worksurf 从"员工#N"接 worker_role+specialty → "员工2·
+  测试"。CEO 一眼看到专长分工(聪明协作最直观)。
+- **★ claude 经理 simulate 免费跑通(里程碑)** — 一直回避:claude 经理从没端到端验证,怕烧钱。
+  补:fake-claude 识别决策 prompt→输出合法决策 JSON(先裁后派),走 ClaudeBrain 真路径;
+  manager_brain simulate 用 fake bin 免费跑(spawn→parse→执行)。意义:验证开真 claude 前管道
+  无断点 + 用户免费预演 claude 经理完整工作流。实测 spawn→deliver 跑通无 escalate。
+- **一键预演 + 经理大脑可见** — 设置页一键「预演 claude 经理(免费)」(设齐 simulate+claude+
+  自治);工作台显示大脑状态(规则/claude·预演/claude·真思考)。激活上述能力让用户可达可见。
+- **CEO 接受合并(§12 验收闭环)** — 晨报 verified+有分支任务「合进 main」走合并列车护栏。
+
+### 体验根因修复(用户真用产品逐个暴露)
+- **字糊真凶(非 DPR)** — 用户"顶部入口清晰、其他模糊"线索定位:.world 用 transform:scale,
+  fit 算 1.43 **放大**世界→整层栅格化成纹理再 GPU 上采样→文字糊(控制条不在 world 里所以清晰)。
+  修:computeFit 上限=1 绝不放大;移除帮倒忙的 counter-scale(它让标签在纹理里更小再放大、更糊)。
+- **非 retina 字糊** — body 的 -webkit-font-smoothing:antialiased 在 DPR=1 屏关掉了 subpixel
+  渲染→糊。媒体查询 max-resolution:1.5dppx 下改回 subpixel-antialiased。
+- 教训:**transform:scale 放大 = 纹理上采样必糊**(retina 也糊);别用 counter-scale 救(更糊)。
+  清晰优先就别放大(1:1 或缩小)。性能上 GPU 杀手是 filter:blur 不是动画(轮38-47 已记)。
+
+### 对照地图更新
+- §5 编排:✓→**✓ + 失败自愈(经理自动重试)**;claude 经理 simulate 可跑(验证管道)
+- §14 配置:✓✓✓→**✓✓✓ + 经理工作准则(CEO 调教风格)**
+- 体验:**字糊根因(world 放大/antialiased)修复、调度台、小人真实身份**
+
+### 仍需 real(烧钱,待用户在场)
+真 claude 经理的**真智能**决策/拆活/指派(simulate 是 fake 桩,验证管道用);真合并端到端;
+worker 写隔离收紧;librarian 真提炼。一键预演已让用户免费看到完整流程形态。
