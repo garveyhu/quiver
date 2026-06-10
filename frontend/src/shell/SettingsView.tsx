@@ -24,22 +24,56 @@ function num(raw: string): number | null | undefined {
 export function SettingsView({ open, settings, onPatch, onClose }: SettingsViewProps) {
   const s = settings;
   const { brain, setBrain } = useManagerBrain();
-  const fullyReal = s?.defaultMode === 'real' && brain === 'claude';
+  // 「聪明的真实自治」三件套:自治开(经理接管) + 经理大脑 claude(聪明决策) + 员工真干。
+  // 缺任一,经理就不会真正决策(尤其自治关时派活直接走流水线,经理工作台是空的)。
+  const autonomousOn = !!s?.autonomous;
+  const fullyReal = autonomousOn && s?.defaultMode === 'real' && brain === 'claude';
   return (
     <div className={`panel${open ? ' on' : ''}`}>
       <h2>系统设置</h2>
-      <div className="sub">全局配置,改动立即生效。「聪明的自治」=经理用 claude 思考 + 员工真干活,两个开关都在这。</div>
+      <div className="sub">全局配置,改动立即生效。「聪明的自治」=自治接管 + 经理 claude 决策 + 员工真干活,三个开关都在这。</div>
       <div className="body">
         {!s ? (
           <div className="rev">读取中…</div>
         ) : (
           <>
-            {fullyReal && (
+            {fullyReal ? (
               <div className="rev" style={{ marginBottom: 8 }}>
                 <span className="st-ok">● 完整真实自治已就绪</span>
                 <span className="st-meta">经理用 claude 决策、员工真 claude 干活 —— 会持续消耗订阅额度。</span>
               </div>
+            ) : (
+              (s.defaultMode === 'real' || brain === 'claude') &&
+              !autonomousOn && (
+                <div className="rev" style={{ marginBottom: 8 }}>
+                  <span className="st-bad">⚠ 自治没开 —— 经理不会决策</span>
+                  <span className="st-meta">现在派活直接走流水线,经理工作台会是空的。要看到经理调度,先把下面「自治运转」打开。</span>
+                </div>
+              )
             )}
+            <div className="kv">
+              <b>自治运转</b>
+              <span>
+                <button
+                  className={`pbtn${autonomousOn ? ' go' : ''}`}
+                  type="button"
+                  onClick={() => onPatch({ autonomous: true })}
+                >
+                  开 · 经理接管调度
+                </button>
+                <button
+                  className={`pbtn${!autonomousOn ? ' go' : ''}`}
+                  type="button"
+                  style={{ marginLeft: 6 }}
+                  onClick={() => onPatch({ autonomous: false })}
+                >
+                  关 · 直接流水线
+                </button>
+                <span className="st-meta" style={{ marginLeft: 8 }}>
+                  开了经理才逐拍决策(派活/复核/交付),决策流才有内容
+                </span>
+              </span>
+            </div>
             <div className="kv">
               <b>员工干活</b>
               <span>
