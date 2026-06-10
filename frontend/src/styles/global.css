@@ -446,3 +446,14 @@ body {
 .wlabel.aud::after { border-top-color: #d8f0e8; }
 .wlabel.think { background: #fff6e0; color: #6a4a10; }
 .wlabel.think::after { border-top-color: #fff6e0; }
+
+/* 设置分组小标题:把平铺的设置项按职责分块,组间留白 + 分隔线 + 弱化标题 → 不再一坨。 */
+.set-sec { margin: 16px 0 7px; padding-top: 13px; border-top: 1px solid var(--bd-soft); font-size: 10.5px;
+  letter-spacing: 1.2px; color: var(--tx-3); font-weight: 600; }
+.set-sec:first-of-type { margin-top: 4px; }
+
+/* 盆栽叶子轻摆:让绿植"活"起来,不再呆板得像静止的人。三层错相位、幅度小,自然不抢眼。 */
+.poly.leafsway { transform-origin: 50% 100%; animation: leafsway 4.2s ease-in-out infinite; }
+.poly.leafsway.s2 { animation-duration: 5s; animation-delay: -1.3s; }
+.poly.leafsway.s3 { animation-duration: 3.6s; animation-delay: -.6s; }
+@keyframes leafsway { 0%,100% { transform: rotate(-1.4deg); } 50% { transform: rotate(1.4deg); } }

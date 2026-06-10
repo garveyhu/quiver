@@ -67,6 +67,7 @@ export function SettingsView({ open, settings, onPatch, onClose }: SettingsViewP
                 )}
               </div>
             )}
+            <div className="set-sec">聪明自治 · 给个方向就自己干</div>
             <div className="kv">
               <b>自治运转</b>
               <span>
@@ -161,6 +162,7 @@ export function SettingsView({ open, settings, onPatch, onClose }: SettingsViewP
                 )}
               </span>
             </div>
+            <div className="set-sec">跑量与质量 · 花多少、跑多快、卡多严</div>
             <div className="kv">
               <b>模型</b>
               <span>

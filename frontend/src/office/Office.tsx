@@ -136,12 +136,14 @@ export function Office({ completionFx, onOpenTrace, onOpenPanel }: OfficeProps) 
       <div className="worker-labels">
         {workers.map(w => {
           if (!w.label) return null;
-          const p = camera.project(w.x, w.y);
+          // 锚到**头顶上方的 world 点**(w.y - 46)再 project → 偏移随相机缩放走,名字稳稳浮在头顶
+          // 上方、不挡脸(.wlabel 自身 translate(-50%,-100%) 让气泡落在锚点之上)。
+          const p = camera.project(w.x, w.y - 46);
           return (
             <div
               key={w.id}
               className={`wlabel${w.role === 'mgr' ? ' mgr' : ''}${w.role === 'aud' ? ' aud' : ''}${w.thinking ? ' think' : ''}`}
-              style={{ left: p.x, top: p.y - 36 }}
+              style={{ left: p.x, top: p.y }}
             >
               {w.label}
             </div>

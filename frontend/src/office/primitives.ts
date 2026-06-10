@@ -67,9 +67,9 @@ export class SceneBuilder {
     return iso(this.layout, c, r, z);
   }
 
-  /** 任意多边形面，用 clip-path 切形，铺满 world 后裁剪。 */
-  poly(pts: Point[], color: string, z: number, extra?: CSSProperties): SceneNode {
-    return this.add({ className: 'poly', style: { zIndex: z, background: color, clipPath: polygon(pts), ...extra } });
+  /** 任意多边形面，用 clip-path 切形，铺满 world 后裁剪。`cls` 追加额外 class(如盆栽叶子摇曳)。 */
+  poly(pts: Point[], color: string, z: number, extra?: CSSProperties, cls = ''): SceneNode {
+    return this.add({ className: `poly${cls ? ' ' + cls : ''}`, style: { zIndex: z, background: color, clipPath: polygon(pts), ...extra } });
   }
 
   /** 一块菱形地板瓦片。 */
@@ -104,11 +104,11 @@ export class SceneBuilder {
   }
 
   /** 落地三面体素(桌、椅、机架、绿植盆…)。返回其层序 z，供叠在上面的细节用。 */
-  isoBox(c: number, r: number, wc: number, dc: number, h: number, col: Faces): number {
+  isoBox(c: number, r: number, wc: number, dc: number, h: number, col: Faces, cls = ''): number {
     const z = zidx(c + wc, r + dc) + 2;
-    this.poly([this.pt(c + wc, r), this.pt(c + wc, r + dc), this.pt(c + wc, r + dc, h), this.pt(c + wc, r, h)], col.r, z);
-    this.poly([this.pt(c, r + dc), this.pt(c + wc, r + dc), this.pt(c + wc, r + dc, h), this.pt(c, r + dc, h)], col.l, z);
-    this.poly([this.pt(c, r, h), this.pt(c + wc, r, h), this.pt(c + wc, r + dc, h), this.pt(c, r + dc, h)], col.top, z + 1);
+    this.poly([this.pt(c + wc, r), this.pt(c + wc, r + dc), this.pt(c + wc, r + dc, h), this.pt(c + wc, r, h)], col.r, z, undefined, cls);
+    this.poly([this.pt(c, r + dc), this.pt(c + wc, r + dc), this.pt(c + wc, r + dc, h), this.pt(c, r + dc, h)], col.l, z, undefined, cls);
+    this.poly([this.pt(c, r, h), this.pt(c + wc, r, h), this.pt(c + wc, r + dc, h), this.pt(c, r + dc, h)], col.top, z + 1, undefined, cls);
     return z;
   }
 

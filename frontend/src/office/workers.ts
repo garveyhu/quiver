@@ -146,8 +146,9 @@ export function placeWorkers(
     label: mgrThinking ? '思考中…' : '经理',
   });
 
-  const ap = iso(layout, 11.3, 0.4);
-  workers.push({ id: 'aud', role: 'aud', x: ap.x, y: ap.y, z: zidx(11.3, 0.4) + 5, hood: ['#46a0a0', '#2f7070'], lean: true, label: '审计' });
+  // 审计挪到质检台前沿(r 更大=更靠前),站到家具前面而非被 qaBench 挡;z 抬高确保在家具之上。
+  const ap = iso(layout, 11.2, 0.95);
+  workers.push({ id: 'aud', role: 'aud', x: ap.x, y: ap.y, z: zidx(11.2, 0.95) + 10, hood: ['#46a0a0', '#2f7070'], lean: true, label: '审计' });
 
   return workers;
 }
