@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { useRoles } from '@/hooks/useRoles';
 import type { Brief, Decision, ManagerDecision, ManagerPreview } from '@/services/wire';
 
 interface ManagerDeskProps {
@@ -8,12 +9,20 @@ interface ManagerDeskProps {
   preview: ManagerPreview | null;
   brief: Brief | null;
   autonomous: boolean;
+  /** 当前运行模式 —— 配合经理大脑判断是「claude·预演」还是「claude·真思考」。 */
+  mode: 'simulate' | 'real';
   onToggleAutonomous: (on: boolean) => void;
   /** CEO 录入一条权威事实给公司(可带主题,同主题旧事实会被作废)。 */
   onAddFact: (text: string, topic?: string) => void;
   /** §12 回流:把被拦下/升级的任务打回重做(新任务入队,经理带记忆再派)。 */
   onRequeue: (taskId: string) => void;
   onClose: () => void;
+}
+
+/** 经理大脑当前状态的人话:规则免费 / claude 预演(simulate) / claude 真思考(real)。 */
+function brainLabel(brain: string | null, mode: 'simulate' | 'real'): string {
+  if (brain !== 'claude') return '规则 · 免费';
+  return mode === 'real' ? 'claude · 真思考(烧额度)' : 'claude · 预演(免费)';
 }
 
 const ACTION_CN: Record<Decision['action'], string> = {
@@ -62,8 +71,11 @@ function situation(d: ManagerDecision): string {
  * 让 CEO **亲眼看到经理在自治、在基于决策调动员工**(派活/交付/拦下/升级),而不是黑箱跑。
  * 顶部是当前局面 + 自治开关(关=旧无脑流水线,开=经理驱动)。
  */
-export function ManagerDesk({ open, decisions, preview, brief, autonomous, onToggleAutonomous, onAddFact, onRequeue, onClose }: ManagerDeskProps) {
+export function ManagerDesk({ open, decisions, preview, brief, autonomous, mode, onToggleAutonomous, onAddFact, onRequeue, onClose }: ManagerDeskProps) {
   const [showBrief, setShowBrief] = useState(false);
+  // 打开工作台时拉最新角色,读经理大脑(在人事部/设置页切了能即时反映)。
+  const { roles } = useRoles(open);
+  const brain = roles.find(r => r.id === 'manager')?.brain ?? null;
   const briefCount = (brief?.facts.length ?? 0) + (brief?.recentEpisodes.length ?? 0);
   return (
     <div className={`panel${open ? ' on' : ''}`}>
@@ -78,6 +90,15 @@ export function ManagerDesk({ open, decisions, preview, brief, autonomous, onTog
             </button>
             <span className="st-meta" style={{ marginLeft: 8 }}>
               {autonomous ? '经理控制循环在基于决策调度' : '打开后由经理拍决策派活,而非有排队就跑'}
+            </span>
+          </span>
+        </div>
+        <div className="kv">
+          <b>大脑</b>
+          <span>
+            <span className={brain === 'claude' ? 'st-ok' : 'st-meta'}>{brainLabel(brain, mode)}</span>
+            <span className="st-meta" style={{ marginLeft: 8 }}>
+              下面这些决策由它拍 · 在人事部 / 设置页切
             </span>
           </span>
         </div>

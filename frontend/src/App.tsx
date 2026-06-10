@@ -275,6 +275,7 @@ export function App() {
         preview={managerDesk.preview}
         brief={managerDesk.brief}
         autonomous={managerDesk.autonomous}
+        mode={runMode}
         onToggleAutonomous={managerDesk.toggleAutonomous}
         onAddFact={(text, topic) =>
           void managerDesk
