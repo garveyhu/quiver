@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import type { StoredEvent } from '@/services/wire';
 import type { PlacedWorker } from '@/office/workers';
 
@@ -6,6 +8,8 @@ interface WorksurfProps {
   /** 该工人当前任务的事件流(working 时有) */
   events: StoredEvent[];
   onClose: () => void;
+  /** 跳到追溯室看这个员工/任务的完整档案(可选)。 */
+  onOpenTrace?: () => void;
 }
 
 function title(w: PlacedWorker): string {
@@ -26,37 +30,90 @@ function state(w: PlacedWorker): string {
 const num = (v: unknown): number => (typeof v === 'number' ? v : 0);
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 
-/** 把一条 stored event 渲染成一行可读轨迹。 */
-function eventLine(ev: StoredEvent): { text: string; cls: string } {
-  let p: Record<string, unknown> = {};
+function parsePayload(raw: string): Record<string, unknown> {
   try {
-    p = JSON.parse(ev.payloadJson) as Record<string, unknown>;
+    const v = JSON.parse(raw);
+    return v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
   } catch {
-    // 非法 payload 退回 kind。
+    return {};
   }
+}
+
+/** claude 思考输出:保留换行、默认折叠、长文可展开(不再压成一行)。 */
+function ThinkText({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const long = text.length > 120;
+  return (
+    <div className="trc-ev">
+      <span className="trc-k think">💭 思考</span>
+      <div className="trc-t think">
+        <div className={`trc-think-body${open || !long ? ' open' : ''}`}>{text}</div>
+        {long && (
+          <button className="trc-more" type="button" onClick={() => setOpen(o => !o)}>
+            {open ? '收起 ▴' : '展开 ▾'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** 一条事件 → 可读行(开工/思考/工具/结果/终态),和追溯室一致的风格。 */
+function EventRow({ ev }: { ev: StoredEvent }) {
+  const p = parsePayload(ev.payloadJson);
   switch (ev.kind) {
     case 'worker_started':
-      return { text: `开工 · ${str(p.model) || '模型未报'}`, cls: 'ev-meta' };
+      return (
+        <div className="trc-ev">
+          <span className="trc-k start">▶ 开工</span>
+          <span className="trc-t">模型 {str(p.model) || '?'}</span>
+        </div>
+      );
     case 'tool_use':
-      return { text: `${str(p.tool) || '工具'} · ${str(p.summary)}`, cls: 'ev-tool' };
-    case 'output_chunk':
-      return { text: str(p.text).replace(/\s+/g, ' ').slice(0, 72), cls: 'ev-meta' };
+      return (
+        <div className="trc-ev">
+          <span className="trc-k tool">🔧 {str(p.tool) || '工具'}</span>
+          <span className="trc-t">{str(p.summary)}</span>
+        </div>
+      );
+    case 'output_chunk': {
+      const text = str(p.text).trim();
+      return text ? <ThinkText text={text} /> : null;
+    }
     case 'result':
-      return { text: `结果 · $${num(p.costUsd).toFixed(2)} · ${num(p.numTurns)} 轮`, cls: p.ok ? 'ev-ok' : 'ev-bad' };
+      return (
+        <div className="trc-ev">
+          <span className="trc-k done">✓ 跑完</span>
+          <span className="trc-t">
+            {num(p.numTurns)} 轮 · ${num(p.costUsd).toFixed(4)} · {Math.round(num(p.durationMs) / 1000)}s
+          </span>
+        </div>
+      );
     case 'error':
-      return { text: `出错 · ${str(p.message)}`, cls: 'ev-bad' };
+      return (
+        <div className="trc-ev">
+          <span className="trc-k err">✗ 错误</span>
+          <span className="trc-t st-bad">{str(p.message) || str(p.code)}</span>
+        </div>
+      );
     case 'finished':
-      return { text: `终态 · ${str(p.status)}`, cls: str(p.status) === 'verified' ? 'ev-ok' : 'ev-bad' };
+      return (
+        <div className="trc-ev">
+          <span className="trc-k fin">● 终态</span>
+          <span className="trc-t">{str(p.status)}</span>
+        </div>
+      );
     default:
-      return { text: ev.kind, cls: 'ev-meta' };
+      return null;
   }
 }
 
 /**
- * 工作台 worksurf(原型 dive 落点):点小人 → 相机飞入 + 这张面板下钻其状态;working 工人
- * 再往里一层接 get_task_events 看真实事件轨迹(工具调用/输出/结果)。
+ * 员工工作台(点小人 → 下钻):这位员工此刻在干什么 + claude 实时轨迹(思考/工具/结果,
+ * 可读折叠)。在干活的小人是活的 —— 看得到 ta 此刻一步步在做什么,不再只是一句"待命"。
  */
-export function Worksurf({ worker, events, onClose }: WorksurfProps) {
+export function Worksurf({ worker, events, onClose, onOpenTrace }: WorksurfProps) {
+  const hasTrace = !!worker?.taskId && events.length > 0;
   return (
     <div className={`worksurf${worker ? ' on' : ''}`}>
       {worker && (
@@ -70,19 +127,26 @@ export function Worksurf({ worker, events, onClose }: WorksurfProps) {
             {title(worker)}
           </div>
           <div className="wmeta">{state(worker)}</div>
-          {worker.taskId && events.length > 0 && (
-            <div className="ws-events">
-              {events.map(ev => {
-                const line = eventLine(ev);
-                return (
-                  <div key={ev.seq} className={`ws-ev ${line.cls}`}>
-                    {line.text}
-                  </div>
-                );
-              })}
+          {hasTrace && (
+            <div className="ws-events trc-events">
+              {events.map(ev => (
+                <EventRow key={ev.seq} ev={ev} />
+              ))}
             </div>
           )}
           <div className="wfoot">
+            {worker.taskId && onOpenTrace && (
+              <button
+                className="pbtn"
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenTrace();
+                }}
+              >
+                完整档案 →
+              </button>
+            )}
             <button className="pbtn go" type="button" onClick={onClose}>
               收起 ▾
             </button>

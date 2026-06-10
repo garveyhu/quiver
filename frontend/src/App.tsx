@@ -235,7 +235,7 @@ export function App() {
   return (
     <>
       <div id="stage" className={`stage${frozen ? ' frozen' : ''}`}>
-        <Office completionFx={completionFx} />
+        <Office completionFx={completionFx} onOpenTrace={() => setOverlay('trace')} />
       </div>
       <div className="topbar">
         <Hud data={hud} budgetCap={budgetCap} />
