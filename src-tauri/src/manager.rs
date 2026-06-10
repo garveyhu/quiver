@@ -33,7 +33,7 @@ use quiver_core::verify::VerifyCommand;
 use quiver_orchestrator::{
     Decision, Effect, ManagerContext, Orchestrator, PendingReview, Step,
 };
-use quiver_store::{Settings, Store};
+use quiver_store::{Settings, Store, TaskRecord};
 
 use crate::run::{run_one_task, RunMode};
 use crate::scheduler::TASK_EVENT_CHANNEL;
@@ -327,6 +327,12 @@ async fn execute_effect(
                     }
                     // §6.7 里程碑:交付后记忆官(若显式开)从 episode 提炼事实。后台 best-effort。
                     crate::librarian::distill_after_delivery(app, store, project_key.to_string());
+                } else if let Some(t) = task.as_ref() {
+                    // §5 失败自愈(绝对自治):经理拦下的若是**验证失败**的活,公司自己再试一轮
+                    // (带返工会话续跑),到上限才停手等 CEO —— 不用 CEO 每次手动打回。
+                    if r.status.contains("fail") && t.attempt < MAX_AUTO_RETRY {
+                        auto_retry(store, pm, project_key, t).await;
+                    }
                 }
                 let _ = app.emit(TASK_EVENT_CHANNEL, project_key);
             }
@@ -444,6 +450,44 @@ fn spawn_worker(
 }
 
 /// §5.7 合并列车:把交付任务的成果分支合进 `main` 并合并后重验,按结果改任务状态。
+/// 失败自愈的尝试上限(§5):attempt 到此就停手、保持 block 等 CEO。2 = 首跑 + 最多自动重试 1 次,
+/// 防"红任务无限重试"刷屏 / 烧钱。
+const MAX_AUTO_RETRY: i64 = 2;
+
+/// §5 失败自愈:把一个验证失败的任务作为**新任务**重新入队(attempt+1、带返工会话续跑),
+/// 经理循环下一拍会把它派出去。best-effort:任何一步失败只是不重试,绝不让编排崩。
+/// new_id 用 `task-retry-{attempt}-{now}` 避免与原任务及彼此撞键。
+async fn auto_retry(store: &Arc<Store>, pm: &Arc<ProjectManager>, project: &str, old: &TaskRecord) {
+    let now = crate::now_ms();
+    let next_attempt = old.attempt + 1;
+    let new_id = format!("task-retry-{next_attempt}-{now}");
+    let prompt = format!(
+        "(自动重试 第 {} 次)上次运行的成果未通过验收,请修复问题后重新交付。原任务:{}",
+        next_attempt - 1,
+        old.prompt
+    );
+    if store
+        .enqueue_task(&quiver_store::NewTask {
+            id: new_id.clone(),
+            project: project.to_string(),
+            prompt,
+            mode: old.mode.clone(),
+            status: "queued".to_string(),
+            created_at: now,
+        })
+        .is_err()
+    {
+        return;
+    }
+    let _ = store.set_task_attempt(&new_id, next_attempt, now);
+    // 续会话返工:worker 记得上次改过什么(real 有意义;simulate 无 session 也无妨)。
+    if let Some(sid) = store.task_session_id(&old.id).ok().flatten() {
+        let _ = store.set_task_session_id(&new_id, &sid, now);
+    }
+    // 唤醒经理循环来 spawn 这个新排队任务(循环 idle 等待时靠这个戳醒)。
+    pm.wake.notify_one();
+}
+
 /// 全局串行(merge_lock);merge_and_reverify 自带护栏(冲突→needs_rebase、重验红→reset
 /// main),所以这里只需翻译结果:`merged`(进了 main)/ `needs_rebase`(冲突或重验红,留人工)。
 /// best-effort:合并出错只记日志、不改状态(任务仍在分支上,可人工处理),绝不让编排崩。

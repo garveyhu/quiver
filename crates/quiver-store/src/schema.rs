@@ -132,6 +132,8 @@ pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
     add_column_if_absent(conn, "task", "duration_ms", "INTEGER")?;
     // §14 按人追溯:派给哪个员工(角色名)跑的,run 时记录,追溯室/工作台据此显示"由员工X干"。
     add_column_if_absent(conn, "task", "worker_role", "TEXT")?;
+    // §5 失败自愈:第几次尝试(初始 1)。验证失败时经理自动重试会 +1,到上限才停手等 CEO。
+    add_column_if_absent(conn, "task", "attempt", "INTEGER NOT NULL DEFAULT 1")?;
 
     // 决策日志(DESIGN §20 decision_log 裁剪/§10 复盘室):经理每拍真实决策一行,只追加。
     conn.execute_batch(
