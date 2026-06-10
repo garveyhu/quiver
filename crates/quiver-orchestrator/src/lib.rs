@@ -102,8 +102,14 @@ impl ManagerBrain for FakeBrain {
     }
 }
 
+/// 每个并发名额的保守预算余量(§9 配额感知):预算不足以按这个余量支撑满并发时,经理
+/// 收敛并发、把剩余预算留给在途的跑完,而非并发把钱烧光。real 任务一单通常 $0.05–0.5,
+/// 取 0.5 偏保守(宁可慢、不超支)。可调;以后做成 settings 的预算策略旋钮(§7)。
+pub const BUDGET_PER_SLOT_USD: f64 = 0.5;
+
 /// 极简 Rust 策略大脑(P0 风格,无 AI):**先裁后派** —— 有完工待复核的先出裁决
-/// (verified→交付,其余→拦下);然后 有预算 + 在途未满 + 有排队 → 派活;否则不动。
+/// (verified→交付,其余→拦下);然后按 §9 配额感知决定并发:预算紧时收敛(甚至串行),
+/// 有预算 + 未到收敛后的上限 + 有排队 → 派活;否则不动。
 /// 在 AI 经理上线前兜底,也是 [`ManagerBrain`] 注入缝的最小可用实现。
 pub struct RuleBrain;
 
@@ -123,11 +129,21 @@ impl ManagerBrain for RuleBrain {
             });
         }
         let has_budget = ctx.budget_remaining_usd > 0.0;
-        let has_capacity = ctx.inflight < ctx.max_inflight;
+        // §9 配额感知:预算够稳稳支撑几个并发名额(保守余量),就是这一拍的有效上限。
+        // 有预算但偏紧 → 收敛(至少留 1,有预算就能跑一个);夹在配置的 max_inflight 内。
+        let affordable = (ctx.budget_remaining_usd / BUDGET_PER_SLOT_USD).floor() as usize;
+        let cap = ctx.max_inflight.min(affordable.max(1));
+        let has_capacity = ctx.inflight < cap;
         if has_budget && has_capacity && ctx.queued > 0 {
+            // 收敛了(cap < 配置上限)就在理由里点明,决策流可见"经理因预算偏紧而保守"。
+            let reason = if cap < ctx.max_inflight {
+                format!("预算偏紧(剩 ${:.2}),收敛并发到 {cap}、把余量留给在途", ctx.budget_remaining_usd)
+            } else {
+                "有预算、在途未满、有排队".to_string()
+            };
             Ok(Decision::Spawn {
                 prompt: QUEUE_NEXT_PLACEHOLDER.to_string(),
-                reason: Some("有预算、在途未满、有排队".to_string()),
+                reason: Some(reason),
             })
         } else {
             Ok(Decision::Noop)
@@ -233,5 +249,40 @@ mod tests {
         // 没预算 → 不动
         let broke = ManagerContext { budget_remaining_usd: 0.0, ..ctx };
         assert_eq!(brain.decide(&broke).await.unwrap(), Decision::Noop);
+    }
+
+    #[tokio::test]
+    async fn rule_brain_budget_aware_throttles_concurrency() {
+        let brain = RuleBrain;
+        // 配置允许 4 并发,但预算只够 ~2 个名额(0.5/名额) → 收敛到 cap=2:
+        // inflight=1 < 2 仍派(带"预算偏紧"理由),inflight=2 到顶不派。
+        let tight = ManagerContext {
+            inflight: 1,
+            queued: 5,
+            max_inflight: 4,
+            budget_remaining_usd: 1.0, // affordable = 2
+            ..ManagerContext::default()
+        };
+        match brain.decide(&tight).await.unwrap() {
+            Decision::Spawn { reason, .. } => {
+                assert!(reason.unwrap().contains("收敛"), "偏紧时理由点明收敛");
+            }
+            other => panic!("expected Spawn, got {other:?}"),
+        }
+        // 已到收敛后的上限(inflight=2 >= cap=2) → 不再扇出,把余量留给在途。
+        let at_tight_cap = ManagerContext { inflight: 2, ..tight.clone() };
+        assert_eq!(brain.decide(&at_tight_cap).await.unwrap(), Decision::Noop);
+        // 极紧(预算 < 一个名额余量)→ 串行:cap=1,inflight=1 即到顶。
+        let serial = ManagerContext { inflight: 1, budget_remaining_usd: 0.3, ..tight };
+        assert_eq!(brain.decide(&serial).await.unwrap(), Decision::Noop, "极紧时串行");
+        // 但极紧 + 空闲(inflight=0)仍跑一个(有预算就不该饿死队列)。
+        let serial_idle = ManagerContext {
+            inflight: 0,
+            queued: 5,
+            max_inflight: 4,
+            budget_remaining_usd: 0.3,
+            ..ManagerContext::default()
+        };
+        assert!(matches!(brain.decide(&serial_idle).await.unwrap(), Decision::Spawn { .. }));
     }
 }
