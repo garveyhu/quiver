@@ -79,6 +79,10 @@ pub struct ManagerContext {
     /// 改写/细化(spawn.prompt 即给 worker 的最终任务描述)。`None`=队列空。
     #[serde(default)]
     pub next_task: Option<String>,
+    /// 团队成员的专长清单(§14 聪明协作),如 `["员工 2 · 测试", "员工 3 · 前端"]`。经理
+    /// 派活时据此在任务描述里点明所需专长 → 系统派给对的人(run.rs 专长匹配)。
+    #[serde(default)]
+    pub team: Vec<String>,
 }
 
 /// [`RuleBrain`] spawn 决策的占位 prompt:表示"原样认领队列下一个任务"(执行层据此用
@@ -238,6 +242,7 @@ mod tests {
             brief: String::new(),
             pending_reviews: vec![],
             next_task: None,
+            team: vec![],
         };
         assert!(matches!(brain.decide(&ctx).await.unwrap(), Decision::Spawn { .. }));
         // 在途已满 → 不动

@@ -209,6 +209,8 @@ async fn manager_loop(app: AppHandle, store: Arc<Store>, pm: Arc<ProjectManager>
             pending_reviews: pm.reviews.lock().await.clone(),
             // §5 A2 拆活:队首任务原文给经理看 —— 真经理可结合记忆改写后再派。
             next_task: peek_next_task(&store, &project_key),
+            // §14 团队专长清单:让经理知道有哪些员工、各擅长什么,派活时点明专长 → 派给对的人。
+            team: team_specialties(&store),
         };
 
         // 2. 经理拍决策:**每拍现场按人事部配置选脑**(rule 免费/claude 真想,§14)——
@@ -574,6 +576,23 @@ fn count_queued(store: &Arc<Store>, project_key: &str) -> usize {
         .list_tasks(Some(project_key), Some("queued"))
         .map(|v| v.len())
         .unwrap_or(0)
+}
+
+/// 团队成员的专长清单(§14):列出所有员工角色 + 专长,供经理派活时按专长指派。
+fn team_specialties(store: &Arc<Store>) -> Vec<String> {
+    store
+        .list_roles()
+        .map(|roles| {
+            roles
+                .into_iter()
+                .filter(|r| r.kind == "worker")
+                .map(|r| {
+                    let sp = if r.specialty.trim().is_empty() { "通用" } else { r.specialty.as_str() };
+                    format!("{} · {sp}", r.name)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// 队首任务原文(§5 A2):`list_tasks` 与 `claim_next_queued` 同序(position→时间),

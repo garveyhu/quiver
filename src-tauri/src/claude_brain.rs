@@ -102,18 +102,25 @@ fn build_prompt(ctx: &ManagerContext) -> String {
             .collect();
         format!("\n完工待你复核裁决(先裁后派,deliver 或 block):\n{lines}")
     };
+    // §14 团队专长:列出员工各擅长什么,经理派活时在任务描述里点明所需专长 → 派给对的人。
+    let team = if ctx.team.is_empty() {
+        String::new()
+    } else {
+        format!("\n团队成员(各自专长):\n{}\n", ctx.team.iter().map(|m| format!("- {m}\n")).collect::<String>())
+    };
     // 队首任务(A2 拆活):给原文,经理可原样派、也可结合简报改写/细化 spawn.prompt。
     let next = match &ctx.next_task {
         Some(t) => format!(
             "\n队列下一个任务(原文):「{t}」\n派活时 spawn.prompt 就是给 worker 的最终任务描述:\
-             可照抄原文,也可以结合项目简报改写得更具体可执行(补背景/边界/验收标准)。"
+             可照抄原文,也可以结合项目简报改写得更具体可执行(补背景/边界/验收标准);\
+             **若该任务需要某专长(团队里有的),在描述里点明那个专长词,系统会自动派给对口的员工**。"
         ),
         None => String::new(),
     };
     format!(
         "你是一个自治 AI 研发公司的经理。看当前局面,决定这一拍做什么。只输出一个 JSON 对象,\
          不要任何解释、不要修改任何文件。\n\
-         局面:在途 {}/{},排队 {} 个任务,预算剩余 ${:.2}。\n项目简报:\n{brief}{reviews}{next}\n\n\
+         局面:在途 {}/{},排队 {} 个任务,预算剩余 ${:.2}。\n项目简报:\n{brief}{team}{reviews}{next}\n\n\
          输出一个 JSON,action 取其一:\n\
          - {{\"action\":\"spawn\",\"prompt\":\"给新 worker 的任务描述\"}} —— 派新活(仅当在途未满且有预算)\n\
          - {{\"action\":\"continue\",\"node_id\":\"...\",\"prompt\":\"追加指令\"}} —— 让在途 worker 继续\n\
@@ -175,12 +182,14 @@ mod tests {
                 task_id: "task-1".into(),
                 status: "verified".into(),
             }],
+            team: vec!["员工 2 · 测试".into(), "员工 3 · 前端".into()],
             ..ManagerContext::default()
         };
         let p = build_prompt(&ctx);
         assert!(p.contains("「做转写的导出功能」"), "队首任务原文");
         assert!(p.contains("改写"), "改写指示");
         assert!(p.contains("node-7") && p.contains("verified"), "待复核行");
+        assert!(p.contains("员工 2 · 测试") && p.contains("前端"), "团队专长清单进 prompt");
         // 都没有时不渲染对应段落。
         let empty = build_prompt(&ManagerContext::default());
         assert!(!empty.contains("队列下一个任务") && !empty.contains("完工待你复核"));

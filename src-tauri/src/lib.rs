@@ -397,6 +397,7 @@ async fn manager_preview(state: State<'_, AppState>) -> Result<ManagerPreviewDto
         // 预览在经理循环之外,看不到(也无需看)循环私有的复核队列/队首细节。
         pending_reviews: vec![],
         next_task: None,
+        team: vec![],
     };
     let decision = RuleBrain.decide(&ctx).await.map_err(|e| format!("{e:#}"))?;
     Ok(ManagerPreviewDto {
