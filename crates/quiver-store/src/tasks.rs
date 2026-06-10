@@ -44,6 +44,8 @@ pub struct TaskRecord {
     /// 派给哪个员工(角色名)跑的(§14 按人追溯);`None` = 没记录(旧任务/未派)。
     pub worker_role: Option<String>,
     pub attempt: i64,
+    /// 父目标(§5 协作):子任务属于哪个被拆的原目标;None=不是子任务。
+    pub parent_goal: Option<String>,
 }
 
 /// A per-task observability sample (§10-12), independent of the board-facing
@@ -125,7 +127,7 @@ impl Store {
         // predicates → at most two bound params, kept positional for clarity.
         let mut sql = String::from(
             "SELECT id, project, prompt, mode, status, cost_usd, branch,
-                    position, created_at, updated_at, worker_role, attempt
+                    position, created_at, updated_at, worker_role, attempt, parent_goal
              FROM task",
         );
         let mut clauses: Vec<&str> = Vec::new();
@@ -167,6 +169,7 @@ impl Store {
                     updated_at: row.get(9)?,
                     worker_role: row.get(10)?,
                     attempt: row.get(11)?,
+                    parent_goal: row.get(12)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -340,6 +343,16 @@ impl Store {
         Ok(())
     }
 
+    /// 记录子任务属于哪个父目标(§5 协作:经理拆活时,子任务标上原目标文本,追溯室画协作树)。
+    pub fn set_task_parent_goal(&self, id: &str, goal: &str, updated_at: i64) -> anyhow::Result<()> {
+        let conn = self.conn.lock().expect("store lock");
+        conn.execute(
+            "UPDATE task SET parent_goal = ?2, updated_at = ?3 WHERE id = ?1",
+            params![id, goal, updated_at],
+        )?;
+        Ok(())
+    }
+
     /// 设置任务的尝试次数(§5 失败自愈:重试任务记 attempt+1)。
     pub fn set_task_attempt(&self, id: &str, attempt: i64, updated_at: i64) -> anyhow::Result<()> {
         let conn = self.conn.lock().expect("store lock");
@@ -430,7 +443,7 @@ impl Store {
         let conn = self.conn.lock().expect("store lock");
         conn.query_row(
             "SELECT id, project, prompt, mode, status, cost_usd, branch,
-                    position, created_at, updated_at, worker_role, attempt
+                    position, created_at, updated_at, worker_role, attempt, parent_goal
              FROM task WHERE id = ?1",
             params![id],
             |row| {
@@ -447,6 +460,7 @@ impl Store {
                     updated_at: row.get(9)?,
                     worker_role: row.get(10)?,
                     attempt: row.get(11)?,
+                    parent_goal: row.get(12)?,
                 })
             },
         )
@@ -474,7 +488,7 @@ impl Store {
         let candidate: Option<TaskRecord> = tx
             .query_row(
                 "SELECT id, project, prompt, mode, status, cost_usd, branch,
-                        position, created_at, updated_at, worker_role, attempt
+                        position, created_at, updated_at, worker_role, attempt, parent_goal
                  FROM task
                  WHERE project = ?1 AND status = 'queued'
                  ORDER BY position ASC, created_at ASC
@@ -494,6 +508,7 @@ impl Store {
                         updated_at: row.get(9)?,
                     worker_role: row.get(10)?,
                     attempt: row.get(11)?,
+                    parent_goal: row.get(12)?,
                     })
                 },
             )

@@ -250,4 +250,6 @@ export interface TaskRecord {
   updatedAt: number;
   /** 派给哪个员工(角色名,§14 按人追溯);null = 没记录(旧任务)。 */
   workerRole: string | null;
+  /** 父目标(§5 协作):子任务属于哪个被拆的目标;null=不是子任务。 */
+  parentGoal: string | null;
 }

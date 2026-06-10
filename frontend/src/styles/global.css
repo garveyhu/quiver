@@ -303,6 +303,9 @@ body {
 .trc-count { font-size: 11px; color: var(--tx-3); padding: 0 0 8px; }
 .trc-worker-sel { padding: 4px 8px; }
 .trc-by { font-size: 11px; color: #d9a86c; flex: none; white-space: nowrap; }
+/* 协作树:目标组头 + 子任务缩进,一眼看出"这几个是同一目标拆出来分工的"。 */
+.trc-goal-head { font-size: 11.5px; color: var(--accent); padding: 7px 2px 3px; font-weight: 600; letter-spacing: .2px; }
+.trc-task.trc-sub { margin-left: 16px; border-left: 2px solid var(--bd-soft); padding-left: 8px; }
 
 /* ===== 记忆库 ===== */
 .mem-fact { gap: 9px; }

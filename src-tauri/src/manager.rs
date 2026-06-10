@@ -308,23 +308,30 @@ async fn execute_effect(
         // 它们(按并发/专长),实现"多 agent 分工并行"。入队后认领下一个待办的拆解原任务出队。
         Effect::Plan { subtasks } => {
             // 先把拆解的原任务(队首)认领掉,免得它又被当普通活派出去(它的角色已变成"被拆")。
-            let _ = store.claim_next_queued(project_key, crate::now_ms());
-            let mode = store
-                .get_settings()
+            // 它的 prompt 就是父目标,标到每个子任务上 → 追溯室画"目标 → 子任务们"协作树。
+            let parent = store
+                .claim_next_queued(project_key, crate::now_ms())
                 .ok()
-                .map(|s| s.default_mode)
+                .flatten();
+            let parent_goal = parent.as_ref().map(|t| t.prompt.clone());
+            let mode = parent
+                .as_ref()
+                .map(|t| t.mode.clone())
                 .unwrap_or_else(|| "simulate".to_string());
             let now = crate::now_ms();
             for (i, sub) in subtasks.iter().enumerate() {
                 let id = format!("task-sub-{i}-{now}");
                 let _ = store.enqueue_task(&quiver_store::NewTask {
-                    id,
+                    id: id.clone(),
                     project: project_key.to_string(),
                     prompt: sub.clone(),
                     mode: mode.clone(),
                     status: "queued".to_string(),
                     created_at: now,
                 });
+                if let Some(g) = &parent_goal {
+                    let _ = store.set_task_parent_goal(&id, g, now);
+                }
             }
             task_prompt_out = Some(format!("拆成 {} 个子任务分工", subtasks.len()));
             pm.wake.notify_one(); // 唤醒经理来 spawn 这些子任务

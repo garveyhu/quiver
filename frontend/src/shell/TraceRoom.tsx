@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 
 import { useTaskEvents } from '@/hooks/useTaskEvents';
 import { getDecisions, listTasks } from '@/services/commands';
@@ -266,8 +266,19 @@ export function TraceRoom({ open, onClose }: TraceRoomProps) {
               {filtered.length > RENDER_CAP ? `(显示前 ${RENDER_CAP},搜索缩小范围)` : ''}
               {filtered.length !== tasks.length ? ` · 共 ${tasks.length}` : ''}
             </div>
-            {shown.map(t => (
-              <div className="trc-task" key={t.id}>
+            {shown.map((t, i) => {
+              // 协作树:同 parentGoal 的子任务前插一个目标组头,子任务缩进 —— 一眼看出"这几个
+              // 是同一个目标拆出来分工的"(§5 协作)。
+              const groupHead = t.parentGoal && t.parentGoal !== shown[i - 1]?.parentGoal;
+              const siblings = t.parentGoal ? shown.filter(x => x.parentGoal === t.parentGoal).length : 0;
+              return (
+                <Fragment key={t.id}>
+                  {groupHead && (
+                    <div className="trc-goal-head">
+                      ⑃ 协作目标：{t.parentGoal!.length > 26 ? `${t.parentGoal!.slice(0, 26)}…` : t.parentGoal} · {siblings} 个子任务分工
+                    </div>
+                  )}
+                  <div className={`trc-task${t.parentGoal ? ' trc-sub' : ''}`}>
                 <button
                   className={`trc-head${selected === t.id ? ' on' : ''}`}
                   type="button"
@@ -299,8 +310,10 @@ export function TraceRoom({ open, onClose }: TraceRoomProps) {
                     <TaskTrace taskId={t.id} />
                   </div>
                 )}
-              </div>
-            ))}
+                  </div>
+                </Fragment>
+              );
+            })}
           </>
         )}
       </div>

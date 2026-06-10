@@ -134,6 +134,8 @@ pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
     add_column_if_absent(conn, "task", "worker_role", "TEXT")?;
     // §5 失败自愈:第几次尝试(初始 1)。验证失败时经理自动重试会 +1,到上限才停手等 CEO。
     add_column_if_absent(conn, "task", "attempt", "INTEGER NOT NULL DEFAULT 1")?;
+    // §5 协作:被经理拆出来的子任务,记它属于哪个父目标(原目标文本)。追溯室据此显示协作树。
+    add_column_if_absent(conn, "task", "parent_goal", "TEXT")?;
 
     // 决策日志(DESIGN §20 decision_log 裁剪/§10 复盘室):经理每拍真实决策一行,只追加。
     conn.execute_batch(
