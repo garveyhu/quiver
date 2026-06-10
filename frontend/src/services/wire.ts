@@ -55,6 +55,8 @@ export interface Settings {
   verifyCommand: string;
   /** 自治开关(§5):true=经理控制循环驱动调度(基于决策派活),false=旧 scheduler 流水线。 */
   autonomous: boolean;
+  /** 自治目标(§5 主动自治):CEO 的高层方向,经理队列空时基于它主动 plan 推进。空=被动。 */
+  autonomousGoal: string;
 }
 
 /** 设置增量补丁(update_settings):字段都可选,只改给到的。 */

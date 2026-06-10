@@ -90,6 +90,23 @@ export function SettingsView({ open, settings, onPatch, onClose }: SettingsViewP
                 </span>
               </span>
             </div>
+            {autonomousOn && (
+              <div className="kv">
+                <b>自治目标</b>
+                <span>
+                  <input
+                    className="field"
+                    style={{ minWidth: 300 }}
+                    placeholder="给经理一个高层方向,如「持续提升测试覆盖率」"
+                    defaultValue={s.autonomousGoal ?? ''}
+                    onBlur={e => onPatch({ autonomousGoal: e.target.value.trim() })}
+                  />
+                  <span className="st-meta" style={{ marginLeft: 8 }}>
+                    设了它,经理派完手头的活就**主动规划推进目标**(真「绝对自治」);留空=被动等你派活
+                  </span>
+                </span>
+              </div>
+            )}
             <div className="kv">
               <b>员工干活</b>
               <span>
