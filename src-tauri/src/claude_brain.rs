@@ -21,6 +21,9 @@ pub struct ClaudeBrain {
     bin: PathBuf,
     cwd: PathBuf,
     model: String,
+    /// CEO 在人事部给经理写的工作指令 / 性格(§14 丰富配置):"预算紧优先复核"、"激进
+    /// 并行派活"等。空则不注入。注入到决策 prompt 开头,塑造经理的判断风格。
+    system_prompt: String,
 }
 
 impl ClaudeBrain {
@@ -29,14 +32,21 @@ impl ClaudeBrain {
             bin,
             cwd,
             model: model.into(),
+            system_prompt: String::new(),
         }
+    }
+
+    /// 注入 CEO 给经理的工作指令 / 性格(空则无效果)。
+    pub fn with_system_prompt(mut self, sp: impl Into<String>) -> Self {
+        self.system_prompt = sp.into();
+        self
     }
 }
 
 #[async_trait]
 impl ManagerBrain for ClaudeBrain {
     async fn decide(&self, ctx: &ManagerContext) -> anyhow::Result<Decision> {
-        let prompt = build_prompt(ctx);
+        let prompt = build_prompt(ctx, &self.system_prompt);
         let runner = ClaudeRunner::new("manager").with_extra_args(["--model", self.model.as_str()]);
         let mut agent = runner.spawn(&prompt, &self.cwd, &self.bin).await?;
         // 收集 claude 的输出文本到流结束(EOF = sender drop);决策 JSON 在其中。
@@ -89,8 +99,14 @@ fn extract_json_object(s: &str) -> Option<&str> {
 
 /// 组装喂给 claude 的决策 prompt(§21):局面 + 待复核 + 队首任务全文(§5 A2) + 决策 schema,
 /// 要求只输出一个 JSON 对象、不改文件。
-fn build_prompt(ctx: &ManagerContext) -> String {
+fn build_prompt(ctx: &ManagerContext, system_prompt: &str) -> String {
     let brief = if ctx.brief.is_empty() { "(无)" } else { ctx.brief.as_str() };
+    // §14 CEO 给经理的工作指令/性格:塑造经理的判断风格,放在最前(最高优先)。
+    let style = if system_prompt.trim().is_empty() {
+        String::new()
+    } else {
+        format!("CEO 给你的工作准则(优先遵守):\n{}\n\n", system_prompt.trim())
+    };
     // 待复核(先裁后派):有完工等裁的,列给经理看。
     let reviews = if ctx.pending_reviews.is_empty() {
         String::new()
@@ -118,7 +134,7 @@ fn build_prompt(ctx: &ManagerContext) -> String {
         None => String::new(),
     };
     format!(
-        "你是一个自治 AI 研发公司的经理。看当前局面,决定这一拍做什么。只输出一个 JSON 对象,\
+        "{style}你是一个自治 AI 研发公司的经理。看当前局面,决定这一拍做什么。只输出一个 JSON 对象,\
          不要任何解释、不要修改任何文件。\n\
          局面:在途 {}/{},排队 {} 个任务,预算剩余 ${:.2}。\n项目简报:\n{brief}{team}{reviews}{next}\n\n\
          输出一个 JSON,action 取其一:\n\
@@ -185,13 +201,15 @@ mod tests {
             team: vec!["员工 2 · 测试".into(), "员工 3 · 前端".into()],
             ..ManagerContext::default()
         };
-        let p = build_prompt(&ctx);
+        let p = build_prompt(&ctx, "预算紧时优先复核,别贸然派活");
         assert!(p.contains("「做转写的导出功能」"), "队首任务原文");
         assert!(p.contains("改写"), "改写指示");
         assert!(p.contains("node-7") && p.contains("verified"), "待复核行");
         assert!(p.contains("员工 2 · 测试") && p.contains("前端"), "团队专长清单进 prompt");
+        assert!(p.contains("预算紧时优先复核") && p.contains("工作准则"), "CEO 给经理的指令进 prompt");
         // 都没有时不渲染对应段落。
-        let empty = build_prompt(&ManagerContext::default());
+        let empty = build_prompt(&ManagerContext::default(), "");
         assert!(!empty.contains("队列下一个任务") && !empty.contains("完工待你复核"));
+        assert!(!empty.contains("工作准则"), "空 system_prompt 不渲染准则段");
     }
 }

@@ -689,7 +689,11 @@ fn manager_brain(
     let role = store.get_role("manager").ok().flatten();
     if let Some(role) = role.filter(|r| r.brain == "claude") {
         if let Ok(bin) = crate::run::resolve_agent_bin(settings, RunMode::Real) {
-            return Arc::new(claude_brain::ClaudeBrain::new(bin, cwd, role.model));
+            // CEO 在人事部给经理写的工作准则/性格注入决策(§14 丰富配置)。
+            return Arc::new(
+                claude_brain::ClaudeBrain::new(bin, cwd, role.model)
+                    .with_system_prompt(role.system_prompt),
+            );
         }
     }
     Arc::new(quiver_orchestrator::RuleBrain)

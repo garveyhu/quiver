@@ -98,6 +98,25 @@ export function PersonnelDesk({ open, roles, onPatch, onHire, onFire, onClose }:
                   />
                 </span>
               </div>
+              {r.kind === 'manager' && (
+                <div className="kv">
+                  <b>工作准则</b>
+                  <span>
+                    <input
+                      className="field"
+                      defaultValue={r.systemPrompt}
+                      placeholder="调教经理的风格(如:预算紧优先复核 / 激进并行派活),claude 大脑生效"
+                      onBlur={e => {
+                        const v = e.target.value;
+                        if (v !== r.systemPrompt) onPatch(r.id, { systemPrompt: v });
+                      }}
+                    />
+                    <span className="st-meta" style={{ marginLeft: 8 }}>
+                      注入 claude 经理决策,塑造判断风格
+                    </span>
+                  </span>
+                </div>
+              )}
               {r.kind === 'worker' && (
                 <div className="kv">
                   <b>专长</b>
