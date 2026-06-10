@@ -28,6 +28,13 @@ export function SettingsView({ open, settings, onPatch, onClose }: SettingsViewP
   // 缺任一,经理就不会真正决策(尤其自治关时派活直接走流水线,经理工作台是空的)。
   const autonomousOn = !!s?.autonomous;
   const fullyReal = autonomousOn && s?.defaultMode === 'real' && brain === 'claude';
+  // claude 经理 + 模拟 = 免费预演:经理走真决策路径(spawn 进程/parse 决策 JSON),桩决策预览
+  // 完整流程,不烧钱(上轮接通)。一键设齐 simulate+claude+自治,用户不烧钱就能看 claude 经理工作。
+  const previewMgr = brain === 'claude' && s?.defaultMode === 'simulate';
+  const startPreview = () => {
+    onPatch({ defaultMode: 'simulate', autonomous: true });
+    void setBrain('claude');
+  };
   return (
     <div className={`panel${open ? ' on' : ''}`}>
       <h2>系统设置</h2>
@@ -42,14 +49,23 @@ export function SettingsView({ open, settings, onPatch, onClose }: SettingsViewP
                 <span className="st-ok">● 完整真实自治已就绪</span>
                 <span className="st-meta">经理用 claude 决策、员工真 claude 干活 —— 会持续消耗订阅额度。</span>
               </div>
+            ) : previewMgr && autonomousOn ? (
+              <div className="rev" style={{ marginBottom: 8 }}>
+                <span className="st-ok">● claude 经理预演中 · 免费</span>
+                <span className="st-meta">
+                  经理走真决策路径(spawn 进程 / parse 决策 JSON),桩决策预览完整流程,不烧钱。要真智能,把「员工干活」切「真实」。
+                </span>
+              </div>
             ) : (
-              (s.defaultMode === 'real' || brain === 'claude') &&
-              !autonomousOn && (
-                <div className="rev" style={{ marginBottom: 8 }}>
-                  <span className="st-bad">⚠ 自治没开 —— 经理不会决策</span>
-                  <span className="st-meta">现在派活直接走流水线,经理工作台会是空的。要看到经理调度,先把下面「自治运转」打开。</span>
-                </div>
-              )
+              <div className="rev" style={{ marginBottom: 8 }}>
+                <span className="st-meta">没把握就先免费看 claude 经理怎么工作:</span>
+                <button className="pbtn go" type="button" style={{ marginLeft: 8 }} onClick={startPreview}>
+                  一键预演 claude 经理(免费)
+                </button>
+                {(s.defaultMode === 'real' || brain === 'claude') && !autonomousOn && (
+                  <span className="st-bad" style={{ marginLeft: 8 }}>⚠ 自治没开,经理不会决策</span>
+                )}
+              </div>
             )}
             <div className="kv">
               <b>自治运转</b>
