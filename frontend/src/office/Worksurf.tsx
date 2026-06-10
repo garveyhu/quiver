@@ -9,6 +9,8 @@ interface WorksurfProps {
   events: StoredEvent[];
   /** 全部角色配置 —— 用 workerRole 关联出这个员工的专长,让"专长分工"具体可见。 */
   roles: AgentRole[];
+  /** 经理实时思考流(点经理时显示):claude 决策过程的滚动文本,空=经理空闲/未用 claude。 */
+  managerThinking?: string;
   onClose: () => void;
   /** 跳到追溯室看这个员工/任务的完整档案(可选)。 */
   onOpenTrace?: () => void;
@@ -123,9 +125,12 @@ function EventRow({ ev }: { ev: StoredEvent }) {
  * 员工工作台(点小人 → 下钻):这位员工此刻在干什么 + claude 实时轨迹(思考/工具/结果,
  * 可读折叠)。在干活的小人是活的 —— 看得到 ta 此刻一步步在做什么,不再只是一句"待命"。
  */
-export function Worksurf({ worker, events, roles, onClose, onOpenTrace }: WorksurfProps) {
+export function Worksurf({ worker, events, roles, managerThinking, onClose, onOpenTrace }: WorksurfProps) {
   const hasTrace = !!worker?.taskId && events.length > 0;
   const specialty = worker ? specialtyOf(worker, roles) : undefined;
+  // 经理:点开看实时思考流(claude 决策过程),而非任务事件 —— 经理不绑单个任务。
+  const isMgr = worker?.role === 'mgr';
+  const thinking = (managerThinking ?? '').trim();
   return (
     <div className={`worksurf${worker ? ' on' : ''}`}>
       {worker && (
@@ -139,8 +144,31 @@ export function Worksurf({ worker, events, roles, onClose, onOpenTrace }: Worksu
             {title(worker)}
             {specialty && <span className="ws-spec">· {specialty}</span>}
           </div>
-          <div className="wmeta">{state(worker)}</div>
-          {hasTrace && (
+          <div className="wmeta">
+            {isMgr
+              ? thinking
+                ? '正在用 claude 思考决策 —— 下面是它此刻的思路。'
+                : '在领导区盯着公司。它一开始决策,这里就实时流出 claude 的思考过程。'
+              : state(worker)}
+          </div>
+          {isMgr && (
+            <div className="ws-events trc-events">
+              {thinking ? (
+                <div className="trc-ev">
+                  <span className="trc-k think">💭 经理思考</span>
+                  <div className="trc-t think">
+                    <div className="trc-think-body open">{thinking}</div>
+                  </div>
+                </div>
+              ) : (
+                <div className="trc-ev st-meta">
+                  经理空闲中,或经理大脑还是「规则」(免费、不思考)。去人事部把经理大脑切成 claude,
+                  它决策时这里就会实时流出思考。
+                </div>
+              )}
+            </div>
+          )}
+          {hasTrace && !isMgr && (
             <div className="ws-events trc-events">
               {events.map(ev => (
                 <EventRow key={ev.seq} ev={ev} />

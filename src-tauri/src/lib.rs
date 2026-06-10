@@ -682,11 +682,23 @@ fn get_task_events(
 /// simulate 任务被真 claude 经理连环想、烧额度毫无感知。`default_mode` 是"任务跑什么
 /// 模式",不是"经理用什么脑"——烧钱的大脑只能由这个显式旋钮打开(蓝图 §7),
 /// 不搭任何其他设置的便车。
+/// 经理**思考流**推给前端的形(camelCase):经理用 claude 决策时,claude 每吐一段思考就发一条,
+/// 让 CEO 点开经理实时看到它在想什么。project 用于前端按当前项目过滤。
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ManagerThinkingEvent {
+    project: String,
+    text: String,
+}
+
 fn manager_brain(
+    app: &AppHandle,
     store: &Arc<Store>,
     settings: &Settings,
     cwd: PathBuf,
+    project_key: &str,
 ) -> Arc<dyn quiver_orchestrator::ManagerBrain> {
+    use tauri::Emitter;
     let role = store.get_role("manager").ok().flatten();
     if let Some(role) = role.filter(|r| r.brain == "claude") {
         // claude 经理走 ClaudeBrain 路径(spawn 进程→parse 决策 JSON→执行)。**simulate 模式
@@ -699,10 +711,20 @@ fn manager_brain(
             RunMode::Simulate
         };
         if let Ok(bin) = crate::run::resolve_agent_bin(settings, mode) {
+            // 思考流回调:claude 每吐一段思考就 emit 到前端(可见性)——经理不再是黑箱。
+            let app2 = app.clone();
+            let proj = project_key.to_string();
+            let sink = std::sync::Arc::new(move |text: &str| {
+                let _ = app2.emit(
+                    crate::manager::MANAGER_THINKING_CHANNEL,
+                    ManagerThinkingEvent { project: proj.clone(), text: text.to_string() },
+                );
+            });
             // CEO 在人事部给经理写的工作准则/性格注入决策(§14 丰富配置)。
             return Arc::new(
                 claude_brain::ClaudeBrain::new(bin, cwd, role.model)
-                    .with_system_prompt(role.system_prompt),
+                    .with_system_prompt(role.system_prompt)
+                    .with_thinking_sink(sink),
             );
         }
     }

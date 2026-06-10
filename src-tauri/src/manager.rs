@@ -53,6 +53,10 @@ use worker::{auto_retry, kill_orphan_worker, spawn_worker, MAX_AUTO_RETRY};
 /// 决策(动作 + 理由 + 调动的真任务),让人**亲眼看到经理在自治**。
 pub const MANAGER_DECISION_CHANNEL: &str = "manager-decision";
 
+/// 经理**思考流** channel(可见性):经理用 claude 决策时,每吐一段思考就 emit 一条 —— 让
+/// CEO 点开经理就能实时看到它在想什么(不再是黑箱)。与最终决策(上面那条)分开。
+pub const MANAGER_THINKING_CHANNEL: &str = "manager-thinking";
+
 /// 经理满载/在途未空时一拍的兜底等待。唤醒主要靠 worker 完工的 `notify`,这只是防丢
 /// 唤醒的保险 —— 放宽到 5s:别让超时拍刷屏决策流,真大脑下每一拍都是决策调用(钱)。
 const TICK_IDLE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -234,9 +238,11 @@ async fn manager_loop(app: AppHandle, store: Arc<Store>, pm: Arc<ProjectManager>
         //    (ClaudeBrain 要等 claude 想几秒,期间不能堵 worker 回流);拿到 decision 后
         //    才持锁瞬间 apply(分配 node/fence/seq)。
         let brain = crate::manager_brain(
+            &app,
             &store,
             &settings.clone().unwrap_or_default(),
             pm.project.clone(),
+            &project_key,
         );
         let decision = match brain.decide(&ctx).await {
             Ok(d) => d,

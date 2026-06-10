@@ -146,6 +146,13 @@ export interface Decision {
   reason?: string;
 }
 
+/** 经理思考流(manager-thinking 事件):经理用 claude 决策时每吐一段思考的实时推送 —— 让点开
+ *  经理就能看到它在想什么(不再是黑箱)。text 是增量片段,前端累积成滚动思考。 */
+export interface ManagerThinkingEvent {
+  project: string;
+  text: string;
+}
+
 /** AI 经理在此刻真实局面下的决策预览(manager_preview,只看不动)。 */
 export interface ManagerPreview {
   inflight: number;

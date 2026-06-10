@@ -8,6 +8,7 @@
 //! 额度(§1.3);默认/其余一律免费 [`RuleBrain`](quiver_orchestrator::RuleBrain)。
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use quiver_core::event::AgentEventPayload;
@@ -24,6 +25,9 @@ pub struct ClaudeBrain {
     /// CEO 在人事部给经理写的工作指令 / 性格(§14 丰富配置):"预算紧优先复核"、"激进
     /// 并行派活"等。空则不注入。注入到决策 prompt 开头,塑造经理的判断风格。
     system_prompt: String,
+    /// 思考流回调(可见性):claude 每吐一段思考文本就调一次 —— app 层注入它把思考 emit
+    /// 到前端,让经理的决策过程**实时可见**(不再是黑箱)。None = 不外发(单测/纯逻辑路径)。
+    on_think: Option<Arc<dyn Fn(&str) + Send + Sync>>,
 }
 
 impl ClaudeBrain {
@@ -33,12 +37,19 @@ impl ClaudeBrain {
             cwd,
             model: model.into(),
             system_prompt: String::new(),
+            on_think: None,
         }
     }
 
     /// 注入 CEO 给经理的工作指令 / 性格(空则无效果)。
     pub fn with_system_prompt(mut self, sp: impl Into<String>) -> Self {
         self.system_prompt = sp.into();
+        self
+    }
+
+    /// 注入思考流回调:claude 每产出一段思考文本就调一次,让经理思考实时可见(app 层注入 emit)。
+    pub fn with_thinking_sink(mut self, sink: Arc<dyn Fn(&str) + Send + Sync>) -> Self {
+        self.on_think = Some(sink);
         self
     }
 }
@@ -53,6 +64,10 @@ impl ManagerBrain for ClaudeBrain {
         let mut out = String::new();
         while let Some(ev) = agent.events.recv().await {
             if let AgentEventPayload::OutputChunk { text } = ev.payload {
+                // 思考流实时外发(可见性):每段思考即时 emit,让前端看到经理在想什么。
+                if let Some(sink) = &self.on_think {
+                    sink(&text);
+                }
                 out.push_str(&text);
             }
         }
