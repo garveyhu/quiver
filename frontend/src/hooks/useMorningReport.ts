@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
-import { getDecisions, getStats, listTasks } from '@/services/commands';
-import type { ManagerDecision, Stats, TaskRecord } from '@/services/wire';
+import { getDecisions, getMemoryFacts, getStats, listTasks } from '@/services/commands';
+import type { FactRecord, ManagerDecision, Stats, TaskRecord } from '@/services/wire';
 
 /** 一个协作目标(§5):被经理拆解过的父目标 + 子任务完成统计。 */
 export interface CollabGoal {
@@ -22,6 +22,8 @@ export interface MorningReportData {
   escalations: ManagerDecision[];
   /** 其余近期已结束委托(verified/done 但未走合并的,如 simulate)。 */
   recent: TaskRecord[];
+  /** §6 记忆驱动:近期沉淀的「教训」事实 —— 公司从失败学到、下次会避开的(越用越聪明)。 */
+  lessons: FactRecord[];
 }
 
 const DONE = new Set(['verified', 'done']);
@@ -42,6 +44,7 @@ export function useMorningReport(open: boolean): MorningReportData {
     needsYou: [],
     escalations: [],
     recent: [],
+    lessons: [],
   });
 
   useEffect(() => {
@@ -49,7 +52,12 @@ export function useMorningReport(open: boolean): MorningReportData {
     let alive = true;
     void (async () => {
       try {
-        const [stats, all, decisions] = await Promise.all([getStats(), listTasks(), getDecisions(60)]);
+        const [stats, all, decisions, facts] = await Promise.all([
+          getStats(),
+          listTasks(),
+          getDecisions(60),
+          getMemoryFacts().catch(() => [] as FactRecord[]), // 记忆是加性:读不到不挡晨报
+        ]);
         if (!alive) return;
         const byUpdated = (a: TaskRecord, b: TaskRecord) => b.updatedAt - a.updatedAt;
         // 协作父目标 = 有子任务指向它(parentGoal==它的 prompt)。单列出来,不混进普通分类。
@@ -71,6 +79,11 @@ export function useMorningReport(open: boolean): MorningReportData {
           // 升级决策:去重同一任务只留最新一条(经理可能多拍 escalate)。
           escalations: dedupeLatest(decisions.filter(d => d.action === 'escalate' && d.executed)),
           recent: all.filter(t => DONE.has(t.status) && !isParent(t)).sort(byUpdated).slice(0, 8),
+          // §6 记忆驱动成果:近期教训(失败沉淀),最新在前 —— 给 CEO 看"公司学到了什么"。
+          lessons: facts
+            .filter(f => f.kind === '教训')
+            .sort((a, b) => b.recordedAt - a.recordedAt)
+            .slice(0, 6),
         });
       } catch {
         // 后端不可用 → 保持上次/空,不打断画面。

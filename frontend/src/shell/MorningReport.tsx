@@ -21,10 +21,10 @@ function cost(t: TaskRecord): string {
  * 还有什么需要我"。复用 .panel 叠层基础设施。
  */
 export function MorningReport({ open, data, onRequeue, onMerge, onClose }: MorningReportProps) {
-  const { stats, collabGoals, mergedToMain, needsYou, escalations, recent } = data;
+  const { stats, collabGoals, mergedToMain, needsYou, escalations, recent, lessons } = data;
 
   const sub = stats
-    ? `昨晚合进 main ${mergedToMain.length} · 等你处理 ${needsYou.length + escalations.length} · 今夜花费 $${stats.spentDay.toFixed(2)} · Lv${stats.level}`
+    ? `昨晚合进 main ${mergedToMain.length} · 等你处理 ${needsYou.length + escalations.length} · 学到 ${lessons.length} 条教训 · 今夜花费 $${stats.spentDay.toFixed(2)} · Lv${stats.level}`
     : '读取中…';
 
   const nothing =
@@ -32,7 +32,8 @@ export function MorningReport({ open, data, onRequeue, onMerge, onClose }: Morni
     mergedToMain.length === 0 &&
     needsYou.length === 0 &&
     escalations.length === 0 &&
-    recent.length === 0;
+    recent.length === 0 &&
+    lessons.length === 0;
 
   return (
     <div className={`panel${open ? ' on' : ''}`}>
@@ -112,6 +113,21 @@ export function MorningReport({ open, data, onRequeue, onMerge, onClose }: Morni
                 <span className="grow">{t.prompt}</span>
                 <span className="st-ok">已合并</span>
                 <span className="st-meta">{cost(t)}</span>
+              </div>
+            ))}
+          </>
+        )}
+
+        {lessons.length > 0 && (
+          <>
+            <div className="kv">
+              <b className="st-ok">📓 学到的教训</b>
+              <span className="st-meta">公司从失败里学到、下次会避开的 —— 越用越聪明</span>
+            </div>
+            {lessons.map(f => (
+              <div className="rev" key={`lesson-${f.id}`}>
+                <span className="grow">{f.text}</span>
+                <span className="st-meta">{f.trust}</span>
               </div>
             ))}
           </>
