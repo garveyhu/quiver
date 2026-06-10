@@ -253,6 +253,17 @@ pub async fn run_task_streaming(
         events.push(event);
     }
 
+    // Agent ran cleanly → commit its working-tree changes onto the attempt branch.
+    // claude (`acceptEdits`) edits files but never `git commit`s; the merge target
+    // (§7) is the branch *commit*, so without this the branch HEAD stays at base,
+    // the merge is empty, and reverify goes red → `needs_rebase`. No-op runs make no
+    // empty commit. Best-effort: a commit failure surfaces downstream as an empty merge.
+    if saw_result_ok {
+        let _ = guard
+            .commit_worktree(&worktree, &format!("quiver attempt: {}", task.id))
+            .await;
+    }
+
     // Bind the run to its commit + diff BEFORE any cleanup removes the worktree
     // (§6.2): the worktree HEAD is the attempt's commit (real mode) or the base it
     // branched from (a no-op run); diff_stat summarizes the change vs base.
@@ -633,6 +644,30 @@ mod tests {
             "a no-op run's diff_stat is captured and empty, got {:?}",
             out.diff_stat
         );
+    }
+
+    /// 真交付链路核心(§6.2/§7):agent 改了文件后,改动必须被**提交到分支**,否则合并是空的。
+    /// claude 只改不 commit → supervisor 调 commit_worktree 落成提交。固化第一次真跑 real 挖出的
+    /// bug:无此提交,分支 HEAD 停在 base、合并空、reverify 红 → needs_rebase。
+    #[tokio::test]
+    async fn commit_worktree_lands_changes_and_skips_empty() {
+        let repo = temp_repo();
+        let wt_root = TempDir::new().expect("wt root");
+        let guard = GitGuard::new(repo.path()).with_worktrees_root(wt_root.path());
+        let wt = guard.create("commit-1", 1).await.expect("worktree");
+        let base = guard.head_sha(&wt).await.expect("base sha");
+
+        // 模拟 agent 改文件(claude acceptEdits 改但不 git commit)。
+        std::fs::write(wt.as_path().join("agent.txt"), "agent work").expect("write");
+        let committed = guard.commit_worktree(&wt, "agent commit").await.expect("commit");
+        assert!(committed, "有改动 → 真提交");
+        let after = guard.head_sha(&wt).await.expect("after sha");
+        assert_ne!(after, base, "分支 HEAD 前进 → 改动进了提交,合并不再是空的");
+
+        // no-op:再提交一次,工作区无改动 → 不造空 commit,HEAD 不动。
+        let again = guard.commit_worktree(&wt, "noop").await.expect("noop commit");
+        assert!(!again, "无改动 → 返回 false,不提交");
+        assert_eq!(guard.head_sha(&wt).await.unwrap(), after, "无改动时 HEAD 不动");
     }
 
     /// The streaming variant fires `on_event` for EACH event AS it arrives —

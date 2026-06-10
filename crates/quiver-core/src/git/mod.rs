@@ -441,6 +441,44 @@ impl GitGuard {
         let out = run_git_in(worktree.as_path(), &["diff", "--shortstat", base]).await?;
         Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
     }
+
+    /// Agent 跑完后,把 worktree 工作区的改动落成一个 commit 到它的分支(DESIGN §6.2)。
+    ///
+    /// **为什么必须有这一步**:claude(`--permission-mode acceptEdits`)只**改文件**、**不 git
+    /// commit**。而真交付(§7)合并到 `main` 的是**分支提交**——不提交则分支 HEAD 还停在 base、
+    /// `merge` 是空的、reverify 看不到改动 → `needs_rebase`。这是 real 交付链路一直断裂的根因。
+    ///
+    /// 无改动(no-op run)→ 不造空 commit,返回 `false`。提交了 → `true`。显式 author + 禁签名/
+    /// 钩子,不依赖目标 repo 的 user 配置、也不触发它的 pre-commit hook。worktree-local。
+    pub async fn commit_worktree(
+        &self,
+        worktree: &WorktreePath,
+        message: &str,
+    ) -> anyhow::Result<bool> {
+        let wt = worktree.as_path();
+        // 工作区有改动才提交(status --porcelain 非空 = 有改动)。
+        let status = run_git_in(wt, &["status", "--porcelain"]).await?;
+        if String::from_utf8_lossy(&status.stdout).trim().is_empty() {
+            return Ok(false); // no-op run:不创建空 commit
+        }
+        let mut add = SAFE_GIT_FLAGS.to_vec();
+        add.extend_from_slice(&["add", "-A"]);
+        run_git_in(wt, &add).await?;
+        let mut commit = SAFE_GIT_FLAGS.to_vec();
+        commit.extend_from_slice(&[
+            "-c",
+            "user.name=Quiver Agent",
+            "-c",
+            "user.email=agent@quiver.local",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-m",
+            message,
+        ]);
+        run_git_in(wt, &commit).await?;
+        Ok(true)
+    }
 }
 
 /// Result of the lock-free §7 conflict probe.
