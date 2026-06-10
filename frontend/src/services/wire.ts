@@ -31,7 +31,9 @@ export type TaskStatus =
   | 'done'
   | 'merged'
   | 'failed'
-  | 'needs_rebase';
+  | 'needs_rebase'
+  /** 协作:被经理拆解的父目标(由子任务接力完成,§5)。 */
+  | 'planned';
 
 /** 运行模式(§4.2):simulate=免费 fake-claude 默认,real=真 claude。Rust 侧小写序列化。 */
 export type RunMode = 'simulate' | 'real';

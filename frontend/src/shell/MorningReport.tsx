@@ -21,14 +21,18 @@ function cost(t: TaskRecord): string {
  * 还有什么需要我"。复用 .panel 叠层基础设施。
  */
 export function MorningReport({ open, data, onRequeue, onMerge, onClose }: MorningReportProps) {
-  const { stats, mergedToMain, needsYou, escalations, recent } = data;
+  const { stats, collabGoals, mergedToMain, needsYou, escalations, recent } = data;
 
   const sub = stats
     ? `昨晚合进 main ${mergedToMain.length} · 等你处理 ${needsYou.length + escalations.length} · 今夜花费 $${stats.spentDay.toFixed(2)} · Lv${stats.level}`
     : '读取中…';
 
   const nothing =
-    mergedToMain.length === 0 && needsYou.length === 0 && escalations.length === 0 && recent.length === 0;
+    collabGoals.length === 0 &&
+    mergedToMain.length === 0 &&
+    needsYou.length === 0 &&
+    escalations.length === 0 &&
+    recent.length === 0;
 
   return (
     <div className={`panel${open ? ' on' : ''}`}>
@@ -36,6 +40,27 @@ export function MorningReport({ open, data, onRequeue, onMerge, onClose }: Morni
       <div className="sub">{sub}</div>
       <div className="body">
         {nothing && <div className="rev">昨晚还没有结果 —— 派一件事给公司,过夜跑完这里就是你的验收台。</div>}
+
+        {collabGoals.length > 0 && (
+          <>
+            <div className="kv">
+              <b className="st-ok">⑃ 协作成果</b>
+              <span className="st-meta">经理拆解大目标、多员工分工完成的</span>
+            </div>
+            {collabGoals.map(g => {
+              const allDone = g.done === g.total && g.goal.status === 'done';
+              return (
+                <div className="rev" key={g.goal.id}>
+                  <span className="grow">{g.goal.prompt}</span>
+                  <span className={allDone ? 'st-ok' : 'st-bad'}>
+                    {allDone ? '协作完成 ✓' : g.goal.status === 'planned' ? '分工中' : '部分失败'}
+                  </span>
+                  <span className="st-meta">{g.done}/{g.total} 子任务</span>
+                </div>
+              );
+            })}
+          </>
+        )}
 
         {escalations.length > 0 && (
           <>
