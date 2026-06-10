@@ -46,6 +46,8 @@ pub struct TaskRecord {
     pub attempt: i64,
     /// 父目标(§5 协作):子任务属于哪个被拆的原目标;None=不是子任务。
     pub parent_goal: Option<String>,
+    /// worker 主动请示的问题(§5 双向协作 worker→经理);None=没请示。
+    pub question: Option<String>,
 }
 
 /// A per-task observability sample (§10-12), independent of the board-facing
@@ -127,7 +129,7 @@ impl Store {
         // predicates → at most two bound params, kept positional for clarity.
         let mut sql = String::from(
             "SELECT id, project, prompt, mode, status, cost_usd, branch,
-                    position, created_at, updated_at, worker_role, attempt, parent_goal
+                    position, created_at, updated_at, worker_role, attempt, parent_goal, question
              FROM task",
         );
         let mut clauses: Vec<&str> = Vec::new();
@@ -170,6 +172,7 @@ impl Store {
                     worker_role: row.get(10)?,
                     attempt: row.get(11)?,
                     parent_goal: row.get(12)?,
+                    question: row.get(13)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -490,7 +493,7 @@ impl Store {
         let conn = self.conn.lock().expect("store lock");
         conn.query_row(
             "SELECT id, project, prompt, mode, status, cost_usd, branch,
-                    position, created_at, updated_at, worker_role, attempt, parent_goal
+                    position, created_at, updated_at, worker_role, attempt, parent_goal, question
              FROM task WHERE id = ?1",
             params![id],
             |row| {
@@ -508,6 +511,7 @@ impl Store {
                     worker_role: row.get(10)?,
                     attempt: row.get(11)?,
                     parent_goal: row.get(12)?,
+                    question: row.get(13)?,
                 })
             },
         )
@@ -535,7 +539,7 @@ impl Store {
         let candidate: Option<TaskRecord> = tx
             .query_row(
                 "SELECT id, project, prompt, mode, status, cost_usd, branch,
-                        position, created_at, updated_at, worker_role, attempt, parent_goal
+                        position, created_at, updated_at, worker_role, attempt, parent_goal, question
                  FROM task
                  WHERE project = ?1 AND status = 'queued'
                  ORDER BY position ASC, created_at ASC
@@ -556,6 +560,7 @@ impl Store {
                     worker_role: row.get(10)?,
                     attempt: row.get(11)?,
                     parent_goal: row.get(12)?,
+                    question: row.get(13)?,
                     })
                 },
             )

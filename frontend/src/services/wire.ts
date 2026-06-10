@@ -254,4 +254,6 @@ export interface TaskRecord {
   workerRole: string | null;
   /** 父目标(§5 协作):子任务属于哪个被拆的目标;null=不是子任务。 */
   parentGoal: string | null;
+  /** worker 主动请示的问题(§5 双向协作 worker→经理);null=没请示。 */
+  question: string | null;
 }

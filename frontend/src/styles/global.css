@@ -291,6 +291,7 @@ body {
 .trc-t.think { color: var(--tx-3); display: block; flex: 1; min-width: 0; }
 .trc-k.mgr { color: #d9a86c; }
 .trc-sec { font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--tx-3); margin: 2px 0; font-weight: 600; }
+.trc-ask { margin: 4px 0 8px; padding: 7px 11px; background: rgba(240,178,74,.12); border: 1px solid rgba(240,178,74,.3); border-radius: 8px; color: #f0b24a; font-size: 12px; line-height: 1.5; }
 /* claude 思考输出:保留 markdown 换行,默认折叠 4 行,可展开。 */
 .trc-think-body { white-space: pre-wrap; line-height: 1.65; max-height: 4.6em; overflow: hidden; }
 .trc-think-body.open { max-height: none; }
@@ -363,6 +364,7 @@ body {
 .rev .grow { flex: 1; }
 .rev .st-ok { color: var(--ok); }
 .rev .st-bad { color: var(--bad); }
+.st-warn { color: var(--warn); }
 .rev .st-meta { color: var(--tx-3); }
 .rev .tl-time { font-family: var(--mono); font-variant-numeric: tabular-nums; flex: none; }
 .cmdk { position: fixed; left: 50%; top: 17%; transform: translateX(-50%) translateY(-10px) scale(.99); width: min(540px,92vw); background: var(--s-2); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); border: 1px solid var(--bd-strong); border-radius: var(--r-3); box-shadow: var(--sh-3), inset 0 1px 0 var(--hairline-top); z-index: 9700; opacity: 0; pointer-events: none; transition: opacity var(--t-fast) var(--ease), transform var(--t-fast) var(--ease); overflow: hidden; }
