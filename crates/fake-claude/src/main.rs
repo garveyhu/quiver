@@ -44,6 +44,14 @@ fn main() -> ExitCode {
     let child_pidfile = parse_flag(args.iter().cloned(), "--child-pidfile");
     let delay = resolve_delay(std::env::var("QUIVER_FAKE_DELAY_MS").ok());
 
+    // 经理决策调用(ClaudeBrain build_prompt)→ 输出一个决策 JSON,不走工作弧。这让 simulate
+    // 模式也能免费跑通整条 claude 经理链路(spawn 进程→收集→parse→执行),验证开真 claude 前
+    // 管道无断点。决策逻辑同 RuleBrain「先裁后派」,只是走 ClaudeBrain 路径。
+    if prompt.contains("自治 AI 研发公司的经理") || prompt.contains("只输出一个 JSON 对象") {
+        emit_manager_decision(&session, &prompt, delay);
+        return ExitCode::SUCCESS;
+    }
+
     match scenario.as_str() {
         // Permanently-failed run (DESIGN §8.4): emit the init line so a worker
         // appears, then die non-zero with NO clean `result` line. Exercises the
@@ -246,6 +254,52 @@ fn emit_text(session: &str, id: &str, text: &str, delay: Duration) {
         ),
         delay,
     );
+}
+
+/// 经理决策桩:从决策 prompt 的局面里推出一个合法 [`Decision`] JSON,作为 assistant text 输出
+/// (ClaudeBrain 收集 → parse)。逻辑同 RuleBrain「先裁后派」:有完工待复核 → 交付那个节点;
+/// 否则有队首任务 → 派活;都没有 → 按兵不动。决策 JSON 经 [`json_escape`] 嵌进 text 值。
+fn emit_manager_decision(session: &str, prompt: &str, delay: Duration) {
+    let decision = decide_from_prompt(prompt);
+    emit_text(session, "dec", &json_escape(&decision), delay);
+}
+
+/// 从决策 prompt 推一个决策 JSON 字符串(桩,验证 ClaudeBrain 链路用)。
+fn decide_from_prompt(prompt: &str) -> String {
+    // 先裁后派:完工待复核的优先交付(抽它的 node_id)。
+    if prompt.contains("完工待你复核") {
+        if let Some(node) = extract_node_id(prompt) {
+            return format!(r#"{{"action":"deliver","node_id":"{node}"}}"#);
+        }
+    }
+    // 否则有队首任务就派活(原样派,worker 会真干)。
+    if let Some(task) = extract_next_task(prompt) {
+        return format!(r#"{{"action":"spawn","prompt":"{}"}}"#, json_escape(&task));
+    }
+    r#"{"action":"noop"}"#.to_string()
+}
+
+/// 从 "节点 {id} 完工" 抽出 node_id(到下一个空格/逗号止)。
+fn extract_node_id(prompt: &str) -> Option<String> {
+    let i = prompt.find("节点 ")? + "节点 ".len();
+    let rest = &prompt[i..];
+    let end = rest
+        .char_indices()
+        .find(|&(_, c)| c == ' ' || c == ',' || c == '，' || c == '完')
+        .map(|(idx, _)| idx)
+        .unwrap_or(rest.len());
+    let id = rest[..end].trim();
+    (!id.is_empty()).then(|| id.to_string())
+}
+
+/// 从 "队列下一个任务(原文):「{t}」" 抽出任务原文。
+fn extract_next_task(prompt: &str) -> Option<String> {
+    let anchor = prompt.find("队列下一个任务")?;
+    let after = &prompt[anchor..];
+    let start = after.find('「')? + '「'.len_utf8();
+    let rest = &after[start..];
+    let end = rest.find('」')?;
+    Some(rest[..end].to_string())
 }
 
 /// Print the happy-path `stream-json` sequence — a believable work arc rather

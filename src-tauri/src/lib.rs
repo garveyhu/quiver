@@ -688,7 +688,16 @@ fn manager_brain(
 ) -> Arc<dyn quiver_orchestrator::ManagerBrain> {
     let role = store.get_role("manager").ok().flatten();
     if let Some(role) = role.filter(|r| r.brain == "claude") {
-        if let Ok(bin) = crate::run::resolve_agent_bin(settings, RunMode::Real) {
+        // claude 经理走 ClaudeBrain 路径(spawn 进程→parse 决策 JSON→执行)。**simulate 模式
+        // 用 fake-claude bin 免费跑这条路径**(fake-claude 识别决策 prompt、输出桩决策):让用户
+        // 不烧钱就能预演 claude 经理的完整工作流、也验证开真 claude 前管道无断点。real 模式才
+        // 用真 claude bin(真智能决策、烧 headless 额度)。
+        let mode = if settings.default_mode == "real" {
+            RunMode::Real
+        } else {
+            RunMode::Simulate
+        };
+        if let Ok(bin) = crate::run::resolve_agent_bin(settings, mode) {
             // CEO 在人事部给经理写的工作准则/性格注入决策(§14 丰富配置)。
             return Arc::new(
                 claude_brain::ClaudeBrain::new(bin, cwd, role.model)
