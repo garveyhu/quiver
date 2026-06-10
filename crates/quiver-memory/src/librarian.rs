@@ -1,4 +1,4 @@
-//! 图书管理员(§6.4):用 AI 判断把矛盾的旧事实作废,让新事实成为当前真相。
+//! 记忆官(§6.4):用 AI 判断把矛盾的旧事实作废,让新事实成为当前真相。
 //!
 //! AI 判断走可注入的 [`ContradictionJudge`] —— 测试用确定性 [`FakeJudge`](免费),
 //! 真跑用 LLM(§21)。机制层只做"判 → 作废",**绝不自动改信任档**(那是机械印证的事,
@@ -64,7 +64,7 @@ impl MemoryStore {
         Ok(n == 1)
     }
 
-    /// 图书管理员核对(§6.4):新事实 `new_id` 对一组候选旧事实逐一过 `judge`,凡裁为
+    /// 记忆官核对(§6.4):新事实 `new_id` 对一组候选旧事实逐一过 `judge`,凡裁为
     /// [`Verdict::IncomingSupersedes`] 的旧事实即作废(`superseded_by = new_id`)。返回被
     /// 作废的 id。候选由调用方挑(同实体 / hybrid_recall 邻居);AI 判断注入,绝不改信任档。
     pub fn reconcile_fact(

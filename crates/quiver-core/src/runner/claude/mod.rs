@@ -39,7 +39,7 @@ pub struct ClaudeRunner {
     task_id: String,
     extra_args: Vec<String>,
     /// 是否把 claude 进程关进沙箱(§8.3 for_worker:留网、禁读密钥)。默认 `true`。
-    /// 经理大脑/图书管理员这类**只读思考**的轻量调用可关(它们不改 worktree、cwd 是 repo 根)。
+    /// 经理大脑/记忆官这类**只读思考**的轻量调用可关(它们不改 worktree、cwd 是 repo 根)。
     sandbox: bool,
 }
 
@@ -52,7 +52,7 @@ impl ClaudeRunner {
         }
     }
 
-    /// 关掉沙箱包裹(经理大脑/图书管理员等只读思考调用用 —— 它们 cwd 是 repo 根、不改码,
+    /// 关掉沙箱包裹(经理大脑/记忆官等只读思考调用用 —— 它们 cwd 是 repo 根、不改码,
     /// 包 for_worker 反而会因 cwd≠worktree 误伤)。
     pub fn without_sandbox(mut self) -> Self {
         self.sandbox = false;

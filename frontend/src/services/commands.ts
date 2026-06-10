@@ -91,5 +91,5 @@ export const updateRole = (id: string, patch: RolePatch): Promise<AgentRole> =>
 /** 人事部:雇一个新员工(§14),返回新角色行。 */
 export const hireWorker = (): Promise<AgentRole> => call<AgentRole>('hire_worker');
 
-/** 人事部:裁掉一个员工(经理/图书管理员裁不掉)。 */
+/** 人事部:裁掉一个员工(经理/记忆官裁不掉)。 */
 export const fireWorker = (id: string): Promise<void> => call<void>('fire_worker', { id });

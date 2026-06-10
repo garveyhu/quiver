@@ -183,7 +183,13 @@ pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
         INSERT OR IGNORE INTO agent_role (id, name, kind, brain, model, specialty, updated_at)
             VALUES ('worker-3', '员工 3', 'worker', 'rule', 'sonnet', '前端', 0);
         INSERT OR IGNORE INTO agent_role (id, name, kind, brain, model, updated_at)
-            VALUES ('librarian', '图书管理员', 'librarian', 'rule', 'sonnet', 0);",
+            VALUES ('librarian', '记忆官', 'librarian', 'rule', 'sonnet', 0);",
+    )?;
+    // 改名迁移:既有 DB 里 INSERT OR IGNORE 不更新已存在行的 name,把旧的"图书管理员"
+    // 一次性改成"记忆官"(幂等:只命中旧名)。
+    conn.execute(
+        "UPDATE agent_role SET name = '记忆官' WHERE id = 'librarian' AND name = '图书管理员'",
+        [],
     )?;
 
     // Seed the single settings row with defaults if absent, so `get_settings`

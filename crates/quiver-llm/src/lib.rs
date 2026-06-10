@@ -1,6 +1,6 @@
 //! 共享 LLM 适配层:千问(DashScope OpenAI 兼容)凭证 + chat HTTP。
 //!
-//! 经理大脑(quiver-orchestrator)和记忆图书管理员/嵌入(quiver-memory)都调千问,凭证读取
+//! 经理大脑(quiver-orchestrator)和记忆官/嵌入(quiver-memory)都调千问,凭证读取
 //! 和 HTTP 调用集中在这里,避免各处重复。**key 只在运行时从 `~/.agents/resources.json` 的
 //! `llm.qwen.<profile>` 读,绝不硬编码 / 打印 / 提交。**
 

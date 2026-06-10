@@ -208,12 +208,12 @@ fn hire_worker(state: State<'_, AppState>) -> Result<quiver_store::AgentRole, St
     Ok(role)
 }
 
-/// 人事部:裁掉一个员工(§14)。只能裁 kind=worker(经理/图书管理员是单例,删不得)。
+/// 人事部:裁掉一个员工(§14)。只能裁 kind=worker(经理/记忆官是单例,删不得)。
 #[tauri::command]
 fn fire_worker(state: State<'_, AppState>, id: String) -> Result<(), String> {
     let store = state.store()?;
     if !store.delete_role(&id).map_err(|e| format!("{e:#}"))? {
-        return Err("只能裁员工(经理/图书管理员是单例岗位,删不得)".to_string());
+        return Err("只能裁员工(经理/记忆官是单例岗位,删不得)".to_string());
     }
     Ok(())
 }

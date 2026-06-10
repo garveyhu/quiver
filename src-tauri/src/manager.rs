@@ -325,7 +325,7 @@ async fn execute_effect(
                     if let Some(branch) = task.as_ref().and_then(|t| t.branch.clone()) {
                         deliver_merge(store, pm, &r.task_id, &branch).await;
                     }
-                    // §6.7 里程碑:交付后图书管理员(若显式开)从 episode 提炼事实。后台 best-effort。
+                    // §6.7 里程碑:交付后记忆官(若显式开)从 episode 提炼事实。后台 best-effort。
                     crate::librarian::distill_after_delivery(app, store, project_key.to_string());
                 }
                 let _ = app.emit(TASK_EVENT_CHANNEL, project_key);

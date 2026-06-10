@@ -93,12 +93,31 @@ export function App() {
     setOverlay('brief');
   }, []);
 
-  const enqueueGoal = useCallback(async (goal: string) => {
-    setCaption(`CEO → 经理：「${goal}」—— 已派给公司（simulate，免费跑）。`);
-    try {
-      await enqueueTask(goal, 'simulate');
-    } catch (e) {
-      setCaption(`派活失败:${e instanceof Error ? e.message : String(e)}`);
+  // 支持一次下一批:每行一个目标 → 全部入队,公司按并发持续消化("一直跑下去")。单行兼容。
+  const enqueueGoal = useCallback(async (goalText: string) => {
+    const goals = goalText
+      .split('\n')
+      .map(g => g.trim())
+      .filter(Boolean);
+    if (goals.length === 0) return;
+    let ok = 0;
+    let lastErr = '';
+    for (const g of goals) {
+      try {
+        await enqueueTask(g, 'simulate');
+        ok += 1;
+      } catch (e) {
+        lastErr = e instanceof Error ? e.message : String(e); // 不静默吞
+      }
+    }
+    if (ok === goals.length) {
+      setCaption(
+        goals.length === 1
+          ? `CEO → 经理：「${goals[0]}」—— 已派给公司（simulate，免费跑）。`
+          : `CEO → 经理：一批 ${ok} 件事已派 —— 公司会按并发持续消化。`,
+      );
+    } else {
+      setCaption(`派活:${ok}/${goals.length} 成功${lastErr ? ` —— ${lastErr}` : ''}`);
     }
   }, []);
 

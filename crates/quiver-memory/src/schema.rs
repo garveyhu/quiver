@@ -72,7 +72,7 @@ pub(crate) fn migrate(conn: &Connection) -> anyhow::Result<()> {
             INSERT INTO memory_fact_fts(rowid, text) VALUES (new.id, new.text);
         END;
 
-        -- §20 memory_staging:员工/经理写入的事实先进待审区(默认不可信),由图书管理员
+        -- §20 memory_staging:员工/经理写入的事实先进待审区(默认不可信),由记忆官
         -- 审核后 promote 进 memory_fact(§6.4 待审/隔离)。promoted=0 待审 / 1 已晋升。
         -- 绝不自动塞进当前真相——只追加,经理主动查才以\"未核实\"出现。
         CREATE TABLE IF NOT EXISTS memory_staging (

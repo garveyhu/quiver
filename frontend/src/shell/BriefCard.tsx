@@ -52,7 +52,7 @@ export function BriefCard({ open, defaultGoal, onClose, onConfirm }: BriefCardPr
       {step === 0 ? (
         <>
           <h2>新任务 · 交给公司</h2>
-          <div className="sub">只写一句目标，经理会读一遍公司此刻的局面、报个能不能接，你点头才花钱。</div>
+          <div className="sub">写一个或多个目标（每行一个），经理会读一遍公司此刻的局面、报个能不能接，你点头才花钱。一次多行 = 公司持续消化一批活。</div>
           <div className="body">
             <textarea className="field" rows={3} value={goal} onChange={e => setGoal(e.target.value)} />
           </div>

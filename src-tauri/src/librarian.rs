@@ -1,4 +1,4 @@
-//! 图书管理员·提炼器(DESIGN §6.7):从近期 episode 提炼值得长期记住的项目事实,写进
+//! 记忆官·提炼器(DESIGN §6.7):从近期 episode 提炼值得长期记住的项目事实,写进
 //! 记忆库的事实层 —— 没有它,brief 的「当前事实」永远是 0,经理只有流水没有沉淀知识。
 //!
 //! 思考用 **claude**(§0「思考全程用 claude」;千问版已删)。烧钱规矩同经理大脑:
@@ -26,7 +26,7 @@ const MAX_FACTS_PER_DISTILL: usize = 3;
 /// 提炼产物的 kind 标签(也用于限频查询:最近一条该 kind 事实的 recorded_at)。
 const DISTILL_KIND: &str = "提炼";
 
-/// 经理交付后调用:若图书管理员被显式打开且不在限频窗口内,起一个 claude 从近期
+/// 经理交付后调用:若记忆官被显式打开且不在限频窗口内,起一个 claude 从近期
 /// episode 提炼 1-3 条事实写入记忆。完全 best-effort——任何失败只是跳过,绝不影响编排。
 /// 在独立 tokio task 里跑(调用方不等)。
 pub fn distill_after_delivery(app: &AppHandle, store: &Arc<Store>, project: String) {
@@ -78,7 +78,7 @@ async fn try_distill(app: &AppHandle, store: &Arc<Store>, project: &str) -> anyh
     let settings = store.get_settings()?;
     let bin = crate::run::resolve_agent_bin(&settings, RunMode::Real)?;
     let prompt = format!(
-        "你是项目记忆库的图书管理员。下面是项目「{project}」最近的工作记录(含经理裁决)。\
+        "你是项目记忆库的记忆官。下面是项目「{project}」最近的工作记录(含经理裁决)。\
          从中提炼最多 {MAX_FACTS_PER_DISTILL} 条**值得长期记住**的项目事实(模式、约定、反复出现的问题、\
          有效的做法),不要复述单次流水。只输出一个 JSON 数组,不要任何解释、不要修改文件:\n\
          [{{\"text\":\"事实陈述\",\"importance\":1到9}}]\n\

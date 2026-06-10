@@ -14,7 +14,7 @@ interface PersonnelDeskProps {
 const KIND_CN: Record<string, string> = {
   manager: '经理 · 领导区',
   worker: '员工 · 工位区',
-  librarian: '图书管理员 · 档案室',
+  librarian: '记忆官 · 记忆库',
 };
 
 /** 各角色「大脑」开关的双态文案:关(免费/休眠) vs claude(烧 headless 额度)。 */

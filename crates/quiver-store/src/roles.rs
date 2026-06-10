@@ -201,7 +201,7 @@ impl Store {
         Ok(())
     }
 
-    /// 裁掉一个**员工**角色(§14):只允许删 `kind='worker'` —— 内置经理/图书管理员是单例
+    /// 裁掉一个**员工**角色(§14):只允许删 `kind='worker'` —— 内置经理/记忆官是单例
     /// 岗位,删不得。返回是否真删了(不是 worker / 不存在 → false)。
     pub fn delete_role(&self, id: &str) -> anyhow::Result<bool> {
         let conn = self.conn.lock().expect("store lock");
@@ -228,7 +228,7 @@ mod tests {
         assert!(ids.contains(&"librarian"));
         let workers = roles.iter().filter(|r| r.kind == "worker").count();
         assert_eq!(workers, 3, "每个员工独立配置:seed 三个 worker 角色");
-        // 安全默认:会烧钱的大脑(经理决策/图书管理员提炼)必须 seed 成免费 rule(休眠),
+        // 安全默认:会烧钱的大脑(经理决策/记忆官提炼)必须 seed 成免费 rule(休眠),
         // claude 只能在人事部显式打开。
         for id in ["manager", "librarian"] {
             let r = store.get_role(id).unwrap().unwrap();
@@ -291,7 +291,7 @@ mod tests {
         // 裁掉它。
         assert!(store.delete_role("worker-99").unwrap(), "员工可裁");
         assert!(store.get_role("worker-99").unwrap().is_none());
-        // 经理/图书管理员是单例岗位,裁不掉(delete 只认 kind='worker')。
+        // 经理/记忆官是单例岗位,裁不掉(delete 只认 kind='worker')。
         assert!(!store.delete_role("manager").unwrap(), "经理裁不掉");
         assert!(store.get_role("manager").unwrap().is_some());
     }
