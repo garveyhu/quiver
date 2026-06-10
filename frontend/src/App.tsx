@@ -12,6 +12,7 @@ import { useRoles } from '@/hooks/useRoles';
 import { useSettings } from '@/hooks/useSettings';
 import { Office } from '@/office/Office';
 import { cancelActiveTasks, enqueueTask, getInitialState, requeueTask } from '@/services/commands';
+import type { RunMode } from '@/services/wire';
 import { Atmosphere } from '@/shell/Atmosphere';
 import { BriefCard } from '@/shell/BriefCard';
 import { Caption } from '@/shell/Caption';
@@ -22,6 +23,7 @@ import { Hud } from '@/shell/Hud';
 import { ManagerDesk } from '@/shell/ManagerDesk';
 import { MorningReport } from '@/shell/MorningReport';
 import { PersonnelDesk } from '@/shell/PersonnelDesk';
+import { SettingsView } from '@/shell/SettingsView';
 import { Timeline } from '@/shell/Timeline';
 import { TrustCard } from '@/shell/TrustCard';
 
@@ -31,12 +33,12 @@ const DEFAULT_CAPTION = '你是 CEO。经理在领导区待命 —— 点「CEO 
 const GOALS = ['做转写的导出功能', '修登录态丢失', '给看板加暗色模式', '把召回准确率提上去', '补端到端测试', '清掉废弃依赖'];
 
 /** 当前打开的叠层(同一时刻至多一个)。 */
-type Overlay = 'none' | 'cmdk' | 'report' | 'brief' | 'trust' | 'timeline' | 'manager' | 'personnel';
+type Overlay = 'none' | 'cmdk' | 'report' | 'brief' | 'trust' | 'timeline' | 'manager' | 'personnel' | 'settings';
 
 /** 应用根:等距办公室舞台 + 叠层 + 画面后期。叠层开合、派活握手、状态条文案在此编排。 */
 export function App() {
   const hud = useHud();
-  const settings = useSettings();
+  const { settings, patch: patchSettings } = useSettings();
   const budgetCap = settings?.nightlyBudgetUsd ?? null;
   const [overlay, setOverlay] = useState<Overlay>('none');
   const [caption, setCaption] = useState(DEFAULT_CAPTION);
@@ -93,33 +95,40 @@ export function App() {
     setOverlay('brief');
   }, []);
 
+  // 派活模式**跟随系统设置**(之前硬编码 simulate 是 bug:用户切 real 不生效)。
+  const runMode = (settings?.defaultMode === 'real' ? 'real' : 'simulate') as RunMode;
+  const modeLabel = runMode === 'real' ? '真实·claude 干活·烧额度' : 'simulate·免费';
+
   // 支持一次下一批:每行一个目标 → 全部入队,公司按并发持续消化("一直跑下去")。单行兼容。
-  const enqueueGoal = useCallback(async (goalText: string) => {
-    const goals = goalText
-      .split('\n')
-      .map(g => g.trim())
-      .filter(Boolean);
-    if (goals.length === 0) return;
-    let ok = 0;
-    let lastErr = '';
-    for (const g of goals) {
-      try {
-        await enqueueTask(g, 'simulate');
-        ok += 1;
-      } catch (e) {
-        lastErr = e instanceof Error ? e.message : String(e); // 不静默吞
+  const enqueueGoal = useCallback(
+    async (goalText: string) => {
+      const goals = goalText
+        .split('\n')
+        .map(g => g.trim())
+        .filter(Boolean);
+      if (goals.length === 0) return;
+      let ok = 0;
+      let lastErr = '';
+      for (const g of goals) {
+        try {
+          await enqueueTask(g, runMode);
+          ok += 1;
+        } catch (e) {
+          lastErr = e instanceof Error ? e.message : String(e); // 不静默吞
+        }
       }
-    }
-    if (ok === goals.length) {
-      setCaption(
-        goals.length === 1
-          ? `CEO → 经理：「${goals[0]}」—— 已派给公司（simulate，免费跑）。`
-          : `CEO → 经理：一批 ${ok} 件事已派 —— 公司会按并发持续消化。`,
-      );
-    } else {
-      setCaption(`派活:${ok}/${goals.length} 成功${lastErr ? ` —— ${lastErr}` : ''}`);
-    }
-  }, []);
+      if (ok === goals.length) {
+        setCaption(
+          goals.length === 1
+            ? `CEO → 经理：「${goals[0]}」—— 已派给公司（${modeLabel}）。`
+            : `CEO → 经理：一批 ${ok} 件事已派（${modeLabel}）—— 公司会按并发持续消化。`,
+        );
+      } else {
+        setCaption(`派活:${ok}/${goals.length} 成功${lastErr ? ` —— ${lastErr}` : ''}`);
+      }
+    },
+    [runMode, modeLabel],
+  );
 
   // 一次下一批目标(§3 协作):经理按并发上限(人事部 maxWorkers)并行调动多个员工。
   // 上限=1 时仍串行 —— 把人事部并发调高才看得到多个工位同时敲键。
@@ -129,7 +138,7 @@ export function App() {
     let lastErr = '';
     for (const g of goals) {
       try {
-        await enqueueTask(g, 'simulate');
+        await enqueueTask(g, runMode);
         ok += 1;
       } catch (e) {
         lastErr = e instanceof Error ? e.message : String(e); // 不静默吞:报真成败,绝不假报"已派"
@@ -137,10 +146,10 @@ export function App() {
     }
     setCaption(
       ok === goals.length
-        ? `CEO → 经理：一批 ${ok} 件事已派 —— 经理按并发上限并行调度(上限=1 则串行)。`
+        ? `CEO → 经理：一批 ${ok} 件事已派（${modeLabel}）—— 经理按并发上限并行调度(上限=1 则串行)。`
         : `派活失败:${ok}/${goals.length} 成功${lastErr ? ` —— ${lastErr}` : ''}`,
     );
-  }, []);
+  }, [runMode, modeLabel]);
 
   const confirmBrief = useCallback(
     (goal: string) => {
@@ -188,6 +197,10 @@ export function App() {
         setOverlay('personnel');
         return;
       }
+      if (cmd.id === 'settings') {
+        setOverlay('settings');
+        return;
+      }
       if (cmd.id === 'estop') {
         void estop();
         return;
@@ -220,6 +233,8 @@ export function App() {
         onGoal={openBrief}
         onManager={() => setOverlay('manager')}
         onPersonnel={() => setOverlay('personnel')}
+        onSettings={() => setOverlay('settings')}
+        mode={runMode}
       />
       <Caption text={caption} />
       <div className={`scrim${overlay !== 'none' ? ' on' : ''}`} onClick={() => setOverlay('none')} />
@@ -242,6 +257,12 @@ export function App() {
             .catch(e => setCaption(`录入失败:${e instanceof Error ? e.message : String(e)}`))
         }
         onRequeue={onRequeue}
+        onClose={() => setOverlay('none')}
+      />
+      <SettingsView
+        open={overlay === 'settings'}
+        settings={settings}
+        onPatch={p => void patchSettings(p).catch(e => setCaption(`改设置失败:${e instanceof Error ? e.message : String(e)}`))}
         onClose={() => setOverlay('none')}
       />
       <PersonnelDesk

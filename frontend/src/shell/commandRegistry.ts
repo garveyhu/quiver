@@ -11,6 +11,7 @@ export const COMMANDS: QuiverCommand[] = [
   { id: 'new-task', label: '新任务', hint: '下一个目标交给公司', kbd: '⌘N' },
   { id: 'manager', label: '经理工作台', hint: '看经理逐拍决策 / 开自治', kbd: 'M' },
   { id: 'personnel', label: '人事部', hint: '经理/员工配置 · 大脑/模型/硬限' },
+  { id: 'settings', label: '系统设置', hint: '模式 / 模型 / 并发 / 预算 / 验证命令' },
   { id: 'report', label: '晨报 / 验收', hint: '看昨晚结果' },
   { id: 'trust', label: '信任设置', hint: '调某个经理的规划自由度' },
   { id: 'dispatch', label: '派活', hint: '让经理开一个任务' },

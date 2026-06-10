@@ -6,10 +6,14 @@ interface CtrlsProps {
   onManager: () => void;
   /** 打开人事部(经理/员工配置 / 专长 / 雇人裁员)。 */
   onPersonnel: () => void;
+  /** 打开系统设置(模式 / 模型 / 并发 / 预算 / 验证命令)。 */
+  onSettings: () => void;
+  /** 当前运行模式,在「CEO 下目标」上标出来 —— 一眼知道派活是免费模拟还是真烧钱。 */
+  mode: 'simulate' | 'real';
 }
 
-/** 右上角控件栏:常用面板直达入口 + CEO 下目标。功能不再只藏在 ⌘K 里。 */
-export function Ctrls({ onCmdk, onReport, onGoal, onManager, onPersonnel }: CtrlsProps) {
+/** 右上角控件栏:常用面板直达入口 + CEO 下目标(标当前模式)。功能不再只藏在 ⌘K 里。 */
+export function Ctrls({ onCmdk, onReport, onGoal, onManager, onPersonnel, onSettings, mode }: CtrlsProps) {
   return (
     <div className="ctrls">
       <button className="b-gh" type="button" onClick={onCmdk}>
@@ -21,11 +25,17 @@ export function Ctrls({ onCmdk, onReport, onGoal, onManager, onPersonnel }: Ctrl
       <button className="b-gh" type="button" onClick={onPersonnel} title="人事部:配置 / 专长 / 雇人">
         人事部
       </button>
-      <button className="b-gh" type="button" onClick={onReport}>
+      <button className="b-gh" type="button" onClick={onReport} title="晨报:合进 main / 卡住 / 等你拍板的结果">
         晨报
+      </button>
+      <button className="b-gh" type="button" onClick={onSettings} title="系统设置:模式 / 模型 / 并发 / 预算">
+        设置
       </button>
       <button className="b-go" type="button" onClick={onGoal}>
         CEO 下目标
+        <span className="lbl" style={{ marginLeft: 6, opacity: 0.8 }}>
+          {mode === 'real' ? '真实' : '模拟'}
+        </span>
         <span className="arr" />
       </button>
     </div>
