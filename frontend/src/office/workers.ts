@@ -26,6 +26,8 @@ export interface PlacedWorker {
   taskId?: string;
   /** 真实员工身份(角色名,§14):这个小人是哪个员工在干 —— 让"专长分工"具体可见。 */
   workerRole?: string;
+  /** 经理正在用 claude 思考决策(头顶冒思考点 + 轻浮动)——让 CEO 扫一眼就知道 AI 在工作。 */
+  thinking?: boolean;
 }
 
 /** 连帽衫配色池(移植原型 HOODS)。 */
@@ -88,6 +90,7 @@ export function placeWorkers(
   active: TaskRecord[],
   bubbles: Record<string, string> = {},
   lingering: LingeringTask[] = [],
+  mgrThinking = false,
 ): PlacedWorker[] {
   const cells = loungeCells();
   const workers: PlacedWorker[] = [];
@@ -128,7 +131,17 @@ export function placeWorkers(
   }
 
   const mp = iso(layout, 11.5, 3.3);
-  workers.push({ id: 'mgr', role: 'mgr', x: mp.x, y: mp.y, z: zidx(11.5, 3.3) + 5, hood: ['#e0a050', '#b07a30'], label: '经理' });
+  workers.push({
+    id: 'mgr',
+    role: 'mgr',
+    x: mp.x,
+    y: mp.y,
+    z: zidx(11.5, 3.3) + 5,
+    hood: ['#e0a050', '#b07a30'],
+    thinking: mgrThinking,
+    // 思考中改 label,头顶思考点 + 浮动一起把"经理在用 AI 想"亮出来。
+    label: mgrThinking ? '思考中…' : '经理',
+  });
 
   const ap = iso(layout, 11.3, 0.4);
   workers.push({ id: 'aud', role: 'aud', x: ap.x, y: ap.y, z: zidx(11.3, 0.4) + 5, hood: ['#46a0a0', '#2f7070'], lean: true, label: '审计' });

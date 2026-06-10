@@ -409,3 +409,7 @@ body {
 .md-code { background: var(--s-inset); border: 1px solid var(--bd-soft); border-radius: 6px; padding: 8px 10px; margin: 5px 0; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; line-height: 1.5; white-space: pre; color: var(--tx-1); }
 .md-code code { font-family: inherit; background: none; border: none; padding: 0; }
 .md-inline { background: var(--tint-hi); border: 1px solid var(--bd-soft); border-radius: 4px; padding: 0 4px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; }
+
+/* 经理在用 claude 思考:头顶冒思考点(复用 thinkpulse)+ 王冠轻浮动 —— 不点开也看得到 AI 在决策。 */
+.worker.thinking .think { opacity: 1; animation: thinkpulse 1.4s ease-in-out infinite; }
+.worker.mgr.thinking .stack { animation: bob 1.7s ease-in-out infinite alternate; }

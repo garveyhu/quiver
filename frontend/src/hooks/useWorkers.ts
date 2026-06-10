@@ -4,11 +4,13 @@ import type { Layout } from '@/office/iso';
 import { placeWorkers, type LingeringTask, type PlacedWorker } from '@/office/workers';
 import { listTasks } from '@/services/commands';
 import { subscribe } from '@/services/ipc';
-import type { AgentEvent, TaskRecord } from '@/services/wire';
+import type { AgentEvent, ManagerThinkingEvent, TaskRecord } from '@/services/wire';
 
 const ACTIVE = new Set(['running', 'verifying']);
 /** 完工驻留时长(D1):小人在工位报完/再回休息室,不瞬移。 */
 const LINGER_MS = 4000;
+/** 经理思考熄灯延时:停收 manager-thinking 这么久后才判经理空闲(防一拍间隙闪烁)。 */
+const THINK_LINGER_MS = 2500;
 
 /** 短气泡:截断工具摘要。 */
 function short(text: string): string {
@@ -26,6 +28,9 @@ export function useWorkers(layout: Layout): PlacedWorker[] {
   const [active, setActive] = useState<TaskRecord[]>([]);
   const [bubbles, setBubbles] = useState<Record<string, string>>({});
   const [lingering, setLingering] = useState<LingeringTask[]>([]);
+  // 经理是否在用 claude 思考:收到 manager-thinking 即 true,停流 THINK_LINGER_MS 后归 false ——
+  // 驱动经理小人头顶冒思考点,让 CEO 不点开也能看到「AI 正在决策」。
+  const [mgrThinking, setMgrThinking] = useState(false);
   // 上一轮的在途清单(diff 出"刚完工"的用),避免在 setState 回调里再 setState。
   const prevActive = useRef<TaskRecord[]>([]);
 
@@ -80,15 +85,28 @@ export function useWorkers(layout: Layout): PlacedWorker[] {
         else if (ev.kind === 'worker_started') setBubbles(prev => ({ ...prev, [ev.taskId]: '开工…' }));
       }),
     );
+    // 经理思考流:每来一段就点亮「思考中」,并把熄灯延后 —— 停流一会才判空闲(防一拍间隙闪烁)。
+    let thinkOff: number | undefined;
+    track(
+      subscribe<ManagerThinkingEvent>('manager-thinking', () => {
+        if (!alive) return;
+        setMgrThinking(true);
+        window.clearTimeout(thinkOff);
+        thinkOff = window.setTimeout(() => {
+          if (alive) setMgrThinking(false);
+        }, THINK_LINGER_MS);
+      }),
+    );
 
     return () => {
       alive = false;
+      window.clearTimeout(thinkOff);
       unlisteners.forEach(u => u());
     };
   }, []);
 
   return useMemo(
-    () => placeWorkers(layout, active, bubbles, lingering),
-    [layout, active, bubbles, lingering],
+    () => placeWorkers(layout, active, bubbles, lingering, mgrThinking),
+    [layout, active, bubbles, lingering, mgrThinking],
   );
 }
