@@ -76,7 +76,9 @@ body {
 .buildmark { position: absolute; width: var(--tw); height: var(--th); margin-left: calc(var(--tw)/-2); margin-top: calc(var(--th)/-2);
   clip-path: polygon(50% 0,100% 50%,50% 100%,0 50%); background: repeating-linear-gradient(45deg, transparent 0 5px, rgba(255,210,122,.10) 5px 7px); display: grid; place-items: center; }
 .buildmark b { color: #7c89ad; font-size: 13px; font-weight: 400; }
-.roomlabel { position: absolute; transform: translate(-50%,-50%); font-size: 10.5px; letter-spacing: 1.2px; color: var(--tx-2); background: rgba(10,14,26,.72);
+/* 房间标签反向缩放(scale(var(--inv-s)))抵消 stage 缩放 → 文字净缩放 1:1,DPR=1 非 retina
+   屏也锐利清晰(不再随等距相机缩放发糊)。--inv-s 由 useCamera 注入。 */
+.roomlabel { position: absolute; transform: translate(-50%,-50%) scale(var(--inv-s, 1)); font-size: 10.5px; letter-spacing: 1.2px; color: var(--tx-2); background: rgba(10,14,26,.72);
   padding: 3px 9px; border-radius: var(--r-1); white-space: nowrap; pointer-events: none; border: 1px solid var(--bd-soft); }
 .poly { position: absolute; inset: 0; pointer-events: none; transition: background .3s; }
 .rect { position: absolute; pointer-events: none; transition: background .3s; }
@@ -94,9 +96,9 @@ body {
 
 /* ===== 家具/道具像素细节 ===== */
 .pled { position: absolute; width: 2px; height: 2px; margin-left: -1px; margin-top: -1px; border-radius: 1px; pointer-events: none; }
-/* LED 静态点亮 —— 原本 45 个灯各自 blink 永动动画,纯装饰却 45 个合成层持续重绘。
-   常亮的服务器灯一样有"在运转"感,省掉 45 个永动动画。 */
-.pled.b { opacity: .9; }
+/* LED 闪烁:opacity 动画是合成器层面(GPU 几乎不耗),恢复它找回"机器在运转"的生命力。
+   真正耗 GPU 的是 filter:blur,不是这个。 */
+.pled.b { animation: blink2 1.4s steps(1) infinite; }
 .pspeck { position: absolute; width: 2px; height: 2px; border-radius: 1px; pointer-events: none; }
 .pcshadow { position: absolute; border-radius: 50%; background: rgba(0,0,0,.3); pointer-events: none; }
 .pscan { position: absolute; pointer-events: none; opacity: .5; background: repeating-linear-gradient(0deg, rgba(255,255,255,.10) 0 1px, transparent 1px 3px); }

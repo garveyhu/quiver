@@ -111,7 +111,9 @@ export function useCamera(worldW: number, worldH: number): Camera {
       transform: `translate(${tx}px,${ty}px) scale(${cam.s.toFixed(3)})`,
       transition,
       transformOrigin: 'center',
-    },
+      // 反向缩放系数:世界内文字标签用它抵消 stage 缩放,净缩放=1 → 文字 1:1 渲染、DPR=1 也清晰。
+      ['--inv-s' as string]: (1 / cam.s).toFixed(3),
+    } as CSSProperties,
     zoomed: cam.s > fitRef.current * 1.02,
     diveTo,
     reset,
