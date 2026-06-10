@@ -423,7 +423,8 @@ async fn execute_effect(
                 let _ = app.emit(TASK_EVENT_CHANNEL, project_key);
             }
         }
-        // Continue P0 先"记录 + 让前端看见",真 resume 留后续刀(见 plan「不做」)。
+        // §5 双向协作闭环:经理评审上一轮产出、给了指导 → 同一任务的 worker 带 --resume 续跑一轮,
+        // 真把经理的回答送回 worker 手里(不是只记录给前端看)。
         Effect::Continue { node_id, fence, ref_node, prompt } => {
             // §5 双向协作:经理评审完上一轮产出、给了具体指导 → 让**同一任务**的 worker `--resume`
             // 带着指导再跑一轮(迭代改进),而不是闷头一锤子买卖。ref_node 是上一轮完工的节点 →
