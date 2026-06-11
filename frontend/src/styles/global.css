@@ -227,6 +227,9 @@ body {
   box-shadow: var(--sh-1), inset 0 1px 0 var(--hairline-top); font-size: 12.5px; }
 .hud .brand { font-weight: 650; letter-spacing: .6px; color: var(--accent); font-size: 12px; }
 .hud .brand small { color: var(--tx-3); font-weight: 400; letter-spacing: .2px; margin-left: 6px; }
+/* 自治状态徽标:自治中=绿(醒目,公司在自主跑)、手动=灰。「绝对自治」打开 app 一眼可见。 */
+.hud-auto { font-size: 11px; font-weight: 600; letter-spacing: .2px; padding: 3px 9px; border-radius: var(--r-pill); color: var(--tx-3); background: var(--s-inset); border: 1px solid var(--bd-soft); white-space: nowrap; max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
+.hud-auto.on { color: #0e1a10; background: linear-gradient(180deg,#a6eaa6,#6cc47a); border-color: transparent; box-shadow: 0 0 12px rgba(108,196,122,.3); }
 .hud .stat { color: var(--tx-2); font-size: 11.5px; letter-spacing: .15px; display: inline-flex; align-items: baseline; gap: 5px; }
 .hud .stat b { color: var(--tx-1); font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: 0; }
 .hud .bar { width: 92px; height: 6px; background: var(--s-inset); border-radius: var(--r-pill); overflow: hidden; box-shadow: inset 0 0 0 1px var(--bd-soft); }

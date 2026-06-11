@@ -252,7 +252,7 @@ export function App() {
         />
       </div>
       <div className="topbar">
-        <Hud data={hud} budgetCap={budgetCap} />
+        <Hud data={hud} budgetCap={budgetCap} autonomous={!!settings?.autonomous} goal={settings?.autonomousGoal ?? ''} />
         <Ctrls
           onCmdk={() => setOverlay('cmdk')}
           onReport={() => setOverlay('report')}
