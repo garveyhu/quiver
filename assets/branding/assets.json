@@ -5,10 +5,7 @@
     "workflow": "t2i",
     "style_prefix": "16-bit cozy pixel art, warm amber and brown palette, crisp clean pixels, cozy fantasy archer's-guild workshop style,",
     "suffix": "clearly coloured, flat even lighting, centered, on a solid uniform magenta background, nothing else, no glow, no shadow, no text",
-    "size": [
-      768,
-      768
-    ],
+    "size": [768, 768],
     "keyflat": {
       "tol": 95
     },
@@ -25,24 +22,18 @@
     },
     {
       "name": "wordmark",
-      "status": "todo",
+      "status": "done",
       "prompt": "a single isolated emblem of a quiver of arrows with one flaming arrow and a small crescent moon, cozy fantasy game logo badge, warm colours",
-      "size": [
-        768,
-        768
-      ]
+      "size": [768, 768]
     },
     {
       "name": "splash",
-      "status": "todo",
+      "status": "done",
       "prompt": "a cozy archer's-guild workshop title splash, warm inviting golden light, atmospheric, generous empty space for a title",
       "workflow": "t2i",
       "style_prefix": "16-bit cozy pixel art, warm amber and brown palette, soft glowing lamplight, gentle dithering, crisp clean pixels, cozy fantasy archer's-guild workshop interior",
       "suffix": "wide composition, no text",
-      "size": [
-        1280,
-        800
-      ],
+      "size": [1280, 800],
       "keyflat": null,
       "pixelize": null
     }

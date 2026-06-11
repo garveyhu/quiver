@@ -1,0 +1,75 @@
+{
+  "category": "characters/hero",
+  "out_prefix": "characters/hero",
+  "_note": "全新角色 hero 的动作集。vars.ref 指向 assets 内的基准图(相对 assets 根),批量会自动上传到 ComfyUI,无需手动 upload。char-edit 锁身份逐个出动作 + matte 抠透明。type=character 默认跳过,跑加 --with-chars。",
+  "defaults": {
+    "workflow": "char-edit",
+    "type": "character",
+    "pixelize": {
+      "px": 140,
+      "colors": 32
+    },
+    "variants": 2,
+    "matte": {
+      "model": "RMBG-2.0"
+    }
+  },
+  "items": [
+    {
+      "name": "idle",
+      "vars": {
+        "ref": "characters/_base/hero-base.png",
+        "change": "standing relaxed in a calm idle pose, arms at sides, front view"
+      },
+      "status": "todo"
+    },
+    {
+      "name": "reading",
+      "vars": {
+        "ref": "characters/_base/hero-base.png",
+        "change": "sitting on a small stool reading an open book, three-quarter view"
+      },
+      "status": "todo"
+    },
+    {
+      "name": "bow",
+      "vars": {
+        "ref": "characters/_base/hero-base.png",
+        "change": "standing and drawing a bow and arrow, side profile view"
+      },
+      "status": "todo"
+    },
+    {
+      "name": "walk",
+      "vars": {
+        "ref": "characters/_base/hero-base.png",
+        "change": "walking mid-stride, side profile view"
+      },
+      "status": "todo"
+    },
+    {
+      "name": "celebrate",
+      "vars": {
+        "ref": "characters/_base/hero-base.png",
+        "change": "celebrating with both arms raised, joyful, front view"
+      },
+      "status": "todo"
+    },
+    {
+      "name": "sick",
+      "vars": {
+        "ref": "characters/_base/hero-base.png",
+        "change": "sitting slumped, tired and unwell, front view"
+      },
+      "status": "todo"
+    },
+    {
+      "name": "portrait",
+      "vars": {
+        "ref": "characters/_base/hero-base.png",
+        "change": "close-up portrait headshot, friendly expression, front view"
+      },
+      "status": "todo"
+    }
+  ]
+}
