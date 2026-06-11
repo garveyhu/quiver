@@ -37,7 +37,14 @@ export function SettingsView({ open, settings, onPatch, onToast, onClose }: Sett
   // 完整流程,不烧钱(上轮接通)。一键设齐 simulate+claude+自治,用户不烧钱就能看 claude 经理工作。
   const previewMgr = brain === 'claude' && s?.defaultMode === 'simulate';
   const startPreview = () => {
-    onPatch({ defaultMode: 'simulate', autonomous: true });
+    // 一键预演不只切大脑:还顺手给个示例自治目标(CEO 没设过的话)。否则经理 autonomous 了却没活、
+    // 没目标,只会观望 —— CEO 点完预演盯着空办公室、看不到经理工作。有了目标,经理立刻主动 plan
+    // 拆活,决策流就滚起来,这才看得到「给方向就自己干」。CEO 设过目标则尊重、不覆盖。
+    onPatch({
+      defaultMode: 'simulate',
+      autonomous: true,
+      autonomousGoal: s?.autonomousGoal?.trim() || '持续完善这个项目的测试与文档',
+    });
     switchBrain('claude');
   };
   return (
