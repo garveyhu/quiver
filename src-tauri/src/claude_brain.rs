@@ -159,8 +159,11 @@ fn build_prompt(ctx: &ManagerContext, system_prompt: &str) -> String {
                 format!("- 节点 {} 完工,终态 {}(任务 {}{}){}{}\n", r.node_id, r.status, r.task_id, round, ask, out)
             })
             .collect();
-        format!("\n完工待你复核裁决 —— **看每条下面的产出(改了什么 + 验证结果)再判断**:产出对路就 \
-                 deliver 交付;方向偏 / 没覆盖到 / 质量不够就 continue 给具体指导再跑一轮;跑歪了就 block 拦下:\n{lines}")
+        format!("\n完工待你复核裁决 —— **看每条下面的产出(改了什么 + 验证结果 / 失败详情)再判断**:产出\
+                 对路就 deliver 交付;方向偏 / 没覆盖到 / 质量不够就 continue 给具体指导再跑一轮;跑歪了就 \
+                 block 拦下。**关键**:若失败详情看着是**环境/权限/依赖/配置问题**(如 PermissionError、\
+                 命令 not found、缺依赖、sandbox/网络拒绝 —— 不是 worker 代码的错),别反复 continue/重试\
+                 瞎烧钱(worker 改代码也修不了环境)→ 直接 escalate 上报 CEO 让 ta 处置:\n{lines}")
     };
     // §14 团队专长:列出员工各擅长什么,经理派活时在任务描述里点明所需专长 → 派给对的人。
     let team = if ctx.team.is_empty() {
