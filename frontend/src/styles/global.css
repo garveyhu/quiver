@@ -58,10 +58,12 @@ body {
 .ws-scrim { position: fixed; inset: 0; z-index: 9200; cursor: pointer; }
 /* 人事部角色卡:卡头一行 + 紧凑数字输入。 */
 /* 人事部角色卡:独立的**纵向**卡片(绝不用 .rev——那是决策流的横排 flex,会让内容塌陷成一行)。 */
-.role-card { display: block; padding: 11px 13px; background: var(--tint-hi); border: 1px solid var(--bd-soft); border-radius: var(--r-1); }
-.body .role-card + .role-card { margin-top: 8px; }
-.role-card .role-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.role-card .role-head b { font-size: 13px; color: var(--tx-1); }
+.role-card { display: block; padding: 14px 16px; background: var(--tint-hi); border: 1px solid var(--bd-soft); border-radius: var(--r-2); }
+.body .role-card + .role-card { margin-top: 11px; }
+.role-card .role-head { display: flex; align-items: center; gap: 9px; margin-bottom: 11px; padding-bottom: 9px; border-bottom: 1px solid var(--bd-soft); }
+.role-card .role-head b { font-size: 14px; font-weight: 650; color: var(--tx-1); }
+/* 卡内的 kv 行用间距分隔即可,不要每行一条线(卡片本身已是容器,多线显碎)。 */
+.role-card .kv { border-bottom: 0; padding: 6px 0; }
 .role-card .fire { margin-left: auto; flex: none; }
 .role-card .field { width: auto; min-width: 120px; display: inline-block; }
 .role-card .role-num { min-width: 64px; width: 64px; margin: 0 6px; display: inline-block; }
