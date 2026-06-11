@@ -66,6 +66,10 @@ const TICK_IDLE_TIMEOUT: Duration = Duration::from_secs(5);
 /// 不管 AI 怎么绕圈,拍数见底强制停 —— 杜绝任何形式的空转/升级风暴把额度烧穿。
 /// 队列重新有活时 enqueue 会重启新循环,所以这只挡风暴、不挡正常工作。
 const MAX_TICKS_PER_LOOP: u64 = 200;
+/// 同一任务经理「continue 续跑改进」的轮次硬上限(§5.8 防失控):救到这一轮还没达标 → 不再烧钱
+/// 续跑,摘出复核队、标 needs_rebase 上报 CEO。claude 经理再想 continue 也挡得住 —— 自治不靠
+/// 经理自觉收手,系统兜底保证「救不动就停、不无限烧」(预算闸只挡总额,这道挡单任务空耗)。
+const MAX_CONTINUE_ROUNDS: u32 = 3;
 
 /// 经理编排运行时,挂在 `AppState`(类比 [`Scheduler`](crate::scheduler::Scheduler))。
 /// 每个 project 一个 [`ProjectManager`](懒创建、单循环)。
@@ -465,6 +469,14 @@ async fn execute_effect(
             // H1:读不到 task.mode 就**不续跑**(绝不把 real 任务降级 simulate 假干一轮) —— 预算/ref/
             // mode 任何一关过不了,都走下面 else 回滚名额、这拍不推进,而非猜一个 mode 硬上。
             let resume = match &found {
+                // §5.8 续跑硬上限:这一轮续跑会让轮次到 MAX → 不再烧钱救,摘出复核队 + 标 needs_rebase
+                // 上报 CEO(晨报「卡住等你处理」)。挡得住 claude 经理反复 continue 救不动一直救。
+                Some((tid, prev_round)) if *prev_round + 1 >= MAX_CONTINUE_ROUNDS => {
+                    pm.reviews.lock().await.retain(|r| &r.task_id != tid);
+                    let _ = store.update_task_status(tid, "needs_rebase", crate::now_ms());
+                    let _ = app.emit(TASK_EVENT_CHANNEL, project_key);
+                    None
+                }
                 Some((tid, prev_round)) => store
                     .get_task(tid)
                     .ok()
