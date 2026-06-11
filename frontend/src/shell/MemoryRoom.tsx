@@ -83,7 +83,11 @@ export function MemoryRoom({ open, onClose, onToast }: MemoryRoomProps) {
       </div>
       <div className="body">
         {sorted.length === 0 ? (
-          <div className="rev st-meta">记忆还空 —— 录入一条事实,或跑几单任务让公司沉淀知识。</div>
+          <div className="rev st-meta">
+            记忆还空 —— CEO 可直接录入事实(上面回车)。想让公司「自动」从每次工作里沉淀知识(约定 /
+            教训 / 现状),去人事部把「记忆官」切到 claude:它默认休眠(不烧钱),开了会在每次交付后从工作
+            记录里提炼。
+          </div>
         ) : (
           <>
             <div className="trc-count">{sorted.length} 条当前事实 · 按种类分组</div>
