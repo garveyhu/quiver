@@ -82,9 +82,11 @@ async fn try_distill(app: &AppHandle, store: &Arc<Store>, project: &str) -> anyh
     let prompt = format!(
         "你是项目记忆库的记忆官。下面是项目「{project}」最近的工作记录(含经理裁决)。从中提炼最多 \
          {MAX_FACTS_PER_DISTILL} 条**值得长期记住**的项目知识,不要复述单次流水。每条标一个种类:\
-         「约定」(该遵守的规则)/「教训」(踩过的坑、下次避开)/「有效做法」(被验证管用的方法)。\
-         只输出一个 JSON 数组,不要任何解释、不要修改文件:\n\
-         [{{\"kind\":\"约定|教训|有效做法\",\"text\":\"事实陈述\",\"importance\":1到9}}]\n\
+         「约定」(该遵守的规则)/「教训」(踩过的坑、下次避开)/「有效做法」(被验证管用的方法)/\
+         「状态」(某模块/组件现在是什么样,如「登录改用了 OAuth」——这种**必须**在 entity 里填模块/\
+         组件名,新状态会自动取代同名的旧状态,让记忆跟上现实)。只输出一个 JSON 数组,不要任何解释、\
+         不要修改文件:\n\
+         [{{\"kind\":\"约定|教训|有效做法|状态\",\"text\":\"事实陈述\",\"entity\":\"仅状态填:模块/组件名\",\"importance\":1到9}}]\n\
          没有值得记的就输出 []。\n\n工作记录:\n{log}"
     );
     let runner = ClaudeRunner::new("librarian").with_extra_args(["--model", role.model.as_str()]);
@@ -99,13 +101,18 @@ async fn try_distill(app: &AppHandle, store: &Arc<Store>, project: &str) -> anyh
     // 5. 解析 + 写入(员工汇报档,§6.2;坏输出安全跳过)。
     let facts = parse_facts(&out);
     for f in facts.iter().take(MAX_FACTS_PER_DISTILL) {
+        let kind = distill_kind(&f.kind);
+        // 状态事实带上 entity 锚点(模块名)→ insert_fact 自动作废同名旧状态,记忆跟上现实(§6.4)。
+        // 非状态事实 entity 留空(约定/教训/有效做法不互斥、正常并存)。
+        let ent = f.entity.trim();
+        let entity = (kind == "状态" && !ent.is_empty()).then(|| ent.to_string());
         let _ = mem.insert_fact(&NewFact {
             project: project.to_string(),
             scope: None,
-            kind: distill_kind(&f.kind),
+            kind,
             text: f.text.clone(),
             entities: None,
-            entity: None,
+            entity,
             importance: Some(f.importance.clamp(1, 9)),
             valid_at: None,
             recorded_at: now,
@@ -131,10 +138,14 @@ fn last_distill_at(mem: &MemoryStore, project: &str) -> Option<i64> {
 /// 提炼出的一条事实(claude 输出的 JSON 数组元素)。
 #[derive(Debug, serde::Deserialize)]
 struct DistilledFact {
-    /// 种类:约定/教训/有效做法。缺/不认识 → 退回笼统「提炼」(`distill_kind` 兜)。
+    /// 种类:约定/教训/有效做法/状态。缺/不认识 → 退回笼统「提炼」(`distill_kind` 兜)。
     #[serde(default)]
     kind: String,
     text: String,
+    /// 状态事实的主题锚点(模块/组件名):insert_fact 据此自动作废同名旧状态(§6.4 自我演化)。
+    /// 非状态留空。
+    #[serde(default)]
+    entity: String,
     #[serde(default = "default_importance")]
     importance: i64,
 }
