@@ -70,6 +70,11 @@ const MAX_TICKS_PER_LOOP: u64 = 200;
 /// 续跑,摘出复核队、标 needs_rebase 上报 CEO。claude 经理再想 continue 也挡得住 —— 自治不靠
 /// 经理自觉收手,系统兜底保证「救不动就停、不无限烧」(预算闸只挡总额,这道挡单任务空耗)。
 const MAX_CONTINUE_ROUNDS: u32 = 3;
+/// 纯目标自治启动时,经理 noop(没主动 plan)的重试上限 + 间隔:real claude 第一拍可能保守观望就
+/// noop,别一 noop 就退出、让「给方向就自治」看 claude 心情失灵。给几拍机会(prompt 已强令第一批
+/// 别 noop),限次防真要收工时无限空转。
+const MAX_GOAL_START_RETRY: u32 = 3;
+const GOAL_START_RETRY_GAP: Duration = Duration::from_secs(2);
 
 /// 经理编排运行时,挂在 `AppState`(类比 [`Scheduler`](crate::scheduler::Scheduler))。
 /// 每个 project 一个 [`ProjectManager`](懒创建、单循环)。
@@ -199,6 +204,8 @@ impl ManagerLoop {
 async fn manager_loop(app: AppHandle, store: Arc<Store>, pm: Arc<ProjectManager>) {
     let project_key = pm.project.display().to_string();
     let mut ticks: u64 = 0;
+    // 纯目标自治启动时经理连续 noop 的计数(给 real claude 几拍 plan 机会,见退出逻辑)。
+    let mut idle_noops: u32 = 0;
     loop {
         // §5.8 风暴熔断:拍数见底强制停(enqueue 重启新循环)。真大脑每拍都可能花钱,
         // 这道闸保证"不管经理怎么绕圈,循环总会停"。
@@ -280,6 +287,16 @@ async fn manager_loop(app: AppHandle, store: Arc<Store>, pm: Arc<ProjectManager>
                 // (先入队再释放名额,见 spawn_worker)——还有待裁的就立即再 tick 去裁,
                 // 全裁完才退出。否则 break 会把完工 worker 晾在复核队里没人裁。
                 if pm.reviews.lock().await.is_empty() {
+                    // 纯目标自治启动:有目标 + 队列空 + 还没为目标做过任何事,但经理这拍 noop(没主动
+                    // plan)。real claude 第一拍可能保守观望就 noop —— 别一 noop 就退出、让「给方向就自治」
+                    // 看 claude 心情失灵。给几拍重试(prompt 已强令第一批别 noop),限次防真要收工时空转。
+                    let pure_goal_start =
+                        !ctx.autonomous_goal.trim().is_empty() && ctx.goal_progress.is_empty();
+                    if pure_goal_start && idle_noops < MAX_GOAL_START_RETRY {
+                        idle_noops += 1;
+                        tokio::time::sleep(GOAL_START_RETRY_GAP).await;
+                        continue;
+                    }
                     break;
                 }
                 continue;
