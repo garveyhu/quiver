@@ -126,7 +126,7 @@ pub async fn enqueue_task_cmd(
     let project_str = project.display().to_string();
     let store = state.store()?;
 
-    let task_id = format!("task-{}", now_ms());
+    let task_id = format!("task-{}-{}", now_ms(), crate::next_id_seq());
     store
         .enqueue_task(&NewTask {
             id: task_id.clone(),
@@ -272,7 +272,7 @@ pub async fn run_task_cmd(
     let project_str = project.display().to_string();
     let store = state.store()?;
 
-    let task_id = format!("task-{}", now_ms());
+    let task_id = format!("task-{}-{}", now_ms(), crate::next_id_seq());
     let _ = store.enqueue_task(&NewTask {
         id: task_id.clone(),
         project: project_str,

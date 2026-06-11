@@ -133,6 +133,15 @@ pub(crate) fn now_ms() -> i64 {
         .unwrap_or(0)
 }
 
+/// 进程内全局单调序号,给 task id 防同毫秒相撞用。`task-{now}` 一类的 id 在批量派活 / 连拍 plan /
+/// 同毫秒 requeue+retry 时会撞 id —— 而 enqueue_task 是 `ON CONFLICT DO UPDATE`,撞了不报错而是
+/// **覆盖前一个**,静默丢活(前端还假报"已派 N 件")。所有 task id 都该带上这个序号杜绝相撞。
+pub(crate) fn next_id_seq() -> u64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    SEQ.fetch_add(1, Ordering::Relaxed)
+}
+
 /// A tiny extension so command handlers emit a board-refresh ping without
 /// repeating the channel name. The payload is unit — the board just re-reads
 /// `list_tasks` on any ping. `pub(crate)` so [`commands::tasks`] can call it.

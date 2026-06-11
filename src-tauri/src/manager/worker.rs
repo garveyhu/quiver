@@ -146,7 +146,7 @@ pub(super) fn kill_orphan_worker(pid: i64) {
 
 /// §5 失败自愈:把一个验证失败的任务作为**新任务**重新入队(attempt+1、带返工会话续跑),
 /// 经理循环下一拍会把它派出去。best-effort:任何一步失败只是不重试,绝不让编排崩。
-/// new_id 用 `task-retry-{attempt}-{now}` 避免与原任务及彼此撞键。
+/// new_id 用 `task-retry-{attempt}-{now}-{seq}` 避免与原任务及彼此撞键(seq 防同毫秒相撞)。
 pub(super) async fn auto_retry(
     store: &Arc<Store>,
     pm: &Arc<ProjectManager>,
@@ -155,7 +155,7 @@ pub(super) async fn auto_retry(
 ) {
     let now = crate::now_ms();
     let next_attempt = old.attempt + 1;
-    let new_id = format!("task-retry-{next_attempt}-{now}");
+    let new_id = format!("task-retry-{next_attempt}-{now}-{}", crate::next_id_seq());
     let prompt = format!(
         "(自动重试 第 {} 次)上次运行的成果未通过验收,请修复问题后重新交付。原任务:{}",
         next_attempt - 1,
