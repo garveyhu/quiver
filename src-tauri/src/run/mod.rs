@@ -300,18 +300,47 @@ pub async fn run_streaming(
     // episode 流水。记忆是加性依赖,读不到就空、绝不挡干活。
     let project_key = guard.repo().display().to_string();
     let mem_brief = {
-        let text = app
+        let facts = app
             .try_state::<crate::AppState>()
-            .and_then(|st| st.memory.get().and_then(|m| m.brief(&project_key, 6, 0).ok()))
-            .map(|b| b.to_text())
+            .and_then(|st| st.memory.get().and_then(|m| m.brief(&project_key, 8, 0).ok()))
+            .map(|b| b.facts)
             .unwrap_or_default();
-        if text.trim().is_empty() {
+        // §6 按种类分组注入:约定(必守)/教训(避坑)/有效做法(照做)/现状,让 worker 一眼看清每条记忆
+        // 的性质 —— 配合记忆官的分类提炼,记忆对干活更有指导性,而非一锅平铺让 worker 自己猜性质。
+        let group = |kind: &str| -> String {
+            facts
+                .iter()
+                .filter(|f| f.kind == kind)
+                .map(|f| format!("  - [{}] {}\n", f.trust, f.text))
+                .collect()
+        };
+        let conventions = group("约定");
+        let lessons = group("教训");
+        let practices = group("有效做法");
+        let others: String = facts
+            .iter()
+            .filter(|f| !matches!(f.kind.as_str(), "约定" | "教训" | "有效做法"))
+            .map(|f| format!("  - [{}] {}\n", f.trust, f.text))
+            .collect();
+        let mut body = String::new();
+        if !conventions.is_empty() {
+            body.push_str(&format!("【必守约定】\n{conventions}"));
+        }
+        if !lessons.is_empty() {
+            body.push_str(&format!("【踩过的坑,避开】\n{lessons}"));
+        }
+        if !practices.is_empty() {
+            body.push_str(&format!("【验证管用的做法】\n{practices}"));
+        }
+        if !others.is_empty() {
+            body.push_str(&format!("【项目现状 / 其他】\n{others}"));
+        }
+        if body.trim().is_empty() {
             String::new()
         } else {
             format!(
-                "[项目记忆] 这个项目沉淀的约定与经验,干活时遵循、别重蹈覆辙(每条带可信度:\
-                 「权威 / 已验证」是硬约定务必照做,「员工汇报」参考即可、与现实冲突时以实际为准):\
-                 \n{text}\n\n"
+                "[项目记忆] 这个项目沉淀的经验,干活时遵循、别重蹈覆辙(每条带可信度:「权威 / 已验证」\
+                 是硬事实务必照做,「员工汇报」参考即可、与现实冲突时以实际为准):\n{body}\n"
             )
         }
     };
