@@ -1,0 +1,1065 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Quiver · 自治 AI 公司</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body { background: #0a0e1a; color: var(--tx-1); font-family: var(--ui); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; letter-spacing: .1px; }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1, "ss01" 1; letter-spacing: 0; }
+  :root {
+    --tw: 64px; --th: 32px;
+    --mono: "SF Mono","JetBrains Mono",ui-monospace,SFMono-Regular,monospace;
+    --ui: -apple-system,"SF Pro Text","Inter","PingFang SC","Microsoft YaHei",sans-serif;
+    --s-0: rgba(11,15,26,.72); --s-1: rgba(18,24,42,.82); --s-2: rgba(22,29,50,.94);
+    --s-inset: rgba(8,11,20,.55); --tint-hi: rgba(255,255,255,.05);
+    --bd: rgba(255,255,255,.09); --bd-soft: rgba(255,255,255,.06); --bd-strong: rgba(255,255,255,.14);
+    --hairline-top: rgba(255,255,255,.10);
+    --tx-1: #eef2fb; --tx-2: #aab4cd; --tx-3: #76819c;
+    --accent: #ffd27a; --accent-dim: rgba(255,210,122,.14);
+    --ok: #7bc47e; --ok-soft: rgba(123,196,126,.13);
+    --warn: #f0b24a; --warn-soft: rgba(240,178,74,.14);
+    --bad: #e2604f; --bad-soft: rgba(226,96,79,.13); --info: #8fd0ff;
+    --r-1: 8px; --r-2: 11px; --r-3: 14px; --r-pill: 999px;
+    --sh-1: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.28);
+    --sh-2: 0 2px 8px rgba(0,0,0,.34), 0 16px 48px rgba(0,0,0,.42);
+    --sh-3: 0 8px 24px rgba(0,0,0,.46), 0 32px 96px rgba(0,0,0,.52);
+    --blur: blur(13px) saturate(1.25); --blur-sm: blur(8px) saturate(1.2);
+    --ease: cubic-bezier(.32,.72,.24,1); --t-fast: .12s; --t-mid: .2s;
+  }
+
+  #stage { position: fixed; inset: 0; background: radial-gradient(130% 100% at 50% 32%, #1b2440 0%, #10162b 62%, #0a0e1a 100%); }
+  .scene-fit { position: absolute; inset: 0; display: grid; place-items: center; }
+  .world { position: relative; transform: scale(var(--s,1)); transform-origin: center; }
+
+  .tile { position: absolute; width: var(--tw); height: var(--th); margin-left: calc(var(--tw)/-2); margin-top: calc(var(--th)/-2);
+    clip-path: polygon(50% 0,100% 50%,50% 100%,0 50%); }
+  .buildmark { position: absolute; width: var(--tw); height: var(--th); margin-left: calc(var(--tw)/-2); margin-top: calc(var(--th)/-2);
+    clip-path: polygon(50% 0,100% 50%,50% 100%,0 50%); background: repeating-linear-gradient(45deg, transparent 0 5px, rgba(255,210,122,.10) 5px 7px); display: grid; place-items: center; }
+  .buildmark b { color: #7c89ad; font-size: 13px; font-weight: 400; }
+  .roomlabel { position: absolute; transform: translate(-50%,-50%); font-size: 10.5px; letter-spacing: 1.2px; color: var(--tx-2); background: rgba(10,14,26,.5);
+    padding: 3px 9px; border-radius: var(--r-1); white-space: nowrap; pointer-events: none; backdrop-filter: blur(2px); border: 1px solid var(--bd-soft); }
+
+  .poly { position: absolute; inset: 0; pointer-events: none; transition: background .3s; }
+  .rect { position: absolute; pointer-events: none; transition: background .3s; }
+  .glow { position: absolute; border-radius: 50%; filter: blur(9px); mix-blend-mode: screen; pointer-events: none; }
+  .lightpool { position: absolute; width: 78px; height: 40px; margin-left: -39px; margin-top: -16px; border-radius: 50%; filter: blur(9px); opacity: 0; mix-blend-mode: screen; transition: opacity .45s, background .3s; pointer-events: none; will-change: opacity, transform; }
+  .lightpool::before { content:""; position:absolute; left:50%; top:50%; width:46%; height:46%; transform:translate(-50%,-50%); border-radius:50%; background:inherit; filter:brightness(1.5) blur(3px); }
+  .lightpool.on { opacity: .9; animation: lp-pulse 2.6s ease-in-out infinite; }
+  @keyframes lp-pulse { 0%,100%{ transform:scale(1); opacity:.78; } 50%{ transform:scale(1.07); opacity:.96; } }
+  .rect.lit { box-shadow: 0 0 9px 2px rgba(143,208,255,.55), 0 0 22px 6px rgba(143,208,255,.32), inset 0 0 4px rgba(255,255,255,.4); }
+  .rect.lit-warn { box-shadow: 0 0 8px 2px rgba(255,210,122,.5), 0 0 20px 6px rgba(255,210,122,.3), inset 0 0 4px rgba(255,235,180,.4); }
+  .rect.lit-pass { box-shadow: 0 0 10px 2px rgba(123,191,126,.55), 0 0 24px 7px rgba(123,191,126,.32), inset 0 0 4px rgba(210,255,210,.4); }
+  .rect.lit-fail { box-shadow: 0 0 9px 2px rgba(226,96,79,.5), 0 0 20px 6px rgba(226,96,79,.3), inset 0 0 4px rgba(255,210,200,.35); }
+  .godray { position: absolute; pointer-events: none; mix-blend-mode: screen; opacity: .5;
+    background: linear-gradient(180deg, rgba(173,214,255,.5) 0%, rgba(160,200,255,.18) 42%, rgba(160,200,255,0) 92%);
+    clip-path: polygon(34% 0, 66% 0, 92% 100%, 8% 100%); filter: blur(3px); animation: shaft 7.5s ease-in-out infinite; transform-origin: 50% 0; }
+  .godray.b { opacity:.32; clip-path: polygon(44% 0, 58% 0, 78% 100%, 20% 100%); animation-duration: 9.5s; animation-delay: -3s; }
+  @keyframes shaft { 0%,100%{ opacity:.34; transform:skewX(-3deg) scaleX(.96); } 50%{ opacity:.6; transform:skewX(0deg) scaleX(1.04); } }
+  .srvled { animation: blink2 1.2s steps(1) infinite; }
+  @keyframes blink2 { 0%,100%{opacity:1;} 50%{opacity:.2;} }
+  .steam { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,.5); filter: blur(2px); }
+
+  .worker { position: absolute; width: 24px; height: 40px; margin-left: -12px; margin-top: -34px; transition: left var(--walk,.6s) linear, top var(--walk,.6s) linear; cursor: pointer; image-rendering: pixelated; }
+  .worker .shadow { position: absolute; left: 50%; bottom: -2px; width: 18px; height: 6px; margin-left: -9px; background: rgba(0,0,0,.4); border-radius: 50%; filter: blur(1.5px); transition: width .2s, opacity .2s; }
+  .worker.moving .shadow { width: 22px; opacity: .55; animation: shadowpace .42s steps(2) infinite; }
+  .worker .body { position: absolute; left: 0; bottom: 6px; width: 24px; height: 34px; transform-origin: 50% 100%; filter: drop-shadow(0 1px 0 rgba(0,0,0,.55)); }
+  .worker .stack { position: absolute; inset: 0; animation: sway 3.4s ease-in-out infinite; transform-origin: 50% 100%; }
+  .worker.working .stack { animation: typebob .46s steps(2) infinite; }
+  .worker.moving  .stack { animation: walkbob .42s steps(2) infinite; }
+  .worker.awaiting .stack { animation: none; }
+  .worker .legs  { position: absolute; left: 5px; bottom: 0; width: 14px; height: 7px; background: linear-gradient(90deg,#343c4c 0 50%,#262c38 50% 100%); border-radius: 0 0 1px 1px; }
+  .worker .torso { position: absolute; left: 2px; top: 14px; width: 20px; height: 15px; border-radius: 1px;
+    background: linear-gradient(90deg, var(--torsoL, #4a6a9a) 0 5px, var(--torso,#3f5f8f) 5px 15px, var(--torsoD,#2f4a72) 15px 20px); }
+  .worker.lean .torso { left: 3px; }
+  .worker .arms  { position: absolute; left: 2px; top: 21px; width: 20px; height: 5px; opacity: 0; }
+  .worker.lean .arms { opacity: 1; left: 3px; }
+  .worker .arms::before, .worker .arms::after { content: ""; position: absolute; top: 0; width: 5px; height: 5px; background: var(--torsoD,#2f4a72); border-radius: 1px; }
+  .worker .arms::before { left: 0; } .worker .arms::after { right: 0; }
+  .worker .hair  { position: absolute; left: 5px; top: 2px; width: 14px; height: 7px; background: linear-gradient(90deg,#473630 0 50%,#33251f 50% 100%); border-radius: 2px 2px 0 0; }
+  .worker .hood  { position: absolute; left: 3px; top: 3px; width: 18px; height: 12px; border-radius: 3px 3px 1px 1px;
+    background: linear-gradient(90deg, var(--hoodL,#6a96d0) 0 4px, var(--hood,#5a86c0) 4px 14px, var(--hoodD,#456ba0) 14px 18px); }
+  .worker .face  { position: absolute; left: 7px; top: 9px; width: 10px; height: 7px; border-radius: 1px;
+    background: linear-gradient(90deg,#ffceb0 0 6px,#e9b193 6px 10px); }
+  .worker .eye   { position: absolute; left: 12px; top: 11px; width: 2px; height: 2px; background: #2a2330; border-radius: 1px; animation: blinkeye 4.2s steps(1) infinite; }
+  .worker .phones { position: absolute; left: 2px; top: 4px; width: 20px; height: 10px; opacity: 0; }
+  .worker.emp .phones { opacity: 1; }
+  .worker .phones::before, .worker .phones::after { content: ""; position: absolute; top: 4px; width: 3px; height: 6px; background: #20242e; border-radius: 1px; }
+  .worker .phones::before { left: 0; } .worker .phones::after { right: 0; }
+  .worker .phones i { position: absolute; left: 3px; top: 0; width: 14px; height: 4px; border: 2px solid #20242e; border-bottom: 0; border-radius: 7px 7px 0 0; }
+  .worker.mgr { margin-top: -40px; }
+  .worker.mgr .hood { top: 1px; background: linear-gradient(90deg,#f2c468 0 4px,#e0a050 4px 14px,#b07a30 14px 18px); }
+  .worker.mgr .hair { top: 0; }
+  .worker.mgr .torso { background: linear-gradient(90deg,#e8b45a 0 5px,#d49a40 5px 15px,#a8742c 15px 20px); }
+  .worker.mgr .crown { position:absolute; left:8px; top:-1px; width:8px; height:4px; background:linear-gradient(90deg,#ffe6ad,#e0a050); border-radius:3px 3px 0 0; }
+  .worker.mgr .mantle{ position:absolute; left:1px; top:13px; width:22px; height:4px; background:#8a5e26; border-radius:2px; box-shadow:inset 0 1px 0 rgba(255,224,150,.45); }
+  .worker.mgr .robe  { position:absolute; left:2px; top:25px; width:20px; height:15px; border-radius:2px 2px 3px 3px;
+    background:linear-gradient(90deg,#d49a40 0 5px,#b07a30 5px 15px,#8a5e26 15px 20px); }
+  .worker.mgr .robe::after{ content:""; position:absolute; left:9px; top:1px; width:2px; height:13px; background:#7a5020; }
+  .worker.mgr .legs { display:none; }
+  .worker .book  { position: absolute; left: -2px; top: 22px; width: 7px; height: 9px; opacity: 0;
+    background: linear-gradient(90deg,#caa24a 0 2px,#e8c45e 2px 7px); border: 1px solid #8a6a28; border-radius: 1px 2px 2px 1px; }
+  .worker.mgr .book { opacity: 1; z-index: 6; box-shadow: 0 0 6px 2px rgba(255,200,90,.6); }
+  .worker .visor { position: absolute; left: 5px; top: 9px; width: 14px; height: 3px; background: #1e3a3a; opacity: 0; border-radius: 1px; }
+  .worker.aud .visor { opacity: 1; }
+  .worker .clip  { position: absolute; right: -3px; top: 19px; width: 8px; height: 10px; opacity: 0;
+    background: linear-gradient(180deg,#d9dde4 0 70%,#b7bcc6 70% 100%); border: 1px solid #6a7078; border-radius: 1px; }
+  .worker .clip::before { content: ""; position: absolute; left: 2px; top: -2px; width: 4px; height: 2px; background: #8a9098; border-radius: 1px; }
+  .worker.aud .clip { opacity: 1; }
+  .worker.aud .arms { opacity: 1; left: 2px; top: 20px; }
+  .worker.sip .stack    { animation: sip 1.3s ease-in-out; }
+  .worker.stretch .stack{ animation: stretch 1.5s ease-in-out; }
+  .worker .bubble { position: absolute; left: 50%; bottom: 100%; margin-bottom: 5px; transform: translateX(-50%) translateY(3px) scale(.92);
+    font-size: 10px; line-height: 1.3; font-weight: 500; background: #f4f6fb; color: #232838; padding: 2px 7px; border-radius: 7px;
+    white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis; opacity: 0; pointer-events: none;
+    box-shadow: 0 2px 5px rgba(0,0,0,.35); transition: opacity .18s ease, transform .18s ease; }
+  .worker .bubble::after { content: ""; position: absolute; left: 50%; bottom: -3px; margin-left: -3px; width: 0; height: 0;
+    border: 3px solid transparent; border-top-color: #f4f6fb; }
+  .worker.talk .bubble { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  .worker .pop { position: absolute; left: 50%; bottom: 100%; margin-bottom: 14px; transform: translateX(-50%); font-size: 12px; font-weight: 700; color: #ffe6ad; opacity: 0; white-space: nowrap; text-shadow: 0 1px 0 rgba(0,0,0,.5); }
+  .worker.cel .pop { animation: rise 1.1s ease-out; }
+  .worker .think { position: absolute; left: 50%; bottom: 100%; margin-bottom: 3px; margin-left: -1px; width: 3px; height: 3px; border-radius: 50%; background: #ffd27a; opacity: 0; box-shadow: 0 -5px 0 -.5px #ffd27a, 0 -9px 0 -1px #ffd27a; }
+  .worker.awaiting .think { opacity: 1; animation: thinkpulse 1.4s ease-in-out infinite; }
+  .worker .puff { position: absolute; left: 50%; bottom: -1px; width: 4px; height: 4px; margin-left: -2px; background: rgba(210,220,235,.5); border-radius: 50%; opacity: 0; pointer-events: none; }
+  .worker.step .puff { animation: puff .42s ease-out; }
+
+  .cat { position: absolute; image-rendering: pixelated; }
+  .cat .b { position: absolute; width: 16px; height: 8px; background: #cbb89a; border-radius: 4px 4px 2px 2px; bottom: 0; animation: bob 2.4s steps(2) infinite; }
+  .cat .e1, .cat .e2 { position: absolute; width: 0; height: 0; border-left: 3px solid transparent; border-right: 3px solid transparent; border-bottom: 4px solid #cbb89a; top: -3px; }
+  .cat .e1 { left: 1px; } .cat .e2 { left: 9px; }
+  .cat .t { position: absolute; width: 8px; height: 3px; background: #cbb89a; border-radius: 2px; right: -6px; bottom: 4px; }
+
+  .crate { position: absolute; width: 16px; height: 13px; margin-left: -8px; background: linear-gradient(180deg,#9a7350,#5a4636); border: 1px solid #4a3628; image-rendering: pixelated; }
+  .dust { position: absolute; width: 3px; height: 3px; background: #fff; border-radius: 50%; opacity: .35; }
+  .ember { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #ffcf8a; box-shadow: 0 0 5px 1px rgba(255,190,110,.8); mix-blend-mode: screen; pointer-events: none; }
+  .star { position: absolute; width: 2px; height: 2px; border-radius: 50%; background: #eaf2ff; pointer-events: none; animation: twinkle 3.4s ease-in-out infinite; }
+  .shootstar { position: absolute; width: 2px; height: 2px; border-radius: 50%; background: #fff; box-shadow: 0 0 6px 2px rgba(255,255,255,.9); pointer-events: none; opacity: 0; }
+  .shootstar::after { content:""; position:absolute; right:1px; top:0; width:46px; height:1px; background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.85)); transform-origin: right center; }
+  .shootstar.go { animation: shoot 1.1s ease-out; }
+  @keyframes twinkle { 0%,100%{ opacity:.25; } 50%{ opacity:.95; } }
+  @keyframes ember { 0%{ transform:translate(0,0) scale(1); opacity:0; } 12%{ opacity:.9; } 100%{ transform:translate(8px,-46px) scale(.4); opacity:0; } }
+  @keyframes shoot { 0%{ opacity:0; transform:translate(0,0); } 8%{ opacity:1; } 100%{ opacity:0; transform:translate(150px,86px); } }
+
+  /* ===== 道具微细节(纯像素,不抢光层) ===== */
+  .pled { position: absolute; width: 2px; height: 2px; margin-left: -1px; margin-top: -1px; border-radius: 1px; pointer-events: none; }
+  .pled.b { animation: blink2 1.4s steps(1) infinite; }
+  .pchip { position: absolute; pointer-events: none; transition: background .3s; }
+  .pcshadow { position: absolute; border-radius: 50%; background: rgba(0,0,0,.34); filter: blur(1.5px); pointer-events: none; }
+  .pscan { position: absolute; pointer-events: none; opacity: .5;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,.10) 0 1px, transparent 1px 3px); }
+  .pgrain { position: absolute; pointer-events: none; opacity: .12; mix-blend-mode: overlay;
+    background: repeating-linear-gradient(90deg, #fff 0 1px, transparent 1px 2px); }
+  .pspeck { position: absolute; width: 2px; height: 2px; border-radius: 1px; pointer-events: none; }
+  .pframe { position: absolute; pointer-events: none; }
+  .pclock-h { position: absolute; pointer-events: none; transform-origin: bottom center; }
+
+  .burst { position: absolute; transform: translate(-50%,-50%); width: 30px; height: 30px; opacity: 0; z-index: 9500; }
+  .burst.go { animation: burst .8s ease-out; }
+  .burst i { position: absolute; inset: 0; border: 3px solid var(--bc,#7bbf7e); border-radius: 50%; }
+  .burst u { position: absolute; left: 9px; top: 6px; width: 7px; height: 13px; border: 3px solid var(--bc,#7bbf7e); border-top: 0; border-left: 0; transform: rotate(40deg); }
+
+  @keyframes bob { from{transform:translateY(0);} to{transform:translateY(-2px);} }
+  @keyframes typebob   { 0%{transform:translateY(0);} 100%{transform:translateY(-1.5px);} }
+  @keyframes walkbob   { 0%{transform:translateY(0) rotate(-1.2deg);} 100%{transform:translateY(-2px) rotate(1.2deg);} }
+  @keyframes sway      { 0%,100%{transform:rotate(-1deg);} 50%{transform:rotate(1deg);} }
+  @keyframes shadowpace{ 0%{transform:scaleX(.92);} 100%{transform:scaleX(1.06);} }
+  @keyframes blinkeye  { 0%,95%,100%{transform:scaleY(1);} 97%{transform:scaleY(.1);} }
+  @keyframes thinkpulse{ 0%,100%{opacity:.45;transform:translateY(1px);} 50%{opacity:1;transform:translateY(0);} }
+  @keyframes puff      { 0%{opacity:.5;transform:translate(0,0) scale(.6);} 100%{opacity:0;transform:translate(-3px,-5px) scale(1.5);} }
+  @keyframes sip       { 0%,100%{transform:translateY(0) rotate(0);} 40%,60%{transform:translateY(-1px) rotate(-3deg);} }
+  @keyframes stretch   { 0%,100%{transform:translateY(0) scaleY(1);} 45%{transform:translateY(-2px) scaleY(1.06);} }
+  @keyframes rise { 0%{opacity:0;transform:translate(-50%,4px);} 20%{opacity:1;} 100%{opacity:0;transform:translate(-50%,-22px);} }
+  @keyframes floaty { from{transform:translateY(0);opacity:.45;} to{transform:translateY(-24px);opacity:0;} }
+  @keyframes steam { 0%{transform:translate(0,0) scale(1);opacity:.5;} 100%{transform:translate(-3px,-22px) scale(1.8);opacity:0;} }
+  @keyframes shipout { 0%{opacity:0;transform:translate(0,0) scale(.7);} 25%{opacity:1;} 100%{opacity:0;transform:translate(58px,-22px) scale(.9);} }
+  @keyframes burst { 0%{opacity:0;transform:translate(-50%,-50%) scale(.3);} 30%{opacity:1;} 100%{opacity:0;transform:translate(-50%,-50%) scale(1.6);} }
+  @keyframes spin { from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
+
+  /* 叠层 UI */
+  .hud { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 18px; padding: 0 18px; height: 42px;
+    background: var(--s-0); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); border: 1px solid var(--bd); border-radius: var(--r-3);
+    box-shadow: var(--sh-1), inset 0 1px 0 var(--hairline-top); font-size: 12.5px; z-index: 9000; }
+  .hud .brand { font-weight: 650; letter-spacing: .6px; color: var(--accent); font-size: 12px; }
+  .hud .brand small { color: var(--tx-3); font-weight: 400; letter-spacing: .2px; margin-left: 6px; }
+  .hud .stat { color: var(--tx-2); font-size: 11.5px; letter-spacing: .15px; display: inline-flex; align-items: baseline; gap: 5px; }
+  .hud .stat b { color: var(--tx-1); font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: 0; }
+  .hud .bar { width: 92px; height: 6px; background: var(--s-inset); border-radius: var(--r-pill); overflow: hidden; box-shadow: inset 0 0 0 1px var(--bd-soft); }
+  .hud .bar i { display: block; height: 100%; width: 0; border-radius: var(--r-pill); background: linear-gradient(90deg,#6cc47a,var(--accent)); box-shadow: 0 0 10px rgba(255,210,122,.35); transition: width .4s var(--ease); }
+  .ctrls { position: fixed; top: 14px; right: 16px; display: flex; gap: 8px; z-index: 9000; }
+  .ctrls button { font-family: var(--ui); font-size: 12.5px; font-weight: 500; letter-spacing: .15px; cursor: pointer; border-radius: var(--r-2); padding: 9px 14px;
+    border: 1px solid var(--bd); display: inline-flex; align-items: center; gap: 7px; transition: background var(--t-fast), border-color var(--t-fast), transform var(--t-fast), box-shadow var(--t-fast); }
+  .ctrls button:active { transform: translateY(1px) scale(.985); }
+  .b-go { color: #0e1a10; font-weight: 600; background: linear-gradient(180deg,#a6eaa6,#6cc47a); border: 0;
+    box-shadow: var(--sh-1), 0 6px 18px rgba(108,196,122,.28), inset 0 1px 0 rgba(255,255,255,.4); }
+  .b-go:hover { background: linear-gradient(180deg,#b0f0b0,#75cd83); box-shadow: var(--sh-2), 0 8px 22px rgba(108,196,122,.34), inset 0 1px 0 rgba(255,255,255,.45); }
+  .b-gh { color: var(--tx-2); background: var(--s-1); backdrop-filter: var(--blur-sm); -webkit-backdrop-filter: var(--blur-sm); box-shadow: inset 0 1px 0 var(--hairline-top); }
+  .b-gh:hover { color: var(--tx-1); background: rgba(30,38,64,.9); border-color: var(--bd-strong); }
+  .b-go .arr { width: 0; height: 0; border-left: 5px solid currentColor; border-top: 4px solid transparent; border-bottom: 4px solid transparent; opacity: .9; }
+  .b-gh .cmd { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--tx-1); border: 1px solid var(--bd-strong); border-radius: 5px; padding: 1px 5px; line-height: 1.3; }
+  .b-gh .ico { width: 11px; height: 11px; flex: none; position: relative; }
+  .b-gh .ico.pause::before, .b-gh .ico.pause::after { content: ""; position: absolute; top: 1px; bottom: 1px; width: 3px; border-radius: 1px; background: currentColor; }
+  .b-gh .ico.pause::before { left: 1px; } .b-gh .ico.pause::after { right: 1px; }
+  .b-gh .ico.play::before { content: ""; position: absolute; top: 1px; left: 2px; border-left: 8px solid currentColor; border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+  .caption { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); max-width: 80vw; display: flex; align-items: center; gap: 11px; padding: 9px 17px;
+    background: var(--s-0); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); border: 1px solid var(--bd); border-radius: var(--r-3);
+    box-shadow: var(--sh-1), inset 0 1px 0 var(--hairline-top); font-size: 12.5px; letter-spacing: .15px; color: var(--tx-2); z-index: 9000; }
+  .caption .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 9px var(--ok); flex: none; animation: blink 1.6s var(--ease) infinite; }
+  @keyframes blink { 50% { opacity: .35; } }
+
+  /* ===== 叠层 UI(Linear/Raycast 风深色玻璃)===== */
+  .pill{position:fixed;top:14px;left:16px;display:flex;align-items:center;gap:9px;height:32px;padding:0 14px;background:var(--s-0);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border:1px solid var(--bd);border-radius:var(--r-pill);box-shadow:var(--sh-1),inset 0 1px 0 var(--hairline-top);font-size:11.5px;letter-spacing:.15px;color:var(--tx-2);z-index:9000}
+  .pill #pill-t{font-variant-numeric:tabular-nums}
+  .pill .b{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 9px var(--ok);animation:breathe 2.8s var(--ease) infinite}
+  @keyframes breathe{0%,100%{opacity:.5;transform:scale(.85)}50%{opacity:1;transform:scale(1.15)}}
+  .scrim{position:fixed;inset:0;background:rgba(5,8,16,.56);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);z-index:9500;opacity:0;pointer-events:none;transition:opacity var(--t-mid) var(--ease)}
+  .scrim.on{opacity:1;pointer-events:auto}
+  .panel{position:fixed;left:50%;top:50%;transform:translate(-50%,-48%) scale(.985);width:min(560px,92vw);max-height:84vh;overflow:auto;background:var(--s-2);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border:1px solid var(--bd-strong);border-radius:var(--r-3);box-shadow:var(--sh-3),inset 0 1px 0 var(--hairline-top);z-index:9600;opacity:0;pointer-events:none;transition:opacity var(--t-mid) var(--ease),transform var(--t-mid) var(--ease);color:var(--tx-1);font-size:13px;letter-spacing:.1px}
+  .panel.on{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1)}
+  .panel h2{font-size:15px;font-weight:650;letter-spacing:.1px;padding:18px 20px 2px}.panel .sub{padding:0 20px 12px;color:var(--tx-3);font-size:12px;line-height:1.55;letter-spacing:.1px}
+  .panel .body{padding:4px 20px 16px}.panel .foot{display:flex;gap:8px;justify-content:flex-end;padding:13px 20px;border-top:1px solid var(--bd-soft);background:var(--tint-hi)}
+  .pbtn{font-family:var(--ui);font-size:12.5px;font-weight:500;letter-spacing:.15px;border-radius:var(--r-1);padding:9px 14px;cursor:pointer;border:1px solid var(--bd-strong);background:var(--tint-hi);color:var(--tx-2);transition:background var(--t-fast),border-color var(--t-fast),transform var(--t-fast)}
+  .pbtn:hover{color:var(--tx-1);background:rgba(255,255,255,.09);border-color:var(--bd-strong)}
+  .pbtn:active{transform:translateY(1px) scale(.985)}
+  .pbtn.go{color:#0e1a10;font-weight:600;background:linear-gradient(180deg,#a6eaa6,#6cc47a);border:0;box-shadow:0 4px 14px rgba(108,196,122,.26),inset 0 1px 0 rgba(255,255,255,.4)}
+  .pbtn.go:hover{background:linear-gradient(180deg,#b0f0b0,#75cd83)}
+  .pbtn.warn{color:#1a1330;font-weight:600;background:linear-gradient(180deg,var(--accent),#f0993f);border:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.35)}
+  .pbtn.bad{color:#fff;font-weight:600;background:linear-gradient(180deg,#e87263,#d24e3d);border:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
+  .field{width:100%;background:var(--s-inset);border:1px solid var(--bd-strong);border-radius:var(--r-2);color:var(--tx-1);font-family:var(--ui);font-size:14px;line-height:1.5;padding:12px 13px;resize:none;transition:border-color var(--t-fast),box-shadow var(--t-fast)}
+  .field:focus{outline:0;border-color:rgba(255,210,122,.5);box-shadow:0 0 0 3px var(--accent-dim)}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin:11px 0 2px}.chip{font-size:11.5px;color:var(--tx-2);border:1px dashed var(--bd-strong);border-radius:var(--r-pill);padding:5px 11px;cursor:pointer;transition:color var(--t-fast),border-color var(--t-fast),background var(--t-fast)}
+  .chip:hover{color:var(--tx-1);border-color:rgba(255,210,122,.4);background:var(--accent-dim)}
+  .kv{display:flex;gap:10px;padding:4px 0;font-size:12.5px;line-height:1.5}.kv b{color:var(--tx-2);min-width:52px;font-weight:500;letter-spacing:.2px}.kv span{color:var(--tx-1)}
+  .q{background:var(--accent-dim);border:1px solid rgba(255,210,122,.22);border-radius:var(--r-2);padding:11px 12px;margin-top:11px;font-size:12.5px;line-height:1.5}
+  .qopt{display:inline-block;font-size:12px;border:1px solid var(--bd-strong);border-radius:var(--r-1);padding:4px 11px;margin:7px 5px 0 0;cursor:pointer;color:var(--tx-2);transition:color var(--t-fast),border-color var(--t-fast),background var(--t-fast)}
+  .qopt:hover{color:var(--tx-1);border-color:rgba(255,210,122,.45);background:var(--accent-dim)}
+  .rev{font-size:12.5px;padding:8px 10px;background:var(--tint-hi);border:1px solid var(--bd-soft);border-radius:var(--r-1);display:flex;align-items:center;gap:9px;flex-wrap:wrap;transition:background var(--t-fast),border-color var(--t-fast)}
+  .rev:hover{background:rgba(255,255,255,.06);border-color:var(--bd)}
+  .knob{display:flex;align-items:center;gap:11px;margin:10px 0;font-size:12px}.knob>span:first-child{min-width:62px;color:var(--tx-1);letter-spacing:.2px}
+  .track{flex:1;height:5px;border-radius:var(--r-pill);background:var(--s-inset);position:relative;box-shadow:inset 0 0 0 1px var(--bd-soft)}
+  .track i{position:absolute;top:-5px;width:15px;height:15px;border-radius:50%;background:radial-gradient(circle at 38% 32%,#ffe1a0,var(--accent));box-shadow:0 1px 3px rgba(0,0,0,.4),0 0 10px rgba(255,210,122,.45),inset 0 1px 0 rgba(255,255,255,.5);transition:left var(--t-mid) var(--ease)}
+  .lockline{position:relative;color:var(--tx-3);font-size:10.5px;margin:16px 0 10px;text-align:center;letter-spacing:1.4px;text-transform:uppercase;display:flex;align-items:center;gap:10px;justify-content:center}
+  .lockline::before,.lockline::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--bd-strong),transparent)}
+  .lockrow{font-size:12px;color:var(--tx-2);padding:3px 0 3px 16px;position:relative}
+  .lockrow::before{content:"";position:absolute;left:3px;top:7px;width:5px;height:5px;border-radius:1px;background:var(--tx-3)}
+  .bars{display:inline-flex;gap:2px;vertical-align:middle}.bars i{width:6px;height:13px;border-radius:1.5px;background:#2a3450}.bars i.g{background:var(--ok)}.bars i.r{background:var(--bad)}.bars i.a{background:var(--accent)}
+  .cmdk{position:fixed;left:50%;top:17%;transform:translateX(-50%) translateY(-10px) scale(.99);width:min(540px,92vw);background:var(--s-2);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border:1px solid var(--bd-strong);border-radius:var(--r-3);box-shadow:var(--sh-3),inset 0 1px 0 var(--hairline-top);z-index:9700;opacity:0;pointer-events:none;transition:opacity var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);overflow:hidden}
+  .cmdk.on{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0) scale(1)}
+  .cmdk input{width:100%;background:transparent;border:0;outline:0;color:var(--tx-1);font-family:var(--ui);font-size:15px;letter-spacing:.1px;padding:15px 17px;border-bottom:1px solid var(--bd-soft)}
+  .cmdk input::placeholder{color:var(--tx-3)}
+  #cmdk-list{padding:5px}
+  .cmdk .row{position:relative;display:flex;justify-content:space-between;align-items:center;padding:9px 13px;border-radius:var(--r-1);font-size:13px;letter-spacing:.1px;color:var(--tx-2);cursor:pointer;transition:background var(--t-fast),color var(--t-fast)}
+  .cmdk .row:hover{background:rgba(255,255,255,.05);color:var(--tx-1)}
+  .cmdk .row.sel{background:var(--accent-dim);color:var(--tx-1)}
+  .cmdk .row.sel::before{content:"";position:absolute;left:3px;top:8px;bottom:8px;width:2.5px;border-radius:2px;background:var(--accent);box-shadow:0 0 8px rgba(255,210,122,.5)}
+  .cmdk .row kbd{font-family:var(--mono);font-size:10.5px;font-weight:600;color:var(--tx-2);background:var(--s-inset);border:1px solid var(--bd-strong);border-bottom-width:2px;border-radius:5px;padding:2px 6px;line-height:1.2;letter-spacing:.5px}
+  .drawer{position:fixed;top:0;right:0;height:100%;width:min(360px,90vw);background:var(--s-2);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border-left:1px solid var(--bd-strong);box-shadow:var(--sh-3);z-index:9550;transform:translateX(100%);transition:transform .24s var(--ease);color:var(--tx-1);font-size:13px;padding:20px}
+  .drawer.on{transform:translateX(0)}.drawer .close{position:absolute;top:14px;right:18px;cursor:pointer;color:var(--tx-3);font-size:12px;transition:color var(--t-fast)}.drawer .close:hover{color:var(--tx-1)}
+  .tree{font-family:var(--mono);font-size:11.5px;line-height:1.75;color:var(--tx-2);margin-top:12px;white-space:pre-wrap;background:var(--s-inset);border:1px solid var(--bd-soft);border-radius:var(--r-1);padding:11px 13px}
+
+  /* ===== 连续语义缩放 + 时间轴 ===== */
+  .ghost{position:absolute;width:13px;height:19px;margin-left:-6px;margin-top:-17px;border-radius:3px;background:var(--gc,#6b7596);opacity:.78;box-shadow:0 0 7px var(--gc,#6b7596);pointer-events:none}
+  #world.replay .worker{opacity:0;transition:opacity .15s}
+  #stage.zoomed .world{filter:blur(2.5px) brightness(.5);transition:filter .45s}
+  .breadcrumb{position:fixed;top:62px;left:50%;transform:translateX(-50%);display:flex;gap:5px;align-items:center;font-size:11.5px;letter-spacing:.2px;color:var(--tx-3);background:var(--s-0);backdrop-filter:var(--blur-sm);-webkit-backdrop-filter:var(--blur-sm);border:1px solid var(--bd);border-radius:var(--r-pill);padding:5px 15px;box-shadow:var(--sh-1),inset 0 1px 0 var(--hairline-top);z-index:9000;opacity:0;transition:opacity .3s var(--ease);pointer-events:none;white-space:nowrap}
+  .breadcrumb.on{opacity:1;pointer-events:auto}.breadcrumb b{color:var(--tx-2);font-weight:500}
+  .breadcrumb .sep{display:inline-block;width:5px;height:5px;border-top:1.5px solid var(--tx-3);border-right:1.5px solid var(--tx-3);transform:rotate(45deg);margin:0 3px;vertical-align:middle}
+  .zoomhint{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);font-size:11px;color:#7c89ad;z-index:9000;opacity:0;transition:opacity .3s;pointer-events:none}.zoomhint.on{opacity:1}
+  .worksurf{position:fixed;left:50%;top:47%;transform:translate(-50%,-50%) scale(.96);width:min(600px,90vw);background:var(--s-2);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border:1px solid rgba(143,208,255,.2);border-radius:var(--r-3);box-shadow:var(--sh-3),0 0 56px rgba(143,208,255,.08),inset 0 1px 0 var(--hairline-top);z-index:9300;opacity:0;pointer-events:none;transition:opacity .35s var(--ease),transform .35s var(--ease);overflow:hidden}
+  .worksurf.on{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1)}
+  .worksurf .wbar{display:flex;align-items:center;gap:7px;padding:10px 14px;background:rgba(143,208,255,.06);border-bottom:1px solid var(--bd-soft);font-size:12px;color:var(--tx-1);font-family:var(--mono);letter-spacing:.2px}
+  .worksurf .dot3{display:inline-flex;gap:5px}.worksurf .dot3 i{width:9px;height:9px;border-radius:50%;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.25)}
+  .worksurf .stq{display:inline-block;width:8px;height:8px;border-radius:50%;margin:0 5px 0 4px;box-shadow:0 0 7px currentColor}
+  .worksurf .wmeta{padding:10px 14px;font-size:11.5px;color:var(--tx-3);line-height:1.65;border-bottom:1px solid var(--bd-soft)}.worksurf .wmeta b{color:var(--tx-2);font-family:var(--mono)}
+  .worksurf .code{padding:8px 0;font-family:var(--mono);font-size:12.5px;line-height:1.65;max-height:40vh;overflow:auto}
+  .worksurf .ln{display:flex;padding:1px 14px}.worksurf .ln .g{color:var(--tx-3);width:40px;flex:none;text-align:right;padding-right:13px;user-select:none;font-variant-numeric:tabular-nums}
+  .worksurf .ln.add{background:var(--ok-soft)}.worksurf .ln.add .g{color:#6cc47a}.worksurf .ln.add .c{color:#b8edb9}
+  .worksurf .ln.del{background:var(--bad-soft)}.worksurf .ln.del .g{color:var(--bad)}.worksurf .ln.del .c{color:#edb1a8}
+  .worksurf .ln .c{white-space:pre;color:var(--tx-2)}
+  .worksurf .mem{padding:8px 14px}.worksurf .memrow{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:6px 10px;border-radius:var(--r-1);margin:4px 0;background:var(--tint-hi);color:var(--tx-1)}.worksurf .memrow span{color:var(--tx-3);font-size:10.5px;font-family:var(--mono);letter-spacing:.3px}
+  .worksurf .memrow.gold{background:var(--accent-dim);color:var(--accent)}.worksurf .memrow.gold span{color:var(--accent)}
+  .worksurf .memrow.torn{opacity:.62;border:1px dashed rgba(226,96,79,.4)}.worksurf .memrow.torn span{color:var(--bad)}
+  .worksurf .chk{font-size:12.5px;padding:6px 14px 6px 30px;color:var(--tx-2);position:relative;line-height:1.45}
+  .worksurf .chk::before{content:"";position:absolute;left:14px;top:9px;width:11px;height:11px}
+  .worksurf .chk.ok::before{border-left:2px solid var(--ok);border-bottom:2px solid var(--ok);width:9px;height:5px;top:8px;transform:rotate(-45deg)}
+  .worksurf .chk.warn::before{width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:10px solid var(--warn);top:8px}
+  .worksurf .chk.warn::after{content:"";position:absolute;left:18.5px;top:13px;width:1.5px;height:3px;background:#1a1330;border-radius:1px;box-shadow:0 4px 0 0 #1a1330}
+  .worksurf .wfoot{display:flex;gap:8px;justify-content:flex-end;padding:11px 14px;border-top:1px solid var(--bd-soft);background:var(--tint-hi)}
+  .scrubwrap{position:fixed;bottom:58px;left:50%;transform:translateX(-50%);width:min(560px,86vw);display:flex;flex-direction:column;align-items:center;gap:7px;z-index:8800}
+  .scrublabel{font-size:10.5px;color:var(--tx-2);font-variant-numeric:tabular-nums;letter-spacing:.2px;background:var(--s-0);backdrop-filter:var(--blur-sm);-webkit-backdrop-filter:var(--blur-sm);border:1px solid var(--bd);border-radius:var(--r-pill);padding:4px 13px;box-shadow:var(--sh-1);opacity:0;transition:opacity var(--t-mid) var(--ease)}.scrublabel.on{opacity:1}
+  .scrub{width:100%;-webkit-appearance:none;appearance:none;height:4px;border-radius:var(--r-pill);background:linear-gradient(90deg,#2b3450,#3a4566);outline:none;cursor:pointer;opacity:.5;transition:opacity var(--t-mid)}.scrubwrap:hover .scrub{opacity:1}
+  .scrub::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 38% 32%,#ffe1a0,var(--accent));box-shadow:0 1px 3px rgba(0,0,0,.45),0 0 9px rgba(255,210,122,.5),inset 0 1px 0 rgba(255,255,255,.5);cursor:grab;transition:transform var(--t-fast)}
+  .scrub::-webkit-slider-thumb:active{transform:scale(1.15);cursor:grabbing}
+  .breadcrumb .bcp{cursor:pointer;color:var(--tx-2);font-weight:500;transition:color var(--t-fast)}.breadcrumb .bcp:hover{color:var(--info)}
+  /* .chk.warn mark drawn via CSS triangle above */
+  .peek{position:fixed;transform:translateX(-50%);font-size:11.5px;letter-spacing:.15px;color:var(--tx-1);background:var(--s-1);backdrop-filter:var(--blur-sm);-webkit-backdrop-filter:var(--blur-sm);border:1px solid var(--bd);border-radius:var(--r-1);padding:5px 11px;box-shadow:var(--sh-1),inset 0 1px 0 var(--hairline-top);z-index:9100;opacity:0;pointer-events:none;transition:opacity var(--t-fast) var(--ease);white-space:nowrap}
+  .peek.on{opacity:1}.peek b{color:var(--accent);font-weight:600}
+  #sky{position:fixed;inset:0;pointer-events:none;z-index:100;background:rgba(8,14,34,.1);transition:background 1.2s linear}
+  #budgetTint{position:fixed;inset:0;pointer-events:none;z-index:120;opacity:0;mix-blend-mode:multiply;background:radial-gradient(120% 100% at 50% 40%,rgba(120,150,200,.0),rgba(40,60,110,.9));transition:opacity 1.6s linear}
+  #vignette{position:fixed;inset:0;pointer-events:none;z-index:8500;background:radial-gradient(130% 110% at 50% 42%,rgba(0,0,0,0) 52%,rgba(0,0,0,.28) 84%,rgba(0,0,0,.6) 100%)}
+  #rededge{position:fixed;inset:0;pointer-events:none;z-index:8520;opacity:0;background:radial-gradient(120% 100% at 50% 50%,rgba(226,60,50,0) 62%,rgba(226,60,50,.42) 100%);transition:opacity 1.2s linear}
+  #rededge.pulse{animation:redpulse 2.4s ease-in-out infinite}
+  @keyframes redpulse{0%,100%{opacity:var(--re,.3);}50%{opacity:calc(var(--re,.3) * 1.7);}}
+  #grain{position:fixed;inset:-50%;width:200%;height:200%;pointer-events:none;z-index:8530;opacity:.05;mix-blend-mode:overlay;
+    background-image:repeating-radial-gradient(rgba(255,255,255,.6) 0 1px,transparent 1px 2px),repeating-radial-gradient(rgba(0,0,0,.5) 0 1px,transparent 1px 3px);
+    background-size:3px 3px,4px 4px;animation:grain .5s steps(4) infinite}
+  @keyframes grain{0%{transform:translate(0,0);}25%{transform:translate(-3%,2%);}50%{transform:translate(2%,-3%);}75%{transform:translate(-2%,-2%);}100%{transform:translate(3%,3%);}}
+</style>
+</head>
+<body>
+  <div id="stage"><div class="scene-fit"><div class="world" id="world"></div></div></div>
+
+  <div class="hud">
+    <span class="brand">QUIVER <small>· 自治 AI 公司 · realtime-voice</small></span>
+    <span class="stat">经理 <b id="s-mgr">1</b></span>
+    <span class="stat">运行 <b id="s-run">0</b></span>
+    <span class="stat">通过 <b id="s-ver">0</b></span>
+    <span class="stat">$<b id="s-spent">0.00</b>/30</span>
+    <span class="bar"><i id="s-bar"></i></span>
+  </div>
+  <div class="ctrls">
+    <button class="b-gh" id="btn-cmdk"><span class="cmd">⌘K</span></button>
+    <button class="b-gh" id="btn-report">晨报</button>
+    <button class="b-gh" id="btn-auto"><span class="ico pause"></span><span class="lbl">自动运转</span></button>
+    <button class="b-go" id="btn-go">CEO 下目标<span class="arr"></span></button>
+  </div>
+  <div class="caption"><span class="dot"></span><span id="cap">你是 CEO。经理在领导区待命 —— 点「CEO 下目标」把一件事交给公司,它自己跑。</span></div>
+
+  <!-- 叠层界面外壳(内容由 JS 填充) -->
+  <div class="pill" id="pill"><span class="b" id="pill-b"></span><span id="pill-t">公司待命</span></div>
+  <div class="scrim" id="scrim"></div>
+  <div class="panel" id="brief"></div>
+  <div class="panel" id="trust"></div>
+  <div class="panel" id="review"></div>
+  <div class="cmdk" id="cmdk"><input id="cmdk-in" placeholder="输入命令…  例如 新任务 / 验收 / 急停 / 设预算"/><div id="cmdk-list"></div></div>
+  <div class="drawer" id="drawer"></div>
+
+  <!-- 连续语义缩放 + 时间轴 -->
+  <div class="breadcrumb" id="breadcrumb"></div>
+  <div class="zoomhint" id="zoomhint">滚轮缩放 · Esc 退回公司</div>
+  <div class="worksurf" id="worksurf"></div>
+  <div class="scrubwrap"><div class="scrublabel" id="scrublabel"></div><input type="range" class="scrub" id="scrub" min="0" max="1" value="1"/></div>
+  <div id="sky"></div>
+  <div id="budgetTint"></div>
+  <div id="vignette"></div>
+  <div id="rededge"></div>
+  <div id="grain"></div>
+  <div class="peek" id="peek"></div>
+
+<script>
+(() => {
+  const TW=64, TH=32, WALLH=42;
+  const world = document.getElementById('world'), $=id=>document.getElementById(id);
+  const sleep = ms => new Promise(r=>setTimeout(r,ms));
+  let OX=0, OY=0;
+  const iso  = (c,r,z=0)=>({ x:(c-r)*TW/2+OX, y:(c+r)*TH/2+OY-z });
+  const zidx = (c,r,z=0)=>Math.round((c+r)*10+z*0.5)+50;
+
+  function poly(pts,color,z){ const d=document.createElement('div'); d.className='poly'; d.style.zIndex=z; d.style.background=color;
+    d.style.clipPath='polygon('+pts.map(p=>p[0].toFixed(1)+'px '+p[1].toFixed(1)+'px').join(',')+')'; world.appendChild(d); return d; }
+  function pxrect(x,y,w,h,color,z,cls){ const d=document.createElement('div'); d.className='rect'+(cls?' '+cls:'');
+    d.style.cssText=`left:${x}px;top:${y}px;width:${w}px;height:${h}px;background:${color};z-index:${z}`; world.appendChild(d); return d; }
+  function wallEdge(c1,r1,c2,r2,h,color,z){ const a=iso(c1,r1),b=iso(c2,r2); return poly([[a.x,a.y],[b.x,b.y],[b.x,b.y-h],[a.x,a.y-h]],color,z); }
+  function tile(c,r,color,z){ const p=iso(c,r); const t=document.createElement('div'); t.className='tile'; t.style.left=p.x+'px'; t.style.top=p.y+'px'; t.style.zIndex=z; t.style.background=color; world.appendChild(t); return t; }
+  function label(c,r,text,room){ const p=iso(c,r); const l=document.createElement('div'); l.className='roomlabel'; if(room)l.dataset.room=room; l.style.left=p.x+'px'; l.style.top=(p.y-6)+'px'; l.style.zIndex=8000; l.textContent=text; world.appendChild(l); return l; }
+
+  function isoBox(c,r,wc,dc,h,col){ const z=zidx(c+wc,r+dc)+2;
+    let a=iso(c+wc,r),b=iso(c+wc,r+dc),c2=iso(c+wc,r+dc,h),d=iso(c+wc,r,h); poly([[a.x,a.y],[b.x,b.y],[c2.x,c2.y],[d.x,d.y]],col.r,z);
+    let e=iso(c,r+dc),f=iso(c+wc,r+dc),g=iso(c+wc,r+dc,h),hh=iso(c,r+dc,h); poly([[e.x,e.y],[f.x,f.y],[g.x,g.y],[hh.x,hh.y]],col.l,z);
+    let t1=iso(c,r,h),t2=iso(c+wc,r,h),t3=iso(c+wc,r+dc,h),t4=iso(c,r+dc,h); poly([[t1.x,t1.y],[t2.x,t2.y],[t3.x,t3.y],[t4.x,t4.y]],col.top,z+1); return z; }
+  function southPanel(c,r,wc,h0,h1,color,z){ let a=iso(c,r,h0),b=iso(c+wc,r,h0),d=iso(c+wc,r,h1),e=iso(c,r,h1); return poly([[a.x,a.y],[b.x,b.y],[d.x,d.y],[e.x,e.y]],color,z); }
+  function rug(c0,r0,wc,dc,col,z){ let t1=iso(c0,r0),t2=iso(c0+wc,r0),t3=iso(c0+wc,r0+dc),t4=iso(c0,r0+dc); poly([[t1.x,t1.y],[t2.x,t2.y],[t3.x,t3.y],[t4.x,t4.y]],col,z); }
+  const WOOD={top:'#9a7350',l:'#5a4636',r:'#7a5a3c'}, DARK={top:'#2a2f3e',l:'#15131a',r:'#20242f'};
+  // 木纹三阶 + 高光边,给桌面/书柜用
+  const WOOD2={top:'#a87f57',l:'#5a4636',r:'#7a5a3c'};
+
+  // 浮空小面:在 z0..z1 之间画一个 3 面小盒(道具放在桌面/架上,不画落地长边)
+  function chip(c,r,wc,dc,z0,z1,col,zb){
+    const z=(zb!=null?zb:zidx(c+wc,r+dc)+3);
+    let a=iso(c+wc,r,z0),b=iso(c+wc,r+dc,z0),c2=iso(c+wc,r+dc,z1),d=iso(c+wc,r,z1); poly([[a.x,a.y],[b.x,b.y],[c2.x,c2.y],[d.x,d.y]],col.r,z);
+    let e=iso(c,r+dc,z0),f=iso(c+wc,r+dc,z0),g=iso(c+wc,r+dc,z1),hh=iso(c,r+dc,z1); poly([[e.x,e.y],[f.x,f.y],[g.x,g.y],[hh.x,hh.y]],col.l,z);
+    let t1=iso(c,r,z1),t2=iso(c+wc,r,z1),t3=iso(c+wc,r+dc,z1),t4=iso(c,r+dc,z1); poly([[t1.x,t1.y],[t2.x,t2.y],[t3.x,t3.y],[t4.x,t4.y]],col.top,z+1); return z;
+  }
+  // 一颗像素 LED / 高光点
+  function ledAt(c,r,h,color,blink,z){ const d=document.createElement('div'); d.className='pled'+(blink?' b':''); const p=iso(c,r,h);
+    d.style.left=p.x+'px'; d.style.top=p.y+'px'; d.style.background=color; d.style.zIndex=(z!=null?z:zidx(c,r)+9); if(blink)d.style.animationDelay=(Math.random()*1.2).toFixed(2)+'s'; world.appendChild(d); return d; }
+  // 道具接触影
+  function contactShadow(c,r,wpx,hpx,z){ const d=document.createElement('div'); d.className='pcshadow'; const p=iso(c,r,0);
+    d.style.left=(p.x-wpx/2)+'px'; d.style.top=(p.y-hpx/2+1)+'px'; d.style.width=wpx+'px'; d.style.height=hpx+'px'; d.style.zIndex=(z!=null?z:zidx(c,r)+1); world.appendChild(d); return d; }
+
+  let screens={};
+  function deskUnit(c,r,idx){
+    // 工位椅(冷紫,带椅背高光边)
+    isoBox(c+0.05,r-0.55,0.45,0.45,9,{top:'#4a3a5a',l:'#2d2138',r:'#3a2c4a'});
+    chip(c+0.07,r-0.53,0.4,0.08,9,17,{top:'#5a4a6e',l:'#352846',r:'#473760'});
+    // 桌面接触影 + 桌体(木纹三阶 + 顶面高光纹)
+    contactShadow(c+0.04,r+0.16,46,22);
+    const z=isoBox(c-0.45,r-0.15,0.95,0.6,11,WOOD2);
+    southPanel(c-0.45,r-0.15,0.95,0,11,'#4a3628',z);
+    southPanel(c-0.44,r-0.15,0.93,8,11,'#b98a5e',z+1);
+    // 显示器底座 + 屏幕
+    isoBox(c-0.1,r-0.05,0.1,0.1,11,{top:'#2a2f3e',l:'#15131a',r:'#20242f'});
+    chip(c-0.16,r-0.05,0.32,0.06,11,13,{top:'#3a3f50',l:'#1c2030',r:'#2a3040'});
+    southPanel(c-0.46,r-0.06,0.8,17,33,'#15131a',z+2);
+    const sc=southPanel(c-0.42,r-0.05,0.72,19,31,'#2a3a55',z+3); sc.dataset.off='#2a3a55'; screens[idx]=sc;
+    const sp=iso(c-0.42,r-0.05,31); pxrect(sp.x,sp.y,16,12,'',z+4,'pscan').style.cssText+=`;width:16px;height:12px;left:${sp.x}px;top:${sp.y}px;z-index:${z+4}`;
+    // 键盘 + 键帽高光
+    chip(c-0.34,r+0.12,0.42,0.16,11,12.5,{top:'#cdd2dc',l:'#7a8090',r:'#9aa0ac'});
+    for(let k=0;k<4;k++)ledAt(c-0.30+k*0.08,r+0.16,13,'rgba(255,255,255,.5)',false,z+6);
+    // 咖啡杯 + 散落纸张
+    contactShadow(c+0.28,r+0.16,9,5,z+5);
+    chip(c+0.24,r+0.10,0.1,0.1,11,15,{top:'#d9d3c4',l:'#8a8276',r:'#aaa294'});
+    ledAt(c+0.29,r+0.155,15,'#3a2c20',false,z+7);
+    chip(c-0.40,r+0.20,0.16,0.12,11,11.6,{top:'#e7e1cf',l:'#b9b3a2',r:'#cfc9b6'});
+    chip(c-0.34,r+0.24,0.16,0.12,11,11.4,{top:'#dcd6c4',l:'#aaa493',r:'#c4beac'});
+    // 桌下走线
+    const ca=iso(c-0.40,r+0.45,11),cb=iso(c-0.40,r+0.45,0); poly([[ca.x-1,ca.y],[ca.x+1,ca.y],[cb.x+1,cb.y],[cb.x-1,cb.y]],'#15131a',z+2);
+    return z;
+  }
+  function deskGlow(i,on){ const s=screens[i]; if(s){ s.style.background=on?'#8fd0ff':s.dataset.off; s.classList.toggle('lit',!!on); } }
+  function sofa(c,r,wc){
+    contactShadow(c+wc/2,r+0.42,wc*60,26);
+    isoBox(c,r,wc,0.7,8,{top:'#5a4a6e',l:'#322444',r:'#46395c'});
+    isoBox(c,r-0.05,wc,0.18,17,{top:'#6a5a80',l:'#3a2c4e',r:'#4e3f66'});
+    southPanel(c,r-0.05,wc,15,17,'rgba(170,150,200,.5)',zidx(c+wc,r)+5);
+    isoBox(c,r,0.16,0.7,13,{top:'#6a5a80',l:'#352848',r:'#4a3c60'});
+    isoBox(c+wc-0.16,r,0.16,0.7,13,{top:'#6a5a80',l:'#352848',r:'#4a3c60'});
+    const n=Math.max(2,Math.round(wc/0.8)), cw=(wc-0.32)/n;
+    for(let i=0;i<n;i++){ const cc=c+0.16+i*cw;
+      chip(cc+0.02,r+0.06,cw-0.06,0.56,8,12,{top:'#6f5e88',l:'#3c2e52',r:'#54456c'});
+      southPanel(cc+0.02,r+0.06,cw-0.06,10,12,'rgba(180,160,210,.4)',zidx(c+wc,r)+6);
+    }
+  }
+  function plant(c,r){
+    contactShadow(c+0.16,r+0.16,18,9);
+    isoBox(c,r,0.32,0.32,8,{top:'#9a6a48',l:'#4a3422',r:'#7a4e30'});
+    southPanel(c,r,0.32,6,8,'rgba(210,150,110,.5)',zidx(c+0.32,r)+4);
+    isoBox(c-0.02,r-0.02,0.36,0.36,20,{top:'#4f8a5a',l:'#2f5a3a',r:'#418a4e'});
+    isoBox(c+0.02,r+0.02,0.28,0.28,27,{top:'#5b9a66',l:'#356a44',r:'#4f8a5a'});
+    isoBox(c+0.07,r+0.07,0.18,0.18,32,{top:'#6aab74',l:'#3c7a4e',r:'#58a064'});
+    ['#8ec98e','#7cbf86','#9ad19a'].forEach((cl,i)=>{ const s=ledAt(c+0.1+i*0.05,r+0.06+i*0.04,30+i*2,cl,false,zidx(c,r)+12); s.className='pspeck'; s.style.background=cl; });
+  }
+  function bigPlant(c,r){
+    contactShadow(c+0.2,r+0.2,24,12);
+    isoBox(c,r,0.4,0.4,10,{top:'#9a6a48',l:'#4a3422',r:'#7a4e30'});
+    southPanel(c,r,0.4,7,10,'rgba(210,150,110,.5)',zidx(c+0.4,r)+4);
+    isoBox(c-0.05,r-0.05,0.5,0.5,30,{top:'#427a4c',l:'#2a5034',r:'#387844'});
+    isoBox(c-0.02,r-0.02,0.42,0.42,40,{top:'#4f8a5a',l:'#2f5a3a',r:'#418a4e'});
+    isoBox(c+0.02,r+0.02,0.34,0.34,48,{top:'#5b9a66',l:'#356a44',r:'#4f8a5a'});
+    isoBox(c+0.07,r+0.07,0.2,0.2,54,{top:'#6aab74',l:'#3c7a4e',r:'#58a064'});
+    ['#8ec98e','#7cbf86','#9ad19a','#86c886'].forEach((cl,i)=>{ const s=ledAt(c+0.08+i*0.06,r+0.05+i*0.05,42+i*4,cl,false,zidx(c,r)+14); s.className='pspeck'; s.style.background=cl; });
+  }
+  function bookcase(c,r,wc){
+    const z=isoBox(c,r,wc,0.3,46,{top:'#6a4e34',l:'#3a2820',r:'#523a28'});
+    southPanel(c,r,wc,0,46,'#2e2018',z+1);
+    southPanel(c+0.02,r,wc-0.04,44,46,'#7a5a3c',z+2);
+    const books=['#c45446','#6f97d6','#6caf70','#e6bd6c','#9c6c80','#4cc0d8','#b8855e','#7e6aa8'];
+    for(let s=0;s<3;s++){
+      southPanel(c+0.03,r,wc-0.06,6+s*13,7+s*13,'#1c130d',z+2);
+      let i=0, cc=c+0.06; const end=c+wc-0.06;
+      while(cc<end-0.01){ const bw=(wc-0.12)/5*(0.7+((i*7+s*3)%5)*0.07);
+        const h=8+(((i*5+s*2)%4))*3.5;
+        const lean=((i+s)%6===5)?2:0;
+        southPanel(cc,r,Math.min(bw,end-cc)*0.82,9+s*13,9+s*13+11+h*0.6+lean,books[(i+s)%books.length],z+3);
+        southPanel(cc,r,Math.min(bw,end-cc)*0.18,9+s*13,9+s*13+11+h*0.6+lean,'rgba(0,0,0,.22)',z+4);
+        cc+=bw+0.005; i++; }
+    }
+  }
+  function serverRack(c,r){
+    contactShadow(c+0.35,r+0.25,40,20);
+    const z=isoBox(c,r,0.7,0.5,42,{top:'#23283a',l:'#0f1118',r:'#181c28'});
+    southPanel(c+0.04,r,0.62,4,40,'#0c0f16',z+1);
+    southPanel(c+0.05,r,0.6,4,5,'#33405a',z+2);
+    for(let i=0;i<8;i++){ const y=6+i*4.4;
+      southPanel(c+0.06,r,0.58,y,y+3.4,'#1a1f2e',z+2);
+      southPanel(c+0.06,r,0.58,y+3.0,y+3.4,'#070a10',z+3);
+      for(let v=0;v<3;v++) southPanel(c+0.40+v*0.05,r,0.03,y+0.6,y+2.8,'#05070c',z+3);
+      ledAt(c+0.12,r,11+i*4.4*0.95,i%3===0?'#6cc47a':(i%3===1?'#ffd27a':'#5ce0ff'),true,z+5);
+      if(i%2===0) ledAt(c+0.17,r,11+i*4.4*0.95,'#e2604f',true,z+5);
+    }
+    ledAt(c+0.6,r,40,'#6cc47a',true,z+6);
+  }
+  function safeBox(c,r){
+    contactShadow(c+0.3,r+0.25,32,17);
+    const z=isoBox(c,r,0.6,0.5,34,{top:'#2f3550',l:'#191d30',r:'#252a42'});
+    southPanel(c+0.06,r,0.48,5,32,'#2a3048',z+1);
+    southPanel(c+0.10,r,0.40,8,28,'#3a4060',z+2);
+    southPanel(c+0.10,r,0.40,26,28,'rgba(120,140,190,.35)',z+3);
+    [[0.13,10],[0.45,10],[0.13,26],[0.45,26]].forEach(([cc,h])=>ledAt(c+cc,r,h,'#5a6488',false,z+4));
+    southPanel(c+0.50,r,0.04,11,15,'#5a6488',z+4); southPanel(c+0.50,r,0.04,22,26,'#5a6488',z+4);
+    const dial=pxrect(0,0,9,9,'#ffd27a',z+5); dial.style.borderRadius='50%'; const p=iso(c+0.3,r,18); dial.style.left=(p.x-4)+'px'; dial.style.top=(p.y-4)+'px'; dial.style.boxShadow='0 0 0 1px #b8860f inset';
+    southPanel(c+0.38,r,0.06,16,20,'#c9a043',z+5);
+  }
+  let qaScreen=null;
+  function qaBench(c,r){
+    contactShadow(c-0.02,r+0.2,48,22);
+    const z=isoBox(c-0.45,r-0.1,0.95,0.6,12,{top:'#aeb6c4',l:'#5a6272',r:'#828c9c'});
+    southPanel(c-0.45,r-0.1,0.95,10,12,'#cdd4de',z+1);
+    southPanel(c-0.5,r,0.9,16,44,'#0e1118',z+2);
+    qaScreen=southPanel(c-0.46,r,0.82,18,42,'#24405a',z+3);
+    const sp=iso(c-0.46,r,42); const sc=pxrect(sp.x,sp.y,42,14,'',z+4,'pscan'); sc.style.cssText+=`;left:${sp.x}px;top:${sp.y}px;width:42px;height:14px;z-index:${z+4}`;
+    southPanel(c-0.46,r,0.82,40,42,'rgba(140,180,220,.35)',z+4);
+    isoBox(c+0.32,r-0.05,0.18,0.18,24,{top:'#9aa2b0',l:'#4a5260',r:'#727c8c'});
+    ledAt(c+0.41,r+0.04,24,'#5ce0ff',true,z+6);
+    chip(c+0.14,r+0.22,0.22,0.14,12,13.5,{top:'#c4ccd6',l:'#7a828e',r:'#9aa2ae'});
+  }
+  function whiteboard(c,r,wc){ const z=zidx(c,r)-2;
+    southPanel(c-0.02,r,wc+0.04,16,49,'#8a7a5a',z);
+    southPanel(c,r,wc,18,46,'#eee8d6',z+1);
+    southPanel(c,r,wc,18,20,'rgba(255,255,255,.5)',z+2);
+    southPanel(c,r,wc,46,49,'#9a8a6a',z+2);
+    const strokes=[['#5a86c0',0.10,0.55,26],['#c45446',0.20,0.34,33],['#6caf70',0.14,0.46,40],['#3a4660',0.30,0.20,47]];
+    strokes.forEach(([col,o,w2,y])=>southPanel(c+o,r,wc*w2,y,y+2,col,z+3));
+    southPanel(c+0.12,r,0.04,28,38,'#3a4660',z+3); southPanel(c+0.12,r,0.18,28,30,'#3a4660',z+3);
+    southPanel(c+wc*0.62,r,0.16,30,38,'#ffd27a',z+4); southPanel(c+wc*0.62,r,0.16,30,31,'#e0b85a',z+5);
+    southPanel(c+wc*0.80,r,0.16,24,32,'#7cc4d0',z+4); southPanel(c+wc*0.80,r,0.16,24,25,'#5aa6b4',z+5);
+  }
+  function board(c,r){ const z=zidx(c,r)+2;
+    isoBox(c,r,0.12,0.5,40,{top:'#3a4060',l:'#191d30',r:'#2a3048'});
+    southPanel(c-0.12,r,0.74,14,42,'#161f33',z+3);
+    southPanel(c-0.12,r,0.74,40,42,'#2a3454',z+4);
+    const cols=[['#5a86c0','#6caf70'],['#c45446','#7aa7e6'],['#ffd27a','#6caf70']];
+    for(let col=0;col<3;col++){ const x=c-0.08+col*0.22;
+      southPanel(x,r,0.02,18,40,'#0e1424',z+4);
+      for(let k=0;k<3;k++){ const y=20+k*7+((col+k)%2)*1; const cardCol=cols[col][k%2];
+        southPanel(x+0.02,r,0.16,y,y+5,cardCol,z+5);
+        southPanel(x+0.02,r,0.16,y,y+1,'rgba(255,255,255,.3)',z+6);
+      }
+    }
+  }
+  let memBook=null;
+  function memoryBook(c,r){
+    isoBox(c-0.2,r-0.1,0.5,0.45,10,WOOD2);
+    southPanel(c-0.2,r-0.1,0.5,8,10,'#b98a5e',zidx(c+0.3,r)+3);
+    const z=zidx(c,r)+4;
+    chip(c-0.2,r-0.06,0.18,0.34,10,12,{top:'#efe6cf',l:'#b8ad92',r:'#d4cbae'});
+    chip(c-0.01,r-0.06,0.18,0.34,10,12,{top:'#efe6cf',l:'#b8ad92',r:'#d4cbae'});
+    const top=southPanel(c-0.16,r,0.34,12,22,'#ffd27a',z);
+    southPanel(c-0.16,r,0.34,12,13.5,'#5a4636',z+1);
+    ledAt(c-0.01,r-0.02,12,'#c45446',false,z+3);
+    memBook=top; return top;
+  }
+  function recordMemory(){ if(!memBook)return; memBook.style.background='#fff3c4'; setTimeout(()=>{ if(memBook)memBook.style.background='#ffd27a'; },520); }
+  function shipBay(c,r){
+    isoBox(c,r-0.1,0.2,1.2,46,{top:'#3a4060',l:'#1a1f30',r:'#2a3048'});
+    isoBox(c+1.0,r-0.1,0.2,1.2,46,{top:'#3a4060',l:'#1a1f30',r:'#2a3048'});
+    let a=iso(c+0.2,r,0),b=iso(c+1.0,r,0),d=iso(c+1.0,r,40),e=iso(c+0.2,r,40);
+    poly([[a.x,a.y],[b.x,b.y],[d.x,d.y],[e.x,e.y]],'repeating-linear-gradient(180deg,#323a54 0 3px,#222a40 3px 6px)',zidx(c+1,r+1)+4);
+    let wa=iso(c+0.2,r,6),wb=iso(c+1.0,r,6),wd=iso(c+1.0,r,9),we=iso(c+0.2,r,9);
+    poly([[wa.x,wa.y],[wb.x,wb.y],[wd.x,wd.y],[we.x,we.y]],'repeating-linear-gradient(45deg,#ffd27a 0 5px,#3a3020 5px 10px)',zidx(c+1,r+1)+5);
+    rug(c+0.25,r+0.05,0.7,0.06,'rgba(255,210,122,.35)',zidx(c+1,r)+1);
+    ledAt(c+0.6,r,42,'#6cc47a',true,zidx(c+1,r+1)+6);
+  }
+  function crateStack(c,r){
+    const slat=(cc,rr,h0,col)=>{ southPanel(cc,rr,0.4,h0+2,h0+3,'#3a2818',zidx(cc+0.4,rr)+5); southPanel(cc,rr,0.4,h0+9,h0+10,'#3a2818',zidx(cc+0.4,rr)+5); };
+    contactShadow(c+0.45,r+0.25,40,20);
+    isoBox(c,r,0.4,0.4,14,{top:'#9a7350',l:'#4a3628',r:'#7a5a3c'}); slat(c,r,1);
+    southPanel(c+0.08,r,0.22,5,11,'#d9d3c4',zidx(c+0.4,r)+6);
+    isoBox(c+0.5,r+0.1,0.4,0.4,14,{top:'#8e6a48',l:'#42301f',r:'#6e5232'}); slat(c+0.5,r+0.1,1);
+    isoBox(c+0.2,r-0.1,0.4,0.4,30,{top:'#a87f57',l:'#4a3628',r:'#7a5a3c'});
+    southPanel(c+0.28,r-0.1,0.06,18,30,'#c9bfa6',zidx(c+0.6,r)+7);
+  }
+  function coffeeBar(c,r){
+    contactShadow(c+0.5,r+0.22,56,20);
+    const z=isoBox(c,r,1.0,0.4,16,{top:'#403a50',l:'#1f1c2c',r:'#2c2840'});
+    southPanel(c,r,1.0,13,16,'#544c66',z+1);
+    isoBox(c+0.08,r,0.26,0.26,20,{top:'#2a2f3e',l:'#15131a',r:'#20242f'});
+    southPanel(c+0.08,r,0.26,28,30,'rgba(150,170,210,.4)',z+5);
+    ledAt(c+0.30,r+0.06,22,'#ffd27a',true,z+6);
+    chip(c+0.14,r+0.20,0.08,0.06,16,18,{top:'#3a3f50',l:'#1c2030',r:'#2a3040'});
+    chip(c+0.50,r+0.10,0.1,0.1,16,20,{top:'#d9d3c4',l:'#8a8276',r:'#aaa294'});
+    ledAt(c+0.55,r+0.15,20,'#3a2c20',false,z+7);
+    chip(c+0.66,r+0.16,0.09,0.09,16,19,{top:'#c9a043',l:'#7a6028',r:'#9a7c34'});
+    const st=document.createElement('div'); st.className='steam'; const p=iso(c+0.2,r,30); st.style.left=p.x+'px'; st.style.top=p.y+'px'; st.style.zIndex=z+8; st.style.animation='steam 2.4s ease-out infinite'; world.appendChild(st);
+  }
+  function windowWall(cA,cB,r){ let a=iso(cA,r,16),b=iso(cB,r,16),c=iso(cB,r,38),d=iso(cA,r,38); poly([[a.x,a.y],[b.x,b.y],[c.x,c.y],[d.x,d.y]],'rgba(143,208,255,.20)',zidx(cA,r)-2);
+    const m=iso((cA+cB)/2,r,27); const moon=pxrect(m.x-4,m.y-5,9,9,'#ffe6ad',zidx(cA,r)-1); moon.style.borderRadius='50%'; moon.style.opacity='.85';
+    moon.style.boxShadow='0 0 10px 3px rgba(255,230,173,.6)';
+    let v1=iso((cA+cB)/2,r,16),v2=iso((cA+cB)/2,r,38); poly([[v1.x-1,v1.y],[v1.x+1,v1.y],[v2.x+1,v2.y],[v2.x-1,v2.y]],'rgba(20,20,30,.6)',zidx(cA,r)-1);
+    const top=iso((cA+cB)/2,r,38), w=(cB-cA)*TW/2;
+    [['',0],[' b',12]].forEach(([cls,dx])=>{ const gr=document.createElement('div'); gr.className='godray'+cls;
+      gr.style.cssText=`left:${top.x-w*0.6+dx}px;top:${top.y}px;width:${Math.max(70,w*1.2)}px;height:140px;z-index:${zidx(cA,r)+4}`; world.appendChild(gr); }); }
+  function ceilLamp(c,r,color){ const p=iso(c,r); const z=zidx(c,r)-3;
+    const g=document.createElement('div'); g.className='glow';
+    g.style.cssText=`left:${p.x-58}px;top:${p.y-36}px;width:116px;height:70px;background:radial-gradient(closest-side, ${color}, transparent 78%);opacity:.62;z-index:${z}`; world.appendChild(g);
+    const core=document.createElement('div'); core.className='glow';
+    core.style.cssText=`left:${p.x-22}px;top:${p.y-16}px;width:44px;height:30px;background:radial-gradient(closest-side, ${color}, transparent 70%);opacity:.5;filter:blur(5px);z-index:${z+1}`; world.appendChild(core);
+    LAMPS.push({x:p.x,y:p.y,z:z+2,warm:/2(0[0-9]|1[0-9]),\s*1[0-9]/.test(color)||/255,\s*2/.test(color)}); }
+  function cat(c,r){ const p=iso(c,r); const el=document.createElement('div'); el.className='cat'; el.innerHTML='<div class="t"></div><div class="b"><div class="e1"></div><div class="e2"></div></div>';
+    el.style.left=(p.x-8)+'px'; el.style.top=(p.y-10)+'px'; el.style.zIndex=zidx(c,r)+3; world.appendChild(el); }
+
+  // ===== 新增道具:墙面 / 环境 =====
+  function wallPoster(c,r,wc,scheme){
+    const z=zidx(c,r)-2; const S=scheme||['#2a3a55','#5a86c0','#ffd27a'];
+    southPanel(c-0.02,r,wc+0.04,24,47,'#1a1f30',z);
+    southPanel(c,r,wc,26,45,S[0],z+1);
+    southPanel(c+wc*0.12,r,wc*0.5,30,42,S[1],z+2);
+    southPanel(c+wc*0.18,r,wc*0.3,33,39,S[2],z+3);
+    southPanel(c,r,wc,44,45,'rgba(255,255,255,.25)',z+3);
+  }
+  function wallClock(c,r,h){
+    const p=iso(c,r,h||34); const z=zidx(c,r)+6;
+    const face=pxrect(p.x-7,p.y-7,14,14,'#e7e1cf',z); face.style.borderRadius='50%'; face.style.boxShadow='0 0 0 2px #3a3040';
+    const mk=(w,len,col,dur)=>{ const h2=document.createElement('div'); h2.className='pclock-h'; h2.style.cssText=`left:${p.x-w/2}px;top:${p.y-len}px;width:${w}px;height:${len}px;background:${col};z-index:${z+1};animation:spin ${dur}s linear infinite`; world.appendChild(h2); };
+    mk(2,6,'#2a3040',60); mk(1.5,4,'#5a86c0',720);
+  }
+  function waterCooler(c,r){
+    contactShadow(c+0.16,r+0.16,18,9);
+    isoBox(c,r,0.3,0.3,22,{top:'#cdd4de',l:'#7a828e',r:'#9aa2ae'});
+    isoBox(c+0.03,r+0.03,0.24,0.24,40,{top:'rgba(150,200,230,.55)',l:'rgba(90,140,180,.55)',r:'rgba(120,170,210,.55)'});
+    southPanel(c+0.06,r,0.18,8,12,'#3a4660',zidx(c+0.3,r)+5);
+    ledAt(c+0.10,r,11,'#5ce0ff',true,zidx(c+0.3,r)+6);
+    ledAt(c+0.20,r,11,'#e2604f',false,zidx(c+0.3,r)+6);
+  }
+  function ceilDuct(cA,cB,r,h,col){
+    const z=zidx(cA,r)-2; const c0=col||'#2c3346';
+    let a=iso(cA,r,h),b=iso(cB,r,h),d=iso(cB,r,h-5),e=iso(cA,r,h-5);
+    poly([[a.x,a.y],[b.x,b.y],[d.x,d.y],[e.x,e.y]],c0,z);
+    poly([[a.x,a.y],[b.x,b.y],[b.x,b.y-1.5],[a.x,a.y-1.5]],'rgba(150,170,210,.35)',z+1);
+    const n=Math.max(2,Math.round(Math.abs(cB-cA)));
+    for(let i=0;i<=n;i++){ const cc=cA+(cB-cA)*i/n; const t=iso(cc,r,h),btm=iso(cc,r,h+8); poly([[t.x-0.7,t.y],[t.x+0.7,t.y],[btm.x+0.7,btm.y],[btm.x-0.7,btm.y]],'#1a2030',z); }
+  }
+  function cableRun(c,r,h){
+    const z=zidx(c,r)-1; const top=iso(c,r,h||44), mid=iso(c+0.04,r,(h||44)*0.6), btm=iso(c+0.02,r,(h||44)*0.25);
+    poly([[top.x-1,top.y],[top.x+1,top.y],[mid.x+1,mid.y],[mid.x-1,mid.y]],'#14181f',z);
+    poly([[mid.x-1,mid.y],[mid.x+1,mid.y],[btm.x+1,btm.y],[btm.x-1,btm.y]],'#181c24',z);
+    ledAt(c+0.02,r,(h||44)*0.25,'#6cc47a',true,z+2);
+  }
+  function deskLamp(c,r){
+    contactShadow(c+0.06,r+0.06,8,4);
+    isoBox(c,r,0.08,0.08,4,{top:'#3a3f50',l:'#1c2030',r:'#2a3040'});
+    const a=iso(c+0.04,r+0.04,4),b=iso(c+0.04,r+0.04,16); poly([[a.x-0.8,a.y],[a.x+0.8,a.y],[b.x+0.8,b.y],[b.x-0.8,b.y]],'#2a3040',zidx(c,r)+5);
+    chip(c-0.02,r,0.12,0.06,15,18,{top:'#e6bd6c',l:'#9a7c34',r:'#c9a043'});
+    ledAt(c+0.04,r+0.03,15,'#ffe6ad',false,zidx(c,r)+8);
+  }
+  function patternRug(c0,r0,wc,dc,base,trim){
+    rug(c0,r0,wc,dc,base,zidx(c0+wc,r0+dc)-1);
+    rug(c0+0.12,r0+0.12,wc-0.24,dc-0.24,trim,zidx(c0+wc,r0+dc)-1);
+    rug(c0+0.28,r0+0.28,wc-0.56,dc-0.56,base,zidx(c0+wc,r0+dc)-1);
+    const m=iso(c0+wc/2,r0+dc/2); poly([[m.x,m.y-6],[m.x+10,m.y],[m.x,m.y+6],[m.x-10,m.y]],trim,zidx(c0+wc,r0+dc)-1);
+  }
+  function pottedShelf(c,r){
+    contactShadow(c+0.1,r+0.1,14,7);
+    isoBox(c,r,0.18,0.18,16,{top:'#6a4e34',l:'#3a2820',r:'#523a28'});
+    southPanel(c,r,0.18,14,16,'#7a5a3c',zidx(c+0.18,r)+3);
+    chip(c+0.02,r+0.02,0.12,0.12,16,20,{top:'#9a6a48',l:'#4a3422',r:'#7a4e30'});
+    chip(c,r,0.16,0.16,20,30,{top:'#5b9a66',l:'#356a44',r:'#4f8a5a'});
+    ['#8ec98e','#7cbf86'].forEach((cl,i)=>{ const s=ledAt(c+0.06+i*0.04,r+0.05,26+i*2,cl,false,zidx(c,r)+10); s.className='pspeck'; s.style.background=cl; });
+  }
+
+  // 工人
+  let WID=0; const HOODS=[['#5a86c0','#3f5f8f'],['#a566a8','#7a3f7a'],['#46a0a0','#2f7070'],['#6a6ad0','#43439a'],['#c07888','#945565'],['#5a8ab0','#3f6a8a']];
+  function shade(hex,d){ const n=parseInt(hex.slice(1),16); const cl=v=>Math.max(0,Math.min(255,v));
+    const r=cl((n>>16)+d), g=cl(((n>>8)&255)+d), b=cl((n&255)+d);
+    return '#'+((r<<16)|(g<<8)|b).toString(16).padStart(6,'0'); }
+  function makeWorker(c,r,hood){ const w=document.createElement('div'); w.className='worker'; w.dataset.id=++WID;
+    const hc=hood||HOODS[(WID-1)%HOODS.length];
+    w.innerHTML='<div class="shadow"></div><div class="puff"></div><div class="body"><div class="stack">'
+      +'<div class="hair"></div><div class="hood"></div><div class="phones"><i></i></div><div class="visor"></div>'
+      +'<div class="face"></div><div class="eye"></div><div class="torso"></div><div class="arms"></div>'
+      +'<div class="book"></div><div class="clip"></div><div class="legs"></div></div></div>'
+      +'<div class="bubble"></div><div class="pop">+100 XP</div><div class="think"></div>';
+    w._body=w.querySelector('.body'); w._face=1;
+    w.style.setProperty('--hood',hc[0]);  w.style.setProperty('--hoodL',shade(hc[0],26));  w.style.setProperty('--hoodD',shade(hc[0],-34));
+    w.style.setProperty('--torso',hc[1]); w.style.setProperty('--torsoL',shade(hc[1],24)); w.style.setProperty('--torsoD',shade(hc[1],-30));
+    const lp=document.createElement('div'); lp.className='lightpool'; world.appendChild(lp); w._lp=lp; world.appendChild(w);
+    const p=iso(c,r); placePx(w,p.x,p.y,zidx(c,r)+5); w._c=c; w._r=r;
+    w.addEventListener('click',()=>onAgentClick(w)); w.addEventListener('mouseenter',()=>showPeek(w)); w.addEventListener('mouseleave',hidePeek); return w; }
+  function placePx(w,x,y,z){ w._x=x;w._y=y; w.style.left=x+'px'; w.style.top=y+'px'; if(z!=null)w.style.zIndex=z; if(w._lp){ w._lp.style.left=x+'px'; w._lp.style.top=(y+32)+'px'; w._lp.style.zIndex=(z||100)-1; } }
+  function face(w,dx){ if(!dx)return; const s=dx<0?-1:1; if(w._face===s)return; w._face=s;
+    if(w._body)w._body.style.transform='scaleX('+s+')'; }
+  function stepPuff(w){ w.classList.remove('step'); void w.offsetWidth; w.classList.add('step'); }
+  function bubble(w,t){ const b=w.querySelector('.bubble'); if(t){ b.textContent=t; w.classList.add('talk'); } else { w.classList.remove('talk'); } }
+  function light(w,c){ if(!w._lp)return; w._lp.style.background=c||'transparent'; w._lp.classList.toggle('on',!!c);
+    if(c){ w._lp.style.animationDelay=((w.dataset.id*0.37)%2.6).toFixed(2)+'s'; } }
+  async function walkPts(w,pts,per=300){ w.classList.add('moving'); w.classList.remove('working');
+    for(const pt of pts){ face(w,pt.x-w._x); w.style.setProperty('--walk',((pt.dur||per)/1000)+'s'); placePx(w,pt.x,pt.y,pt.z); stepPuff(w); await sleep(pt.dur||per); }
+    w.classList.remove('moving'); face(w,1); }
+
+  // HUD
+  let S={run:0,queue:0,ver:0,spent:0};
+  function hud(){ $('s-run').textContent=S.run; $('s-ver').textContent=S.ver; $('s-spent').textContent=S.spent.toFixed(2); $('s-bar').style.width=Math.min(100,S.spent/30*100)+'%'; }
+  function cap(t){ $('cap').textContent=t; }
+
+  // —— 布局：单层房间网格（cols 0..13, rows 0..9）——
+  const C=13, R=9;
+  const ROOMS={
+    lounge:{c0:0,c1:3,r0:0,r1:9,label:'休息室',tint:'rgba(120,90,140,.16)',wall:'rgba(86,62,104,1)'},
+    work:  {c0:5,c1:9,r0:0,r1:9,label:'工位区',tint:'rgba(90,120,170,.13)',wall:'rgba(64,86,128,1)'},
+    verify:{c0:11,c1:13,r0:0,r1:1,label:'质检台',tint:'rgba(80,150,130,.16)',wall:'rgba(54,110,96,1)'},
+    dispatch:{c0:11,c1:13,r0:2,r1:3,label:'领导区 · 经理',tint:'rgba(200,160,90,.13)',wall:'rgba(150,116,56,1)'},
+    build: {c0:11,c1:13,r0:4,r1:5,label:'＋ 可扩展',tint:'transparent',wall:null,build:true},
+    ops:   {c0:11,c1:13,r0:6,r1:7,label:'运维 · 预算',tint:'rgba(160,130,80,.13)',wall:'rgba(120,96,56,1)'},
+    ship:  {c0:11,c1:13,r0:8,r1:9,label:'发货口',tint:'rgba(110,120,140,.12)',wall:'rgba(74,84,104,1)'},
+  };
+  const HALLS=[4,10];
+  const DESKS=[[5,1],[7,1],[9,1],[5,3],[7,3],[9,3],[5,5],[7,5],[9,5],[5,7],[7,7],[9,7]];
+  const BARR=[]; for(let r=1;r<=8;r++)for(let c=0;c<=3;c++) if(!(c<=1&&r>=7)) BARR.push([c,r]);
+  const roomAt=(c,r)=>{ for(const k in ROOMS){const R2=ROOMS[k]; if(c>=R2.c0&&c<=R2.c1&&r>=R2.r0&&r<=R2.r1)return k;} return null; };
+  const toPts=l=>l.map(([c,r])=>({...iso(c,r),z:zidx(c,r)+5}));
+  function route(c0,r0,c1,r1){ const p=[]; const h1=HALLS.reduce((a,b)=>Math.abs(b-c0)<Math.abs(a-c0)?b:a,HALLS[0]); const h2=HALLS.reduce((a,b)=>Math.abs(b-c1)<Math.abs(a-c1)?b:a,HALLS[0]);
+    let cc=c0,rr=r0; const st=(tc,tr)=>{while(cc!==tc){cc+=Math.sign(tc-cc);p.push([cc,rr]);}while(rr!==tr){rr+=Math.sign(tr-rr);p.push([cc,rr]);}}; st(h1,rr); st(h1,r1); if(h1!==h2)st(h2,r1); st(c1,r1); return p; }
+
+  let deskState={}, hitFx=null, idle=[], manager=null, auditor=null, GEN=0;
+  function layout(){ OX=0;OY=0; const xs=[],ys=[]; for(const[c,r]of[[0,0],[C+1,0],[0,R+1],[C+1,R+1]]){const p=iso(c,r);xs.push(p.x);ys.push(p.y);}
+    const minx=Math.min(...xs),maxx=Math.max(...xs),miny=Math.min(...ys)-WALLH-50,maxy=Math.max(...ys); const mX=60,mT=44,mB=30;
+    OX=mX-minx; OY=mT-miny; world.style.width=((maxx-minx)+2*mX)+'px'; world.style.height=((maxy-miny)+mT+mB)+'px'; }
+
+  function build(){
+    layout(); deskState={}; LAMPS=[];
+    for(let r=0;r<=R;r++)for(let c=0;c<=C;c++){ const k=roomAt(c,r);
+      if(k==='build'){ const p=iso(c,r); const bm=document.createElement('div'); bm.className='buildmark'; bm.style.left=p.x+'px'; bm.style.top=p.y+'px'; bm.style.zIndex=zidx(c,r); if(c===12&&r===4)bm.innerHTML='<b>＋</b>'; world.appendChild(bm); continue; }
+      const base=k?ROOMS[k].tint:(HALLS.includes(c)?'rgba(255,255,255,.045)':'rgba(255,255,255,.02)'); tile(c,r,base,zidx(c,r)); }
+    for(const key in ROOMS){ const R2=ROOMS[key]; if(!R2.wall)continue;
+      wallEdge(R2.c0,R2.r0,R2.c1+1,R2.r0,WALLH,R2.wall,zidx(R2.c0,R2.r0)-3).style.filter='brightness(.82)';
+      wallEdge(R2.c0,R2.r0,R2.c0,R2.r1+1,WALLH,R2.wall,zidx(R2.c0,R2.r0)-3).style.filter='brightness(.6)'; }
+    for(const k in ROOMS){ const R2=ROOMS[k]; label((R2.c0+R2.c1)/2,(R2.r0+R2.r1)/2,R2.label,k); }
+
+    // 休息室
+    patternRug(0.4,2.2,2.8,3.2,'rgba(176,122,142,.4)','rgba(120,84,100,.5)');
+    sofa(0.5,2.4,1.7); sofa(0.5,4.8,1.7); coffeeBar(2.3,6.4); bookcase(0.15,0.4,2.0);
+    bigPlant(2.9,1.0); plant(0.5,6.6); plant(2.9,8.4); cat(1.7,3.6); windowWall(0.6,2.6,0);
+    wallPoster(0.05,2.0,1.1,['#2a3550','#5a86c0','#ffd27a']);
+    wallClock(0.05,5.6,34); waterCooler(0.2,8.3); pottedShelf(2.95,5.3);
+    ceilDuct(0.5,2.6,0.2,48); cableRun(2.4,0.6,46);
+    // 工位区
+    DESKS.forEach(([c,r],i)=>deskUnit(c,r,i)); serverRack(5.3,8.6); serverRack(6.6,8.6); whiteboard(7.6,0,1.6); plant(8.9,8.6); windowWall(5.6,7.2,0);
+    wallPoster(8.5,0.0,1.1,['#243042','#46a0a0','#5ce0ff']);
+    ceilDuct(5.4,7.2,0.0,50,'#283044'); ceilDuct(5.4,7.2,4.0,50,'#283044');
+    deskLamp(5.4,0.65); deskLamp(7.4,0.65); deskLamp(9.4,0.65); pottedShelf(8.95,0.2);
+    // 质检台
+    qaBench(11.7,0.6); const hp=iso(11.7,0.3); hitFx=makeBurst(hp.x,hp.y-30); plant(12.8,0.3);
+    wallClock(11.1,0.2,30); deskLamp(11.0,0.95);
+    // 领导区（经理 + 记忆书）
+    board(11.2,2.4); memoryBook(12.6,2.6); plant(12.9,3.5);
+    wallPoster(11.05,2.0,1.0,['#3a2e1a','#e6bd6c','#ffd27a']); deskLamp(12.2,2.2);
+    // 运维 · 预算
+    serverRack(11.3,6.3); safeBox(12.6,7.0);
+    cableRun(11.4,6.0,44); ceilDuct(11.2,13,6.0,50,'#2a2218');
+    // 发货口
+    shipBay(11.6,8.3); crateStack(12.7,9.0);
+    crateStack(11.2,9.1); pottedShelf(11.1,8.2);
+    // 顶光
+    ceilLamp(1.8,4,'rgba(255,200,150,.5)'); ceilLamp(7,3,'rgba(150,190,255,.46)'); ceilLamp(7,7,'rgba(150,190,255,.42)'); ceilLamp(12,1,'rgba(150,230,200,.46)'); ceilLamp(12,3,'rgba(255,210,140,.4)'); ceilLamp(12,7,'rgba(255,210,140,.4)');
+    // 浮尘
+    // 浮尘：暖灯附近偏暖，余处冷白
+    for(let i=0;i<26;i++){ const d=document.createElement('div'); d.className='dust'; const p=iso(Math.random()*C,Math.random()*R,20+Math.random()*34);
+      d.style.left=p.x+'px'; d.style.top=p.y+'px'; d.style.zIndex=8000; d.style.opacity=(0.18+Math.random()*0.3).toFixed(2);
+      const sz=(2+Math.random()*2.5).toFixed(1); d.style.width=sz+'px'; d.style.height=sz+'px';
+      if(Math.random()<0.3)d.style.background='#ffe2b0';
+      d.style.animation=`floaty ${4+Math.random()*5}s linear ${Math.random()*5}s infinite`; world.appendChild(d); }
+    // 窗外视差星 + 偶尔流星
+    [[ -10,-30, 4.2],[ 280,-46, 5.0]].forEach(([bx,by,sp])=>{ for(let i=0;i<14;i++){ const s=document.createElement('div'); s.className='star';
+      s.style.left=(bx+Math.random()*220)+'px'; s.style.top=(by-Math.random()*60)+'px'; s.style.zIndex=40+(i%2);
+      s.style.animationDelay=(Math.random()*3.4).toFixed(2)+'s'; s.style.animationDuration=(2.6+Math.random()*2.6).toFixed(1)+'s'; world.appendChild(s); } });
+    spawnShooter();
+
+    // 员工：休息室 5 个待命 + 领导区经理 1 个 + 质检台独立审计 1 个
+    for(let i=0;i<5;i++){ const [c,r]=BARR[(i*7+3)%BARR.length]; const w=makeWorker(c,r); w.classList.add('emp'); idle.push(w); if(i===4)w.classList.add('awaiting'); }
+    manager=makeWorker(11.5,3.3,['#e0a050','#b07a30']); manager._mgr=true; manager.classList.add('mgr'); bubble(manager,'经理');
+    { const st=manager.querySelector('.stack'); st.insertAdjacentHTML('beforeend','<div class="crown"></div><div class="mantle"></div><div class="robe"></div>'); st.appendChild(st.querySelector('.book')); }
+    auditor=makeWorker(11.3,0.4,['#46a0a0','#2f7070']); auditor._auditor=true; auditor.classList.add('aud'); auditor.classList.add('lean'); bubble(auditor,'审计');
+    setTimeout(()=>{ if(manager)bubble(manager,''); if(auditor)bubble(auditor,''); },2400);
+    const g=GEN;
+    (async()=>{ while(g===GEN){ await sleep(1700+Math.random()*2400); if(g!==GEN)return; const free=idle.filter(w=>!w._busy&&!w.classList.contains('awaiting')); if(!free.length)continue;
+      const w=free[(Math.random()*free.length)|0]; const [c,r]=BARR[(Math.random()*BARR.length)|0]; w._c=c;w._r=r; await walkPts(w,toPts([[c,r]]),440); } })();
+    (async()=>{ while(g===GEN){ await sleep(3200+Math.random()*4200); if(g!==GEN)return;
+      const rest=idle.filter(w=>!w._busy&&!w.classList.contains('moving')&&!w.classList.contains('awaiting'));
+      if(!rest.length)continue; const w=rest[(Math.random()*rest.length)|0]; const cls=Math.random()<0.5?'sip':'stretch';
+      w.classList.add(cls); setTimeout(()=>w.classList.remove(cls),1500); } })();
+    deciderLoop(g);
+  }
+  function makeBurst(x,y){ const b=document.createElement('div'); b.className='burst'; b.innerHTML='<i></i><u></u>'; b.style.left=x+'px'; b.style.top=y+'px'; world.appendChild(b); return b; }
+
+  // 工头 Claude 复核「等待决策」的工人 → 清掉 → 工人继续（呼应自主推进）
+  async function deciderLoop(g){
+    while(g===GEN){ await sleep(4000+Math.random()*3000); if(g!==GEN)return;
+      const w=idle.find(x=>x.classList.contains('awaiting')&&!x._busy); if(!w||manager._busy)continue;
+      manager._busy=true; w._busy=true; cap(`经理复核 #${w.dataset.id} 的进度 → 决定下一步…`);
+      await walkPts(w,toPts(route(w._c,w._r,11,3)),300); w._c=11;w._r=3;
+      face(manager, w._x-manager._x); await sleep(700);
+      const mb=makeBurst(manager._x, manager._y-28); mb.classList.add('go'); mb.style.setProperty('--bc','#ffd27a'); setTimeout(()=>mb.remove(),900);
+      w.classList.remove('awaiting'); bubble(w,'继续推进'); await sleep(600); bubble(w,'');
+      const [bc,br]=BARR[(Math.random()*BARR.length)|0]; await walkPts(w,toPts(route(w._c,w._r,bc,br)),300); w._c=bc;w._r=br;
+      manager._busy=false; w._busy=false; face(manager,1);
+      if(!idle.some(x=>x._busy)) cap('经理把决策推进了 —— 员工回岗待命。');
+    }
+  }
+
+  const GOALS=['做转写的导出功能','修登录态丢失','给看板加暗色模式','把召回准确率提上去','补端到端测试','清掉废弃依赖'];
+  let gIdx=0;
+  // CEO 下目标 → 经理决策 → 派活（这就是自治主循环）
+  async function ceoGoal(){
+    const goal=GOALS[gIdx++%GOALS.length];
+    cap(`CEO → 经理：「${goal}」`);
+    if(manager){ bubble(manager,'决策中…'); }
+    await sleep(850); if(manager) bubble(manager,'派 1 个员工 ▸');
+    await sleep(550); if(manager) bubble(manager,'');
+    dispatch(goal);
+  }
+  async function dispatch(task){
+    const free=idle.filter(w=>!w._busy); if(!free.length){ cap('员工都在忙 —— 经理把这件事排队等。'); return; }
+    const fd=DESKS.findIndex((d,i)=>!deskState[i]); if(fd<0){ cap('工位满了(12 个并发都在跑)。'); return; }
+    const w=free.find(x=>!x.classList.contains('awaiting'))||free[0]; w.classList.remove('awaiting'); w._busy=true; deskState[fd]=w;
+    const prompt=task||GOALS[gIdx++%GOALS.length], [dc,dr]=DESKS[fd]; w._task=prompt;
+    S.run++; hud(); bubble(w,'收到'); cap(`经理派员工 #${w.dataset.id} → 走向工位「${prompt}」…`); await sleep(220); bubble(w,'');
+    await walkPts(w,toPts(route(w._c,w._r,dc,dr)),300); w._c=dc;w._r=dr;
+    deskGlow(fd,true); light(w,'rgba(143,208,255,.9)'); w.classList.add('working','lean'); bubble(w,prompt); cap(`员工 #${w.dataset.id} 在独立工作区敲键:${prompt}…`);
+    for(let k=0;k<3;k++){ await sleep(700); S.spent+=0.01; hud(); }
+    w.classList.remove('working','lean');
+    await sleep(340); light(w,'rgba(255,210,122,.85)'); bubble(w,'交质检'); deskGlow(fd,false); deskState[fd]=null; cap('员工干完 → 交独立审计…');
+    await walkPts(w,toPts(route(w._c,w._r,11,1)),300); w._c=11;w._r=1;
+    if(auditor){ face(auditor,w._x-auditor._x); bubble(auditor,'干净环境重验…'); } cap('独立审计:在干净克隆重跑测试 + 查测试有没有被改弱…'); await sleep(850);
+    const pass=Math.random()>0.18;
+    if(pass){ if(hitFx){hitFx.classList.remove('go');void hitFx.offsetWidth;hitFx.classList.add('go');} if(qaScreen){qaScreen.style.background='#3fae5a';qaScreen.classList.add('lit-pass');setTimeout(()=>qaScreen&&qaScreen.classList.remove('lit-pass'),900);} if(auditor)bubble(auditor,'已通过');
+      light(w,'rgba(123,191,126,.95)'); w.classList.add('cel'); setTimeout(()=>{w.classList.remove('cel'); if(qaScreen)qaScreen.style.background='#24405a';},900);
+      bubble(w,''); S.ver++; hud(); cap(`审计通过 → 发货 · $${S.spent.toFixed(2)} · 经理记下进度`); await sleep(650);
+      await walkPts(w,toPts(route(w._c,w._r,12,8)),300); w._c=12;w._r=8; const sp=iso(12,8.3); const pk=document.createElement('div'); pk.className='crate'; pk.style.left=sp.x+'px'; pk.style.top=sp.y+'px'; pk.style.zIndex=9400; pk.style.animation='shipout 1s ease-in forwards'; world.appendChild(pk); setTimeout(()=>pk.remove(),1000);
+      recordMemory();
+    } else { if(qaScreen){qaScreen.style.background='#c0463a';qaScreen.classList.add('lit-fail');setTimeout(()=>qaScreen&&qaScreen.classList.remove('lit-fail'),900);} if(auditor)bubble(auditor,'打回');
+      light(w,'rgba(226,96,79,.95)'); bubble(w,''); cap('审计打回(测试被改弱)—— 留分支等经理决定,绝不自动改 main。'); await sleep(950); if(qaScreen)qaScreen.style.background='#24405a'; }
+    setTimeout(()=>{ if(auditor)bubble(auditor,''); },500);
+    bubble(w,''); light(w,null); S.run--; hud();
+    const [bc,br]=BARR[(Math.random()*BARR.length)|0]; cap('员工回休息室待命…'); await walkPts(w,toPts(route(w._c,w._r,bc,br)),300); w._c=bc;w._r=br; w._busy=false;
+    if(Math.random()<0.4) w.classList.add('awaiting');
+    if(!idle.some(x=>x._busy)) cap('公司空闲 —— 经理在领导区盯着、员工在休息室待命。继续点「CEO 下目标」。');
+  }
+
+  // —— 控件 + 自适应 ——
+  let autoTimer=null;
+  function startAuto(){ if(autoTimer)return; ceoGoal(); autoTimer=setInterval(ceoGoal,3200); $('btn-auto').innerHTML='<span class="ico pause"></span><span class="lbl">自动运转</span>'; }
+  function stopAuto(){ if(autoTimer){clearInterval(autoTimer);autoTimer=null;} $('btn-auto').innerHTML='<span class="ico play"></span><span class="lbl">自动运转</span>'; }
+  $('btn-go').addEventListener('click',openBrief);
+  $('btn-auto').addEventListener('click',()=>{ autoTimer?stopAuto():startAuto(); });
+  $('btn-report').addEventListener('click',openReview);
+  $('btn-cmdk').addEventListener('click',openCmdk);
+  // —— 相机:连续语义缩放的底座 ——
+  let cam={s:1,fx:0,fy:0}, fitScale=1, focusW=null; const stage=$('stage');
+  function applyCam(anim){ world.style.transition = anim===false?'none':(anim==='fast'?'transform .13s ease-out':'transform .6s cubic-bezier(.45,.02,.2,1)');
+    const W=world.offsetWidth,H=world.offsetHeight;
+    world.style.transform=`translate(${(-(cam.fx-W/2)*cam.s).toFixed(1)}px,${(-(cam.fy-H/2)*cam.s).toFixed(1)}px) scale(${cam.s.toFixed(3)})`; updateAltitude(); }
+  function fit(){ const W=world.offsetWidth,H=world.offsetHeight; fitScale=Math.max(0.4,Math.min(window.innerWidth/W,window.innerHeight/H));
+    cam.s=fitScale; cam.fx=W/2; cam.fy=H/2; focusW=null; applyCam(false); }
+  // ===== 叠层 UI(演示 ui-design.md 的关键界面)=====
+  function scrim(on){ $('scrim').classList.toggle('on',on); }
+  function closeAll(){ ['brief','trust','review'].forEach(id=>$(id).classList.remove('on')); $('cmdk').classList.remove('on'); $('drawer').classList.remove('on'); scrim(false); }
+  function showPanel(id){ closeAll(); $(id).classList.add('on'); scrim(true); }
+  $('scrim').addEventListener('click',closeAll);
+  document.addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); openCmdk(); } else if(e.key==='Escape'){ closeAll(); undive(); } else if(e.key==='Tab'){ e.preventDefault(); jumpToProblem(); } });
+
+  // 菜单栏呼吸灯 + 状态条语义
+  function pill(){ const awaitN=idle.filter(w=>w.classList.contains('awaiting')).length; const b=$('pill-b');
+    const col=S.run>0?'#6cc47a':(awaitN?'#ffd27a':'#6b7596'); b.style.background=col; b.style.boxShadow='0 0 8px '+col;
+    $('pill-t').textContent=`${S.run} 在干 · ${awaitN} 等你 · main 绿 · $${S.spent.toFixed(2)}`; }
+  setInterval(pill,500); pill();
+
+  // 点小人 → 相机飞进去(连续语义缩放,见下方 dive)
+  function onAgentClick(w){ dive(w); }
+
+  // 下目标 · Brief Card(+ 经理复述握手)
+  const BRIEFS=['给设置页加暗色模式,记住选择','修登录态丢失的问题','把召回准确率提上去','给看板加导出功能'];
+  let bStep=0,bIdx=0;
+  function openBrief(){ bStep=0; renderBrief(); showPanel('brief'); }
+  function renderBrief(){ const goal=BRIEFS[bIdx%BRIEFS.length];
+    if(bStep===0){ $('brief').innerHTML=`<h2>新任务 · 交给公司</h2><div class="sub">只写一句目标,经理会复述理解、报价,你点头才花钱。</div>
+      <div class="body"><textarea class="field" rows="3">${goal}</textarea>
+      <div class="chips"><span class="chip">+ 仓库</span><span class="chip">+ 完成标准</span><span class="chip">+ 护栏</span><span class="chip">+ 预算</span><span class="chip">拖入截图/日志</span></div></div>
+      <div class="foot"><button class="pbtn" id="b-cancel">取消</button><button class="pbtn go" id="b-go">交给经理<span class="arr"></span></button></div>`;
+      $('b-cancel').onclick=closeAll; $('b-go').onclick=()=>{ bStep=1; renderBrief(); };
+    } else { $('brief').innerHTML=`<h2>经理这样理解</h2><div class="sub">没看到这个之前,不花一分钱、不派一个员工。</div>
+      <div class="body">
+        <div class="kv"><b>目标</b><span>${goal}</span></div>
+        <div class="kv"><b>计划</b><span>1. 加暗色 token　2. 开关组件　3. 持久化并启动时恢复</span></div>
+        <div class="kv"><b>会动</b><span>settings/ · theme/ · store/</span></div>
+        <div class="kv"><b>不动</b><span>auth/(按你的护栏)</span></div>
+        <div class="kv"><b>估计</b><span>1 个员工 · ~$1.80 · ~25 分</span></div>
+        <div class="q">两个不确定:跟随系统主题,还是只手动?<div><span class="qopt">跟随系统</span><span class="qopt">只手动</span><span class="qopt">你定</span></div></div>
+      </div>
+      <div class="foot"><button class="pbtn" id="b-edit">改任务</button><button class="pbtn go" id="b-start">看着对 → 开始</button></div>`;
+      $('b-edit').onclick=()=>{ bStep=0; renderBrief(); };
+      $('b-start').onclick=()=>{ bIdx++; closeAll(); ceoGoal(); }; } }
+
+  // 信任卡(旋钮在上、铁律在下)
+  function knob(name,lo,hi,pos){ return `<div class="knob"><span>${name}</span><span style="color:#7c89ad;font-size:11px">${lo}</span><div class="track"><i style="left:calc(${(pos*100)|0}% - 7px)"></i></div><span style="color:#7c89ad;font-size:11px">${hi}</span></div>`; }
+  function openTrust(){ $('trust').innerHTML=`<h2>后端经理 · v4 <span style="color:#8b94a6;font-weight:400;font-size:12px">· 自治公司</span></h2>
+    <div class="sub">这里的"规划自由度",跟下面锁着的"破坏半径"是两码事。</div>
+    <div class="body">
+      <div style="color:#9fb0d0;margin-bottom:6px">战绩(近 30 次交付)</div>
+      <div class="kv"><b style="min-width:0">干净合并 22　</b><div class="bars"><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="a"></i><i class="r"></i><i class="r"></i></div></div>
+      <div class="kv"><b style="min-width:0;color:#8b94a6">回滚 1 · 审计否决 4(都在 main 前拦下)· 升级你 3</b></div>
+      <div style="color:#9fb0d0;margin:12px 0 2px">信任 = 规划自由度（不是危险）</div>
+      ${knob('权限','问我','自动',.85)}${knob('计划审批','每个','从不',.55)}${knob('预算/次','¥','¥20',.5)}${knob('扇出','1','4 员工',.4)}
+      <div class="lockline">锁住 · 任何旋钮都动不了</div>
+      <div class="lockrow">· 合并必须过独立审计</div><div class="lockrow">· 不能碰 main</div>
+      <div class="lockrow">· 不能写权威记忆</div><div class="lockrow">· 不能直接联网</div>
+      <div style="color:#7bc47e;font-size:11.5px;margin-top:10px">↑ 拖到"全自治",它最坏也只是规划更大胆,永远搞不坏 main。</div>
+    </div><div class="foot"><button class="pbtn go" id="t-ok">好</button></div>`;
+    $('t-ok').onclick=closeAll; showPanel('trust'); }
+
+  // 晨报 → 验收卡
+  function openReview(){ $('review').innerHTML=`<h2>晨报 · 过夜 23:14 → 07:02</h2>
+    <div class="sub">昨晚公司干完 3 件,2 件等你点头,1 件卡住。花了 $4.20/$8.00 · main 是绿的。</div>
+    <div class="body">
+      <div style="color:var(--accent);margin-bottom:6px;display:flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)"></span>等你 <span class="num">(2)</span></div>
+      <div class="rev"><span style="flex:1">给登录页加"记住我"</span><span style="color:#7bc47e">审计 通过</span><span style="color:#8b94a6">中等 · $1.10</span><button class="pbtn go" style="padding:4px 10px" id="r-open">审阅 →</button></div>
+      <div class="rev" style="margin-top:6px"><span style="flex:1">重构结算模块</span><span style="color:#7bc47e">审计 通过</span><span style="color:#8b94a6">大改动 · $1.80</span></div>
+      <div style="color:var(--bad);margin:14px 0 6px;display:flex;align-items:center;gap:7px"><span style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:9px solid var(--bad)"></span>卡住 <span class="num">(1)</span></div>
+      <div class="rev"><span style="flex:1">接入支付网关</span><span style="color:#e2604f">审计两次否决(测试被改弱)</span><span style="color:#8b94a6">已升级等你</span></div>
+      <div style="color:#7bc47e;margin:14px 0 6px">已落地 main (3)　<span style="color:#8b94a6;font-size:12px">自动合并、都过了独立审计</span></div>
+    </div><div class="foot"><button class="pbtn" id="r-close">进办公室</button><button class="pbtn go" id="r-tl">看整夜时间线</button></div>`;
+    $('r-close').onclick=closeAll; $('r-tl').onclick=closeAll;
+    const ro=$('r-open'); if(ro) ro.onclick=openReviewCard; showPanel('review'); }
+  function openReviewCard(){ $('review').innerHTML=`<h2>← 验收 · 给登录页加"记住我"</h2>
+    <div class="sub">裁定先行、证据按需 —— 外行也能判。</div>
+    <div class="body">
+      <div style="background:rgba(123,196,126,.1);border:1px solid rgba(123,196,126,.25);border-radius:10px;padding:10px;margin-bottom:8px">
+        <b style="color:#7bc47e">独立审计裁定:通过</b><div style="color:#aeb8d0;font-size:12px;margin-top:4px">· 干净环境重验过　· 测试没被改弱(变异式验证)　· 没扫到密钥</div></div>
+      <div style="color:#9fb0d0;margin:8px 0 2px">这次改了什么(大白话)</div>
+      <div style="font-size:12.5px;line-height:1.6">登录页加一个"记住我"勾选框,勾上后会话保留 30 天。改了 3 文件、加 4 测试。<b style="color:#cdd6ec">没动数据库、没碰支付。</b></div>
+      <div class="kv" style="margin-top:8px"><b style="min-width:0">影响面</b><span>●●●○○　安全 ●●○○○　回滚难度 ●○○○○</span></div>
+      <div style="color:#8b94a6;font-size:12px;margin-top:6px">经理说明(声称非证据):"复用现有 session,没引三方库"</div>
+      <div style="color:#7c89ad;font-size:12px;margin-top:8px">▸ 看解释过的 diff(默认折叠)　▸ 看完整因果链 → 观测室</div>
+    </div>
+    <div class="foot"><button class="pbtn bad" id="rc-x">驳回</button><button class="pbtn warn" id="rc-redo">打回重做</button><button class="pbtn go" id="rc-ok">接受并合并</button></div>`;
+    const done=t=>{ closeAll(); cap(t); };
+    $('rc-ok').onclick=()=>{ S.ver++; hud(); done('你接受了 → Rust 跑合并列车,main 是绿的。'); };
+    $('rc-redo').onclick=()=>done('打回重做 → 已生成给经理的任务简报、回流进组织。');
+    $('rc-x').onclick=()=>done('驳回 → 分支废弃,经理不会重试。'); }
+
+  // 命令栏 ⌘K
+  const CMDS=[['新任务','下一个目标交给公司','⌘N',()=>{closeAll();openBrief();}],['晨报 / 验收','看昨晚结果','',()=>{closeAll();openReview();}],['信任设置','调某个经理的规划自由度','',()=>{closeAll();openTrust();}],['派活','让经理开一个任务','',()=>{closeAll();ceoGoal();}],['急停 · 全公司','冻结并停掉所有 AI','⌃.',()=>{closeAll();estop();}],['看整夜时间线','回放过夜运行','',closeAll]];
+  function openCmdk(){ const list=$('cmdk-list'); list.innerHTML=CMDS.map((c,i)=>`<div class="row${i===0?' sel':''}" data-i="${i}"><span>${c[0]} <span style="color:#7c89ad">· ${c[1]}</span></span>${c[2]?`<kbd>${c[2]}</kbd>`:''}</div>`).join('');
+    list.querySelectorAll('.row').forEach(r=>r.onclick=()=>CMDS[+r.dataset.i][3]());
+    closeAll(); $('cmdk').classList.add('on'); scrim(true); const inp=$('cmdk-in'); inp.value=''; setTimeout(()=>inp.focus(),30);
+    inp.onkeydown=e=>{ const rows=[...list.querySelectorAll('.row')]; let i=rows.findIndex(r=>r.classList.contains('sel')); if(i<0)i=0;
+      if(e.key==='ArrowDown'){ e.preventDefault(); rows[i].classList.remove('sel'); rows[(i+1)%rows.length].classList.add('sel'); }
+      else if(e.key==='ArrowUp'){ e.preventDefault(); rows[i].classList.remove('sel'); rows[(i-1+rows.length)%rows.length].classList.add('sel'); }
+      else if(e.key==='Enter'){ e.preventDefault(); CMDS[+rows[i].dataset.i][3](); } }; }
+  function estop(){ cap('急停 —— 全公司冻结,main 安全。所有 AI 工具权已收回(演示)。'); const all=idle.concat(manager?[manager]:[],auditor?[auditor]:[]);
+    all.forEach(w=>w.style.filter='grayscale(1) brightness(.65)'); setTimeout(()=>all.forEach(w=>w.style.filter=''),2200); }
+
+  // 轨迹抽屉(点员工 → 下钻到真实轨迹)
+  function openDrawer(w){ const id=w.dataset.id; $('drawer').innerHTML=`<div class="close" id="dw-x">关闭</div>
+    <h2 style="padding:0">员工 #${id}</h2><div class="sub" style="padding:6px 0 0">点小人 = 下钻到它的真实轨迹(同一个缩放手势的更深一层)</div>
+    <div class="kv" style="margin-top:10px"><b>状态</b><span>${w._busy?'在干活':'休息室待命'}</span></div>
+    <div class="kv"><b>花费</b><span>$${(0.6+Math.random()*1.2).toFixed(2)}</span></div>
+    <div class="kv"><b>工作区</b><span>worktree/auth-remember-me</span></div>
+    <div style="color:#9fb0d0;margin:12px 0 4px">因果链(它为什么在干这个)</div>
+    <div class="tree">CEO 目标: 加用户认证
+ └─ 经理·决策#7: 拆 3 个并行
+     └─ 员工 #${id}  ← 你在这
+         查了记忆: JWT 不用 session [已验证·印证]
+         产出: +40 −12 行 · 待审计</div>
+    <div style="color:#7c89ad;font-size:12px;margin-top:12px">▸ 继续缩放 → 看真实 diff　▸ 看决策当时注入了什么</div>`;
+    closeAll(); $('dw-x').onclick=closeAll; $('drawer').classList.add('on'); }
+
+  // ===== 招牌交互①:连续语义缩放(公司→房间→员工→它在改的代码,一个手势)=====
+  function altInfo(){ const r=cam.s/fitScale; if(r<1.5)return 0; if(r<2.8)return 1; if(r<4.6)return 2; if(r<8)return 3; return 4; }
+  const ROOMNAME=w=>{ const k=roomAt(Math.round(w._c),Math.round(w._r)); return k&&ROOMS[k]?ROOMS[k].label.replace('＋ ',''):'楼层'; };
+  let lastShow=null;
+  function flyToLevel(l){ if(l===0)return undive(); const map={1:2.2,2:3.6,3:6,4:9}; cam.s=fitScale*(map[l]||6); if(focusW){cam.fx=focusW._x;cam.fy=focusW._y;} applyCam(true); }
+  function updateAltitude(){ const n=altInfo(), bc=$('breadcrumb');
+    if(n===0||!focusW){ bc.classList.remove('on'); }
+    else { const role=focusW._mgr?'经理':focusW._auditor?'独立审计':'员工 #'+focusW.dataset.id;
+      const deepL=focusW._mgr?'它的决策与记忆书':focusW._auditor?'审计裁定':'它在改的代码';
+      const parts=[['公司',0]]; if(n>=1)parts.push([ROOMNAME(focusW),1]); if(n>=2)parts.push([role,2]); if(n>=3)parts.push([deepL,3]); if(n>=4&&!focusW._mgr&&!focusW._auditor)parts.push(['测试 + 变异式',4]);
+      bc.innerHTML=parts.map(([t,l],i)=>`${i?'<span class="sep">›</span> ':''}<b class="bcp" data-l="${l}">${t}</b>`).join('');
+      bc.querySelectorAll('.bcp').forEach(el=>el.onclick=()=>flyToLevel(+el.dataset.l)); bc.classList.add('on'); }
+    if(focusW&&n>=3){ const deep=(n>=4&&!focusW._mgr&&!focusW._auditor); if(!lastShow||lastShow.w!==focusW||lastShow.deep!==deep){ showWork(focusW,deep); lastShow={w:focusW,deep}; } }
+    else if($('worksurf').classList.contains('on')){ $('worksurf').classList.remove('on'); stage.classList.remove('zoomed'); lastShow=null; } }
+  function nearestWorker(){ const live=[...idle,manager,auditor].filter(Boolean); return live.find(w=>w._busy)||live[0]; }
+  function dive(w){ if(!w)return; focusW=w; closeAll(); cam.fx=w._x; cam.fy=w._y; cam.s=fitScale*6; applyCam(true); $('zoomhint').classList.add('on');
+    cap(`缩进「${w._mgr?'经理':w._auditor?'独立审计':'员工 #'+w.dataset.id}」—— 滚轮继续缩放,Esc 退回公司。`); }
+  function undive(){ focusW=null; $('worksurf').classList.remove('on'); stage.classList.remove('zoomed'); $('zoomhint').classList.remove('on'); $('breadcrumb').classList.remove('on');
+    const W=world.offsetWidth,H=world.offsetHeight; cam.s=fitScale; cam.fx=W/2; cam.fy=H/2; applyCam(true); }
+  function nearestTo(wx,wy){ const live=[...idle,manager,auditor].filter(Boolean); let best=null,bd=1e9; for(const w of live){ const d=(w._x-wx)**2+(w._y-wy)**2; if(d<bd){bd=d;best=w;} } return best; }
+  let wheelLock=false;
+  stage.addEventListener('wheel',e=>{ if(document.querySelector('.panel.on,.cmdk.on'))return; e.preventDefault(); if(wheelLock)return; wheelLock=true; requestAnimationFrame(()=>{wheelLock=false;});
+    const vcx=window.innerWidth/2, vcy=window.innerHeight/2;
+    const wx=cam.fx+(e.clientX-vcx)/cam.s, wy=cam.fy+(e.clientY-vcy)/cam.s;          // 光标下的世界点
+    const ns=Math.max(fitScale,Math.min(fitScale*10,cam.s*(e.deltaY<0?1.16:1/1.16)));
+    if(ns<=fitScale*1.02){ undive(); return; }
+    cam.s=ns; cam.fx=wx-(e.clientX-vcx)/ns; cam.fy=wy-(e.clientY-vcy)/ns;             // 朝光标缩放,该点不动
+    if(!focusW||altInfo()<2){ const nf=nearestTo(wx,wy); if(nf)focusW=nf; }
+    $('zoomhint').classList.add('on'); applyCam('fast'); },{passive:false});
+
+  function diffHtml(){ const L=[['ctx',12,'export function login(req, res) {'],['ctx',13,'  const { user, pass } = req.body;'],['del',14,'  const token = sign(user, "1d");'],['add',14,'  const ttl = req.body.remember ? "30d" : "1d";'],['add',15,'  const token = sign(user, ttl);'],['ctx',16,'  res.cookie("sid", token);'],['add',17,'  res.cookie("remember", !!req.body.remember);'],['ctx',18,'  return res.json({ ok: true });'],['ctx',19,'}']];
+    return L.map(([t,n,c])=>`<div class="ln ${t==='add'?'add':t==='del'?'del':''}"><span class="g">${t==='add'?'+':t==='del'?'−':''}${n}</span><span class="c">${c.replace(/</g,'&lt;')}</span></div>`).join(''); }
+  function divePanel(w,deep){ const id=w.dataset.id;
+    if(w._mgr)return{dot:'#ffd27a',head:`经理 · 决策 #7`,meta:`它做决策时看到的:「认证模块当前无实现」<b>[事实#F212 · 已验证·机械]</b> · 实时:0 员工在跑、预算 $7.60 剩 → 决定 spawn 3 个并行`,body:`<div class="mem"><div class="memrow gold">JWT 不用 session 库<span>权威</span></div><div class="memrow">上次 OAuth 失败于回调<span>员工汇报</span></div><div class="memrow torn">员工7 声称缓存可关<span>待审 · 不可信</span></div></div>`,foot:`<button class="pbtn" id="ws-trust">调它的信任设置 →</button><button class="pbtn go" id="ws-close">收起 ▾</button>`};
+    if(w._auditor)return{dot:'#46a0a0',head:`独立审计 · 干净环境重验`,meta:`在一份干净克隆里重跑测试 + 变异式探针。裁判不由生产者,这份裁定承重。`,body:`<div class="chk ok">干净环境重验通过</div><div class="chk ok">测试没被改弱(变异式验证)</div><div class="chk ok">没扫到密钥</div><div class="chk ok">对抗式发现 2 条(1 提醒 · 1 已自动修)</div>`,foot:`<button class="pbtn go" id="ws-review">去验收 →</button><button class="pbtn" id="ws-close">收起 ▾</button>`};
+    if(deep)return{dot:'#8fd0ff',head:`员工 #${id} · 测试 + 变异式验证`,meta:`再钻一层:审计在干净克隆里重跑测试,并对断言做变异,确认测试不是摆设。`,body:`<div class="chk ok">17 个测试全绿(干净环境重跑)</div><div class="chk ok">变异式探针:12 处变异 · 11 处被测试抓出</div><div class="chk warn">1 处变异存活 → 已自动补一条断言</div><div class="chk ok">没有被跳过 / 置空的测试</div>`,foot:`<button class="pbtn" id="ws-back">← 退回看 diff</button><button class="pbtn go" id="ws-close">收起 ▾</button>`};
+    return{dot:'#8fd0ff',head:`员工 #${id} · auth.rs · 待审计`,meta:`经理决策#7 派它做这个 · 查了记忆「JWT 不用 session」<b>[已验证·印证]</b> · 产出 +4 −1 行`,body:diffHtml(),foot:`<button class="pbtn" id="ws-test">继续缩放 → 看测试</button><button class="pbtn go" id="ws-close">收起 ▾</button>`}; }
+  function showWork(w,deep){ const p=divePanel(w,deep); $('worksurf').innerHTML=`<div class="wbar"><span class="dot3"><i style="background:#e2604f"></i><i style="background:#ffd27a"></i><i style="background:#6cc47a"></i></span><span class="stq" style="color:${p.dot};background:${p.dot}"></span>${p.head}</div><div class="wmeta">${p.meta}</div><div class="code">${p.body}</div><div class="wfoot">${p.foot}</div>`;
+    $('worksurf').classList.add('on'); stage.classList.add('zoomed');
+    let el; if(el=$('ws-close'))el.onclick=undive; if(el=$('ws-trust'))el.onclick=()=>{undive();openTrust();}; if(el=$('ws-review'))el.onclick=()=>{undive();openReview();}; if(el=$('ws-test'))el.onclick=()=>flyToLevel(4); if(el=$('ws-back'))el.onclick=()=>flyToLevel(3); }
+
+  // ===== 招牌交互②:时间轴 —— 把整夜倒回任意一刻(ghost 真复现当时每个人在哪)=====
+  const fmt=m=>`${String(Math.floor(m/60)%24).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+  let hist=[], ghosts=[];
+  const liveW=()=>[...idle, ...(manager?[manager]:[]), ...(auditor?[auditor]:[])];
+  const gcolor=w=>w.classList.contains('awaiting')?'#ffd27a':(w._busy?'#8fd0ff':'#6b7596');
+  function recordTick(){ const sc=$('scrub'); if(+sc.value<+sc.max)return;
+    hist.push({pos:liveW().map(w=>({x:w._x,y:w._y,c:gcolor(w)})),spent:S.spent,run:S.run,t:23*60+14+hist.length*6});
+    if(hist.length>40)hist.shift(); sc.max=Math.max(1,hist.length-1); if(!sc._drag)sc.value=sc.max; }
+  function clearGhosts(){ ghosts.forEach(g=>g.remove()); ghosts=[]; world.classList.remove('replay'); $('scrublabel').classList.remove('on'); }
+  function renderReplay(){ const sc=$('scrub'), idx=+sc.value; if(idx>=+sc.max){ clearGhosts(); return; }
+    const f=hist[idx]; if(!f)return; world.classList.add('replay'); ghosts.forEach(g=>g.remove());
+    ghosts=f.pos.map(pp=>{ const g=document.createElement('div'); g.className='ghost'; g.style.left=pp.x+'px'; g.style.top=pp.y+'px'; g.style.setProperty('--gc',pp.c); g.style.zIndex=9000; world.appendChild(g); return g; });
+    $('scrublabel').textContent=`回放 · ${fmt(f.t)} · 当时 ${f.run} 在干 · $${f.spent.toFixed(2)}`; $('scrublabel').classList.add('on'); }
+  (function initScrub(){ const sc=$('scrub'); sc.addEventListener('input',renderReplay);
+    sc.addEventListener('pointerdown',()=>{sc._drag=true;}); sc.addEventListener('pointerup',()=>{ sc._drag=false; if(+sc.value>=+sc.max){ clearGhosts(); cap('回到现在 —— 公司继续运转。'); } });
+    sc.title='拖动倒回整夜任意一刻'; })();
+  setInterval(recordTick,650);
+
+  // ===== 招牌交互③:Tab 跳到下一个需要你的 · hover 速览 · 夜色呼吸 =====
+  let tabIdx=0;
+  function jumpToProblem(){ const list=[...idle].filter(w=>w.classList.contains('awaiting')&&!w._busy); if(!list.length){ cap('没有需要你拍板的 —— 公司顺着跑,继续睡。'); return; } const w=list[tabIdx++%list.length]; cap(`Tab 跳到等你拍板的「员工 #${w.dataset.id}」。`); dive(w); }
+  function showPeek(w){ if(focusW)return; const r=w.getBoundingClientRect(); const role=w._mgr?'经理':w._auditor?'独立审计':'员工 #'+w.dataset.id;
+    const st=w.classList.contains('awaiting')?'<span style="color:#ffd27a">等你拍板</span>':w._busy?('在干:'+(w._task||'任务')):'休息室待命';
+    const pk=$('peek'); pk.innerHTML=`<b>${role}</b> · ${st}`; pk.style.left=Math.max(80,Math.min(window.innerWidth-90,r.left+r.width/2))+'px'; pk.style.top=Math.max(70,r.top-30)+'px'; pk.classList.add('on'); }
+  function hidePeek(){ $('peek').classList.remove('on'); }
+  const lerp3=(a,b,k)=>a.map((v,i)=>Math.round(v+(b[i]-v)*k));
+  const DUSK=[42,34,58], DEEP=[8,14,34], DAWN=[20,34,64];
+  const HOT=[120,72,46], COOL=[26,40,78], COLD=[36,58,96], COOLTOP=[10,16,40];
+  let nightT=0, LAMPS=[];
+  function nightTick(){ nightT=(nightT+0.45)%100; const p=nightT/100; let c,op,horiz,hk;
+    if(p<0.45){ const k=p/0.45; c=lerp3(DUSK,DEEP,k); op=0.10+0.34*k; horiz=lerp3(HOT,COOL,k); hk=0.34*(1-k)+0.06; }
+    else if(p<0.82){ const k=(p-0.45)/0.37; c=lerp3(DEEP,DAWN,k); op=0.44-0.18*k; horiz=lerp3(COOL,COLD,k); hk=0.06+0.05*k; }
+    else { const k=(p-0.82)/0.18; c=lerp3(DAWN,DUSK,k); op=0.26-0.16*k; horiz=lerp3(COLD,HOT,k); hk=0.11+0.26*k; }
+    const top=lerp3(c, COOLTOP, 0.45);
+    $('sky').style.background=
+      `linear-gradient(180deg, rgba(${top[0]},${top[1]},${top[2]},${(op*0.9).toFixed(3)}) 0%,`+
+      ` rgba(${c[0]},${c[1]},${c[2]},${op.toFixed(3)}) 48%,`+
+      ` rgba(${horiz[0]},${horiz[1]},${horiz[2]},${hk.toFixed(3)}) 100%)`; }
+  setInterval(nightTick,650); nightTick();
+
+  // 余烬:暖灯附近偶尔升起一颗暖星(粒子封顶)
+  function spawnEmbers(){ if(!LAMPS.length)return; const warm=LAMPS.filter(l=>l.warm); if(!warm.length)return;
+    const live=world.querySelectorAll('.ember'); if(live.length>10)return;
+    const L=warm[(Math.random()*warm.length)|0]; const e=document.createElement('div'); e.className='ember';
+    e.style.left=(L.x-8+Math.random()*16)+'px'; e.style.top=(L.y+4+Math.random()*8)+'px'; e.style.zIndex=L.z;
+    e.style.animation=`ember ${2.4+Math.random()*1.8}s ease-out forwards`; world.appendChild(e);
+    setTimeout(()=>e.remove(),4400); }
+  setInterval(spawnEmbers,900);
+  // 流星:守夜奖励,间隔随机
+  let shooter=null;
+  function spawnShooter(){ if(!shooter){ shooter=document.createElement('div'); shooter.className='shootstar'; shooter.style.zIndex=60; world.appendChild(shooter); }
+    const startX= Math.random()<0.5 ? -20+Math.random()*120 : 240+Math.random()*120;
+    shooter.style.left=startX+'px'; shooter.style.top=(-60-Math.random()*30)+'px';
+    shooter.classList.remove('go'); void shooter.offsetWidth; shooter.classList.add('go');
+    setTimeout(spawnShooter, 12000+Math.random()*16000); }
+  // 预算=能量:spent 越逼近上限 → 全场越冷越暗;临界亮红边
+  function budgetTick(){ const f=Math.min(1,S.spent/30); const e=Math.sqrt(f);
+    $('budgetTint').style.opacity=(e*0.55).toFixed(3);
+    const re=$('rededge'); if(f>0.78){ re.style.setProperty('--re',((f-0.78)/0.22*0.45+0.12).toFixed(3)); re.style.opacity=re.style.getPropertyValue('--re'); re.classList.add('pulse'); }
+    else { re.classList.remove('pulse'); re.style.opacity='0'; } }
+  setInterval(budgetTick,800); budgetTick();
+
+  build(); fit(); window.addEventListener('resize',fit);
+  startAuto();
+})();
+</script>
+</body>
+</html>

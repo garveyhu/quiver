@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quiver · 像素主题方向</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  img,canvas{image-rendering:pixelated}
+  :root{--bg:#0c0e14;--panel:#13161f;--ink:#e6e9f0;--dim:#8b94a6;--line:#272d3a;--accent:#86e1ff}
+  body{
+    background:var(--bg);color:var(--ink);
+    font-family:"DejaVu Sans Mono",ui-monospace,Menlo,Consolas,monospace;
+    line-height:1.55;padding:46px 26px 90px;
+    background-image:linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);
+    background-size:6px 6px;
+  }
+  .wrap{max-width:1200px;margin:0 auto}
+  h1{font-size:26px;letter-spacing:1px;margin-bottom:6px}
+  h1 b{color:var(--accent)}
+  .sub{color:var(--dim);font-size:13.5px;margin-bottom:22px;max-width:880px}
+  .brief{background:var(--panel);border:2px solid var(--line);padding:16px 20px;margin-bottom:8px}
+  .brief h2{font-size:13px;color:var(--accent);letter-spacing:1px;margin-bottom:6px}
+  .brief p{font-size:13px;color:var(--dim)}
+  .brief b{color:var(--ink)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:18px;margin-top:22px}
+  .card{border:2px solid var(--line);background:var(--panel);display:flex;flex-direction:column}
+  /* ---- pixel stage ---- */
+  .stage{height:200px;position:relative;overflow:hidden;border-bottom:2px solid var(--line);
+    background:var(--s-sky);
+    background-image:linear-gradient(rgba(0,0,0,.12) 2px,transparent 2px),linear-gradient(90deg,rgba(0,0,0,.10) 2px,transparent 2px);
+    background-size:8px 8px;}
+  .label{position:absolute;left:10px;top:8px;font-size:11px;letter-spacing:2px;font-weight:bold;color:var(--s-hi);text-shadow:1px 1px 0 #000}
+  .floor{position:absolute;left:0;right:0;bottom:0;height:34%;background:var(--s-floor);box-shadow:0 -2px 0 rgba(0,0,0,.3)}
+  .glow{position:absolute;background:var(--s-glow);opacity:.5;box-shadow:0 0 0 4px var(--s-glow);}
+  .blk{position:absolute;box-shadow:2px 2px 0 rgba(0,0,0,.35)}        /* generic pixel block */
+  /* blocky worker: head + body + 2 eyes, hard edges */
+  .worker{position:absolute;bottom:30%;width:24px}
+  .worker .head{width:24px;height:20px;background:var(--w-skin);box-shadow:inset 0 -3px 0 rgba(0,0,0,.12),2px 2px 0 rgba(0,0,0,.3)}
+  .worker .body{width:28px;height:22px;margin-left:-2px;background:var(--w-body);box-shadow:2px 2px 0 rgba(0,0,0,.3)}
+  .worker .eye{position:absolute;top:9px;width:3px;height:4px;background:#15131a}
+  .worker .e1{left:6px}.worker .e2{left:15px}
+  .prop{position:absolute;font-size:14px;text-shadow:1px 1px 0 #000}
+  .meta{padding:14px 16px 16px}
+  .tag{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--dim)}
+  .name{font-size:17px;font-weight:bold;margin:2px 0}
+  .name .en{font-size:11px;color:var(--dim);margin-left:6px}
+  .concept{font-size:12.5px;color:var(--dim);margin:7px 0 10px}
+  .concept b{color:var(--ink)}
+  .pal{display:flex;gap:3px;margin:8px 0 10px}
+  .pal i{width:22px;height:22px;display:block;box-shadow:1px 1px 0 rgba(0,0,0,.4)}
+  .states{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--dim)}
+  .states div b{color:var(--ink)}
+  footer{margin-top:34px;background:var(--panel);border:2px solid var(--line);padding:18px 20px;font-size:13px;color:var(--dim)}
+  footer b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><b>Quiver</b> · 像素主题方向</h1>
+  <div class="sub">彻底重来。<b>像素风锁定</b>(低帧动画是像素风的天生优势,正好绕开"做不出流畅高帧"的限制)。下面只换<b>世界观/隐喻</b>,核心都是「过夜监工一群小工替你干活」+ 一套<b>角色 5 状态</b>。挑一个主题。</div>
+
+  <div class="brief">
+    <h2>不变的内核</h2>
+    <p>一个任务=一个后台 AI agent=一个<b>像素小工</b>。5 状态:<b>干活</b> · <b>卡住</b>(等你/限流/预算到顶) · <b>紧张</b>(跑测试) · <b>庆祝</b>(验证通过已合并) · <b>崩了</b>(失败)。要 <b>cozy、夜里看着安心、信息一眼可读</b>。每个主题下面标了这 5 态在该世界里长啥样。需要的资产都一样:主场景 / 角色+状态 / 工位道具 / 炉火等特效 / UI / 品牌——全像素,走 skill 的 t2i→pixelize→matte 管线。</p>
+  </div>
+
+  <div class="grid">
+
+    <!-- 1 Cozy Night Studio -->
+    <div class="card" style="--s-sky:#1b2440;--s-floor:#3a3050;--s-glow:#ffd27a;--s-hi:#ffd9a0;--w-skin:#ffc6a8;--w-body:#e2748a">
+      <div class="stage">
+        <div class="label">01 · 深夜工作室</div>
+        <div class="blk" style="left:20px;top:24px;width:60px;height:44px;background:#0e1530"></div>
+        <div class="blk" style="left:24px;top:28px;width:52px;height:36px;background:#26345f"></div>
+        <div class="prop" style="left:42px;top:36px">✦</div>
+        <div class="floor"></div>
+        <div class="glow" style="right:40px;top:78px;width:8px;height:8px"></div>
+        <div class="blk" style="right:24px;bottom:34%;width:52px;height:14px;background:#7a5a3c"></div>
+        <div class="blk" style="right:34px;bottom:42%;width:18px;height:12px;background:#8fd0ff"></div>
+        <div class="worker" style="left:40px"><div class="head"></div><div class="eye e1"></div><div class="eye e2"></div><div class="body"></div></div>
+        <div class="prop" style="left:74px;bottom:50%">☕</div>
+      </div>
+      <div class="meta">
+        <div class="tag">cozy-modern</div>
+        <div class="name">深夜工作室<span class="en">Night Studio</span></div>
+        <div class="concept">暖灯下的夜间合作社,小人在工位敲键盘。<b>最稳、最贴"过夜干活"</b>,咖啡/庆祝都自然。</div>
+        <div class="pal"><i style="background:#1b2440"></i><i style="background:#3a3050"></i><i style="background:#ffd27a"></i><i style="background:#ffc6a8"></i><i style="background:#e2748a"></i><i style="background:#8fd0ff"></i></div>
+        <div class="states"><div><b>干活</b> 敲键盘 · <b>卡住</b> 端咖啡</div><div><b>紧张</b> 冒汗盯屏 · <b>庆祝</b> 举手</div><div><b>崩了</b> 趴桌叹气</div></div>
+      </div>
+    </div>
+
+    <!-- 2 Tiny Bots Workshop -->
+    <div class="card" style="--s-sky:#241f33;--s-floor:#3b3450;--s-glow:#5ff0c8;--s-hi:#7fe9d0;--w-skin:#ff8a5c;--w-body:#3e9ae9">
+      <div class="stage">
+        <div class="label">02 · 机器人工坊</div>
+        <div class="blk" style="left:18px;top:22px;width:40px;height:30px;background:#2e2742;box-shadow:inset 0 0 0 2px #4a3f66"></div>
+        <div class="blk" style="left:26px;top:30px;width:8px;height:8px;background:#5ff0c8"></div>
+        <div class="floor"></div>
+        <div class="blk" style="left:30px;bottom:30%;width:56px;height:12px;background:#5a4d78"></div>
+        <div class="blk" style="right:26px;bottom:30%;width:50px;height:12px;background:#5a4d78"></div>
+        <div class="worker" style="left:44px"><div class="head" style="box-shadow:2px 2px 0 rgba(0,0,0,.3)"></div><div class="eye e1" style="background:#5ff0c8;top:8px;width:4px;height:4px"></div><div class="eye e2" style="background:#5ff0c8;top:8px;width:4px;height:4px"></div><div class="body"></div></div>
+        <div class="prop" style="left:80px;bottom:52%;color:#7fffcf">▮</div>
+        <div class="prop" style="right:48px;bottom:50%;color:#ffd76a">z</div>
+      </div>
+      <div class="meta">
+        <div class="tag">cute-tech</div>
+        <div class="name">机器人工坊<span class="en">Tiny Bots</span></div>
+        <div class="concept">圆滚滚小机器人在工位忙活。<b>"AI agent = 机器人"最贴切</b>,LED 表情天生表状态,呆萌又科技。</div>
+        <div class="pal"><i style="background:#241f33"></i><i style="background:#3b3450"></i><i style="background:#ff8a5c"></i><i style="background:#3e9ae9"></i><i style="background:#5ff0c8"></i><i style="background:#ffd76a"></i></div>
+        <div class="states"><div><b>干活</b> 绿灯转动 · <b>卡住</b> 蓝灯待机</div><div><b>紧张</b> 红灯过热 · <b>庆祝</b> 彩灯+撒花</div><div><b>崩了</b> 冒烟故障</div></div>
+      </div>
+    </div>
+
+    <!-- 3 Starship Night Watch -->
+    <div class="card" style="--s-sky:#08111e;--s-floor:#10243a;--s-glow:#2bd4ff;--s-hi:#5ce0ff;--w-skin:#3aa0d8;--w-body:#236f9e">
+      <div class="stage">
+        <div class="label">03 · 母舰夜班</div>
+        <div class="blk" style="left:0;top:18px;width:100%;height:2px;background:#1f4a6b"></div>
+        <div class="prop" style="left:30px;top:8px;color:#5ce0ff">·</div><div class="prop" style="left:120px;top:14px;color:#fff">·</div><div class="prop" style="right:40px;top:6px;color:#5ce0ff">✦</div>
+        <div class="floor" style="box-shadow:0 -2px 0 #1f4a6b"></div>
+        <div class="blk" style="left:28px;bottom:30%;width:58px;height:14px;background:#163a55;box-shadow:inset 0 2px 0 #2bd4ff"></div>
+        <div class="blk" style="right:26px;bottom:30%;width:50px;height:14px;background:#163a55"></div>
+        <div class="worker" style="left:42px"><div class="head"></div><div class="eye e1" style="background:#5ce0ff;width:4px;top:8px"></div><div class="eye e2" style="background:#5ce0ff;width:4px;top:8px"></div><div class="body"></div></div>
+        <div class="prop" style="left:80px;bottom:52%;color:#5ce0ff">◇</div>
+        <div class="prop" style="right:48px;bottom:50%;color:#ff7ad0">!</div>
+      </div>
+      <div class="meta">
+        <div class="tag">cool-sci-fi</div>
+        <div class="name">母舰夜班<span class="en">Starship</span></div>
+        <div class="concept">你是舰长,小船员过夜值守站位。<b>预算=燃料、验证=系统自检、合并=对接成功</b>,监工隐喻天然贴。</div>
+        <div class="pal"><i style="background:#08111e"></i><i style="background:#10243a"></i><i style="background:#2bd4ff"></i><i style="background:#5ce0ff"></i><i style="background:#236f9e"></i><i style="background:#ff7ad0"></i></div>
+        <div class="states"><div><b>干活</b> 操作台亮 · <b>卡住</b> 待命</div><div><b>紧张</b> 红色警报 · <b>庆祝</b> 对接成功</div><div><b>崩了</b> 站位离线</div></div>
+      </div>
+    </div>
+
+    <!-- 4 Late-Night Diner -->
+    <div class="card" style="--s-sky:#2e1d12;--s-floor:#5c3b26;--s-glow:#ffb24d;--s-hi:#ffd28a;--w-skin:#ffe0b0;--w-body:#d24b3a">
+      <div class="stage">
+        <div class="label">04 · 深夜食堂</div>
+        <div class="blk" style="left:18px;top:22px;width:46px;height:30px;background:#3a2418;box-shadow:inset 0 0 0 2px #6a4630"></div>
+        <div class="prop" style="left:30px;top:28px">🍜</div>
+        <div class="floor"></div>
+        <div class="blk" style="left:26px;bottom:30%;width:60px;height:14px;background:#8a6347"></div>
+        <div class="blk" style="right:24px;bottom:30%;width:50px;height:14px;background:#8a6347"></div>
+        <div class="worker" style="left:42px"><div class="head"></div><div class="eye e1"></div><div class="eye e2"></div><div class="body"></div></div>
+        <div class="prop" style="left:78px;bottom:54%">🔥</div>
+        <div class="prop" style="right:46px;bottom:52%;color:#fff">🎫</div>
+      </div>
+      <div class="meta">
+        <div class="tag">warm-food</div>
+        <div class="name">深夜食堂<span class="en">Diner</span></div>
+        <div class="concept">暖光小馆,每个任务=一张<b>订单票</b>,厨子在灶台备餐。<b>backlog=排队订单、验证=尝味、合并=上桌</b>,隐喻极顺。</div>
+        <div class="pal"><i style="background:#2e1d12"></i><i style="background:#5c3b26"></i><i style="background:#ffb24d"></i><i style="background:#ffe0b0"></i><i style="background:#d24b3a"></i><i style="background:#8a6347"></i></div>
+        <div class="states"><div><b>干活</b> 颠勺 · <b>卡住</b> 候单擦汗</div><div><b>紧张</b> 火大手忙 · <b>庆祝</b> 出餐上桌</div><div><b>崩了</b> 烧糊冒黑烟</div></div>
+      </div>
+    </div>
+
+    <!-- 5 Wizard's Tower -->
+    <div class="card" style="--s-sky:#1a1530;--s-floor:#2c2348;--s-glow:#b98bff;--s-hi:#d3b8ff;--w-skin:#e8d3b0;--w-body:#6b4bb0">
+      <div class="stage">
+        <div class="label">05 · 法师塔</div>
+        <div class="blk" style="left:18px;top:20px;width:40px;height:34px;background:#120e26;box-shadow:inset 0 0 0 2px #3a2f66"></div>
+        <div class="prop" style="left:28px;top:26px;color:#b98bff">✦</div>
+        <div class="floor"></div>
+        <div class="blk" style="left:30px;bottom:30%;width:54px;height:14px;background:#4a3a72"></div>
+        <div class="blk" style="right:28px;bottom:30%;width:24px;height:24px;background:#3a6b5a;box-shadow:2px 2px 0 rgba(0,0,0,.3)"></div>
+        <div class="prop" style="right:32px;bottom:46%;color:#7fffcf">∿</div>
+        <div class="worker" style="left:44px"><div class="head"></div><div class="eye e1"></div><div class="eye e2"></div><div class="body"></div></div>
+        <div class="prop" style="left:80px;bottom:54%;color:#d3b8ff">✨</div>
+      </div>
+      <div class="meta">
+        <div class="tag">cozy-fantasy</div>
+        <div class="name">法师塔<span class="en">Wizard's Tower</span></div>
+        <div class="concept">学徒在塔里施法/熬药,每个任务=一道<b>法术/药剂</b>。<b>验证=药管不管用、合并=封入法典</b>。魔法替你过夜干活,氛围最奇幻 cozy。</div>
+        <div class="pal"><i style="background:#1a1530"></i><i style="background:#2c2348"></i><i style="background:#b98bff"></i><i style="background:#e8d3b0"></i><i style="background:#6b4bb0"></i><i style="background:#7fffcf"></i></div>
+        <div class="states"><div><b>干活</b> 施法/搅锅 · <b>卡住</b> 翻法典等</div><div><b>紧张</b> 法术不稳冒火花 · <b>庆祝</b> 发光成功</div><div><b>崩了</b> 反噬·变青蛙/晕</div></div>
+      </div>
+    </div>
+
+    <!-- 6 Forge -->
+    <div class="card" style="--s-sky:#241a16;--s-floor:#3a2a22;--s-glow:#ff8a3c;--s-hi:#ffb066;--w-skin:#d9a878;--w-body:#7a8a52">
+      <div class="stage">
+        <div class="label">06 · 锻造坊</div>
+        <div class="blk" style="left:18px;top:24px;width:42px;height:32px;background:#1a120e;box-shadow:inset 0 0 0 2px #5a3a26"></div>
+        <div class="glow" style="left:30px;top:34px;width:10px;height:10px;--s-glow:#ff8a3c;background:#ff8a3c"></div>
+        <div class="floor"></div>
+        <div class="blk" style="left:30px;bottom:30%;width:50px;height:16px;background:#4a3326"></div>
+        <div class="blk" style="right:26px;bottom:30%;width:44px;height:16px;background:#4a3326"></div>
+        <div class="worker" style="left:44px"><div class="head"></div><div class="eye e1"></div><div class="eye e2"></div><div class="body"></div></div>
+        <div class="prop" style="left:78px;bottom:54%;color:#ffb066">✸</div>
+        <div class="prop" style="right:44px;bottom:52%;color:#ffd76a">⚒</div>
+      </div>
+      <div class="meta">
+        <div class="tag">cozy-fantasy</div>
+        <div class="name">锻造坊<span class="en">The Forge</span></div>
+        <div class="concept">矮人/工匠在炉边抡锤打造,任务=一件<b>锻造委托</b>。<b>验证=成品过检、合并=交付</b>。火光暖、敲打声,硬核又温暖。</div>
+        <div class="pal"><i style="background:#241a16"></i><i style="background:#3a2a22"></i><i style="background:#ff8a3c"></i><i style="background:#d9a878"></i><i style="background:#7a8a52"></i><i style="background:#ffd76a"></i></div>
+        <div class="states"><div><b>干活</b> 抡锤 · <b>卡住</b> 喝麦酒歇</div><div><b>紧张</b> 火星四溅 · <b>庆祝</b> 成品出炉</div><div><b>崩了</b> 锤偏·砸脚</div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    <b>怎么选</b>:给个编号(01–06),或混搭(如"01 的工位 + 02 的机器人小工")。<br>
+    定了我会:① 出 <b>像素定妆</b>(主场景 + 1 角色 idle)+ 锁死 <b>Style Bible</b>(调色板 / `--px` 网格 / 描边 / 光影)→ 你认可像素质感 → ② 写 per-folder <b>assets.json</b>(每张 prompt + pixelize/matte 参数)→ 你过夜 `batch.sh` 一次跑完静态;动画用低帧像素条单独攻。<br>
+    <span style="color:var(--dim)">注:上面是 CSS 块状草样,只传达<b>主题·配色·5态映射</b>,不代表最终像素精度——最终由模型出图 + pixelize。</span>
+  </footer>
+</div>
+</body>
+</html>

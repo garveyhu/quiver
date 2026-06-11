@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quiver · 深夜工作室 · 美术 Bible</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    /* ===== 锁定调色板(深夜工作室)===== */
+    --night:#1b2440; --night2:#141b33; --wall:#2a2f4d; --floor:#3a3050; --floor2:#473b5e;
+    --wood:#7a5a3c; --wood2:#9a7350;
+    --amber:#ffd27a; --amber2:#ff9d4d; --glow:#ffe6ad;
+    --skin:#ffc6a8; --skin2:#e89e82;
+    --pink:#e2748a; --blue:#7aa7e6; --screen:#8fd0ff; --green:#7bbf7e; --plant:#4f8a5a;
+    --ink:#15131a; --cream:#f3e6d0; --red:#e2604f;
+    --bg:#0c0e14; --panel:#13161f; --txt:#e6e9f0; --dim:#8b94a6; --line:#272d3a;
+  }
+  body{background:var(--bg);color:var(--txt);font-family:"DejaVu Sans Mono",ui-monospace,Menlo,monospace;line-height:1.5;padding:42px 26px 90px;
+    background-image:linear-gradient(rgba(255,255,255,.015) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.015) 1px,transparent 1px);background-size:6px 6px}
+  .wrap{max-width:1180px;margin:0 auto}
+  h1{font-size:24px;letter-spacing:1px}h1 b{color:var(--amber)}
+  .sub{color:var(--dim);font-size:13px;margin:6px 0 22px;max-width:860px}
+  .sec{margin-top:26px}
+  .secT{font-size:13px;letter-spacing:2px;color:var(--amber);border-bottom:2px solid var(--line);padding-bottom:6px;margin-bottom:14px}
+  .secT span{color:var(--dim);font-size:11px;letter-spacing:0;margin-left:8px}
+  .row{display:flex;flex-wrap:wrap;gap:14px}
+  .tile{background:var(--panel);border:2px solid var(--line);padding:10px;text-align:center}
+  .cap{font-size:11px;color:var(--dim);margin-top:8px}
+  .cap b{color:var(--txt)}
+  /* pixel canvas */
+  .px{position:relative;image-rendering:pixelated}
+  .blk{position:absolute;box-shadow:1px 1px 0 rgba(0,0,0,.3)}
+  /* worker sprite (head+body+eyes) on an 80x80 stage */
+  .spr{width:80px;height:80px;position:relative;background:var(--floor);overflow:hidden;border:1px solid #0008}
+  .spr .grd{position:absolute;inset:0;background-image:linear-gradient(rgba(0,0,0,.12) 2px,transparent 2px),linear-gradient(90deg,rgba(0,0,0,.10) 2px,transparent 2px);background-size:8px 8px}
+  .w{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);width:26px}
+  .w .head{width:26px;height:20px;background:var(--skin);box-shadow:inset 0 -3px 0 #0001,1px 1px 0 #0004}
+  .w .hat{position:absolute;top:-3px;left:0;width:26px;height:6px}
+  .w .body{width:30px;height:22px;margin-left:-2px;background:var(--pink);box-shadow:1px 1px 0 #0004}
+  .w .eye{position:absolute;top:9px;width:3px;height:4px;background:var(--ink)}
+  .w .e1{left:7px}.w .e2{left:16px}
+  .pr{position:absolute;font-size:13px;text-shadow:1px 1px 0 #000}
+  /* palette */
+  .palrow{display:flex;flex-wrap:wrap;gap:6px}
+  .sw{width:64px;text-align:center}
+  .sw i{display:block;height:34px;box-shadow:1px 1px 0 #0006}
+  .sw span{font-size:9.5px;color:var(--dim)}
+  /* scene */
+  .scene{width:340px;height:200px;position:relative;border:2px solid #0008;overflow:hidden;background:linear-gradient(180deg,var(--night),var(--night2))}
+  .scene .grd{position:absolute;inset:0;background-image:linear-gradient(rgba(0,0,0,.10) 2px,transparent 2px),linear-gradient(90deg,rgba(0,0,0,.08) 2px,transparent 2px);background-size:8px 8px}
+  footer{margin-top:34px;background:var(--panel);border:2px solid var(--line);padding:18px 20px;font-size:13px;color:var(--dim)}
+  footer b{color:var(--txt)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><b>Quiver</b> · 深夜工作室 · 美术 Bible</h1>
+  <div class="sub">基于主题 01,把整套系统要的像素资源排出来给你过目:锁定调色板 + 主场景 + 角色 5 态 + 4 工人 + 工位道具 + 特效 + UI。下面是 CSS 块状草样,只定<b>配色 / 构图 / 资产范围 / 状态映射</b>;最终像素由模型出图 + pixelize。</div>
+
+  <!-- 调色板 -->
+  <div class="sec">
+    <div class="secT">① 调色板 PALETTE <span>统一锁死 · 全套共用 · pixelize 量化到这套</span></div>
+    <div class="palrow">
+      <div class="sw"><i style="background:#1b2440"></i><span>night</span></div>
+      <div class="sw"><i style="background:#141b33"></i><span>night2</span></div>
+      <div class="sw"><i style="background:#2a2f4d"></i><span>wall</span></div>
+      <div class="sw"><i style="background:#3a3050"></i><span>floor</span></div>
+      <div class="sw"><i style="background:#473b5e"></i><span>floor2</span></div>
+      <div class="sw"><i style="background:#7a5a3c"></i><span>wood</span></div>
+      <div class="sw"><i style="background:#ffd27a"></i><span>amber</span></div>
+      <div class="sw"><i style="background:#ff9d4d"></i><span>amber2</span></div>
+      <div class="sw"><i style="background:#ffc6a8"></i><span>skin</span></div>
+      <div class="sw"><i style="background:#e2748a"></i><span>pink</span></div>
+      <div class="sw"><i style="background:#7aa7e6"></i><span>blue</span></div>
+      <div class="sw"><i style="background:#8fd0ff"></i><span>screen</span></div>
+      <div class="sw"><i style="background:#4f8a5a"></i><span>plant</span></div>
+      <div class="sw"><i style="background:#f3e6d0"></i><span>cream</span></div>
+      <div class="sw"><i style="background:#e2604f"></i><span>red</span></div>
+      <div class="sw"><i style="background:#15131a"></i><span>ink</span></div>
+    </div>
+  </div>
+
+  <!-- 主场景 -->
+  <div class="sec">
+    <div class="secT">② 主场景 SCENES <span>t2i → pixelize(无透明)</span></div>
+    <div class="row">
+      <div class="tile">
+        <div class="scene">
+          <div class="grd"></div>
+          <!-- window -->
+          <div class="blk" style="left:120px;top:18px;width:110px;height:62px;background:#0e1530;box-shadow:inset 0 0 0 3px #2a3560"></div>
+          <div class="pr" style="left:150px;top:30px;color:#fff">✦</div><div class="pr" style="left:200px;top:50px;color:#cfe">·</div>
+          <!-- floor -->
+          <div class="blk" style="left:0;bottom:0;width:100%;height:64px;background:#3a3050"></div>
+          <div class="blk" style="left:0;bottom:60px;width:100%;height:4px;background:#473b5e"></div>
+          <!-- desk + lamp + screen + plant -->
+          <div class="blk" style="left:40px;bottom:40px;width:80px;height:14px;background:#7a5a3c"></div>
+          <div class="blk" style="left:52px;bottom:54px;width:26px;height:18px;background:#8fd0ff;box-shadow:0 0 0 2px #1b2440"></div>
+          <div class="blk" style="left:96px;bottom:54px;width:4px;height:24px;background:#5a4636"></div>
+          <div class="blk" style="left:88px;bottom:78px;width:20px;height:10px;background:#ffd27a;box-shadow:0 0 10px 4px #ffd27a88"></div>
+          <div class="blk" style="left:248px;bottom:40px;width:80px;height:14px;background:#7a5a3c"></div>
+          <div class="blk" style="left:300px;bottom:54px;width:14px;height:16px;background:#4f8a5a"></div>
+          <div class="blk" style="left:258px;bottom:54px;width:24px;height:16px;background:#8fd0ff;box-shadow:0 0 0 2px #1b2440"></div>
+          <!-- worker at left desk -->
+          <div class="w" style="left:60px;bottom:54px;transform:none"><div class="head"></div><div class="eye e1"></div><div class="eye e2"></div><div class="body"></div></div>
+          <div class="pr" style="left:14px;bottom:6px;color:#8b94a6">bg/room.png</div>
+        </div>
+        <div class="cap"><b>主大厅 room</b> · 工位 + 夜窗 + 暖灯 + 绿植</div>
+      </div>
+      <div class="tile">
+        <div class="scene" style="width:200px;background:linear-gradient(180deg,#141b33,#0e1530)">
+          <div class="grd"></div>
+          <div class="blk" style="left:30px;top:30px;width:140px;height:90px;background:#13161f;box-shadow:inset 0 0 0 2px #2a2f4d"></div>
+          <div class="blk" style="left:44px;top:44px;width:112px;height:6px;background:#ffd27a"></div>
+          <div class="blk" style="left:44px;top:60px;width:80px;height:4px;background:#473b5e"></div>
+          <div class="blk" style="left:44px;top:72px;width:96px;height:4px;background:#473b5e"></div>
+          <div class="pr" style="left:14px;bottom:6px;color:#8b94a6">空状态 / 设置</div>
+        </div>
+        <div class="cap"><b>空状态 · 设置账本</b> · 同色系面板底</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 角色 5 态 -->
+  <div class="sec">
+    <div class="secT">③ 角色 · 5 状态 CHARACTER STATES <span>idle=t2i 基底;其余 i2i 改姿势/表情 → pixelize → matte(透明)</span></div>
+    <div class="row">
+      <div class="tile"><div class="spr"><div class="grd"></div><div class="w"><div class="head"></div><div class="eye e1"></div><div class="eye e2"></div><div class="body"></div></div></div><div class="cap"><b>idle</b> 站立(基底)</div></div>
+      <div class="tile"><div class="spr"><div class="grd"></div><div class="blk" style="left:18px;bottom:18px;width:44px;height:8px;background:#7a5a3c"></div><div class="blk" style="left:24px;bottom:26px;width:18px;height:12px;background:#8fd0ff;box-shadow:0 0 0 2px #1b2440"></div><div class="w" style="bottom:24px"><div class="head"></div><div class="eye e1" style="top:11px"></div><div class="eye e2" style="top:11px"></div><div class="body"></div></div></div><div class="cap"><b>reading</b> 干活·敲键盘</div></div>
+      <div class="tile"><div class="spr"><div class="grd"></div><div class="w"><div class="head"></div><div class="eye e1"></div><div class="eye e2"></div><div class="body"></div></div><div class="pr" style="left:46px;bottom:40px">☕</div></div><div class="cap"><b>coffee</b> 卡住·端咖啡</div></div>
+      <div class="tile"><div class="spr"><div class="grd"></div><div class="w"><div class="head"></div><div class="eye e1" style="width:4px;height:5px"></div><div class="eye e2" style="width:4px;height:5px"></div><div class="body"></div></div><div class="blk" style="right:18px;top:18px;width:5px;height:7px;background:#7aa7e6"></div></div><div class="cap"><b>sweating</b> 紧张·跑测试</div></div>
+      <div class="tile"><div class="spr"><div class="grd"></div><div class="w" style="bottom:16px"><div class="head"></div><div class="eye e1"></div><div class="eye e2"></div><div class="body"></div><div class="blk" style="left:-8px;top:-2px;width:8px;height:14px;background:var(--skin)"></div><div class="blk" style="right:-8px;top:-2px;width:8px;height:14px;background:var(--skin)"></div></div><div class="pr" style="left:14px;top:14px;color:#ffd27a">✦</div><div class="pr" style="right:14px;top:20px;color:#e2748a">✦</div></div><div class="cap"><b>celebrate</b> 庆祝·已合并</div></div>
+      <div class="tile"><div class="spr"><div class="grd"></div><div class="w" style="bottom:10px"><div class="head" style="background:#7bbf7e"></div><div class="eye e1" style="height:2px;top:11px"></div><div class="eye e2" style="height:2px;top:11px"></div><div class="body"></div></div><div class="pr" style="left:46px;top:14px;color:#7bbf7e">@</div></div><div class="cap"><b>sick</b> 崩了·失败</div></div>
+      <div class="tile"><div class="spr"><div class="grd"></div><div class="w" style="bottom:2px"><div class="head" style="width:40px;height:34px;transform:scale(1)"></div><div class="eye e1" style="top:16px;left:11px;width:4px;height:5px"></div><div class="eye e2" style="top:16px;left:25px;width:4px;height:5px"></div></div></div><div class="cap"><b>portrait</b> 详情头像</div></div>
+    </div>
+  </div>
+
+  <!-- 4 工人变体 -->
+  <div class="sec">
+    <div class="secT">④ 4 个工人变体 WORKERS <span>同款不同色 + 小配件,看板上区分任务</span></div>
+    <div class="row">
+      <div class="tile"><div class="spr"><div class="grd"></div><div class="w"><div class="head"></div><div class="hat" style="background:#e2748a"></div><div class="eye e1"></div><div class="eye e2"></div><div class="body" style="background:#e2748a"></div></div></div><div class="cap"><b>char0</b> 粉·呆毛</div></div>
+      <div class="tile"><div class="spr"><div class="grd"></div><div class="w"><div class="head"></div><div class="hat" style="background:#7aa7e6"></div><div class="eye e1"></div><div class="eye e2"></div><div class="body" style="background:#7aa7e6"></div></div></div><div class="cap"><b>char1</b> 蓝·耳机</div></div>
+      <div class="tile"><div class="spr"><div class="grd"></div><div class="w"><div class="head"></div><div class="hat" style="background:#7bbf7e"></div><div class="eye e1"></div><div class="eye e2"></div><div class="body" style="background:#4f8a5a"></div></div></div><div class="cap"><b>char2</b> 绿·围巾</div></div>
+      <div class="tile"><div class="spr"><div class="grd"></div><div class="w"><div class="head"></div><div class="hat" style="background:#ff9d4d"></div><div class="eye e1"></div><div class="eye e2"></div><div class="body" style="background:#ff9d4d"></div></div></div><div class="cap"><b>char3</b> 橙·鸭舌帽</div></div>
+    </div>
+  </div>
+
+  <!-- 工位 & 道具 -->
+  <div class="sec">
+    <div class="secT">⑤ 工位 & 道具 PROPS <span>t2i → pixelize → matte(透明 PNG);✱=低帧动画</span></div>
+    <div class="row">
+      <div class="tile"><div class="spr"><div class="grd"></div><div class="blk" style="left:14px;bottom:18px;width:52px;height:12px;background:#7a5a3c"></div><div class="blk" style="left:18px;bottom:6px;width:6px;height:14px;background:#5a4636"></div><div class="blk" style="right:18px;bottom:6px;width:6px;height:14px;background:#5a4636"></div><div class="blk" style="left:24px;bottom:30px;width:22px;height:16px;background:#8fd0ff;box-shadow:0 0 0 2px #1b2440"></div></div><div class="cap"><b>station</b> 工位(桌+屏)</div></div>
+      <div class="tile"><div class="spr"><div class="grd"></div><div class="blk" style="left:34px;bottom:14px;width:5px;height:34px;background:#5a4636"></div><div class="blk" style="left:24px;bottom:46px;width:26px;height:12px;background:#ffd27a;box-shadow:0 0 12px 5px #ffd27a77"></div></div><div class="cap"><b>台灯</b> lamp(暖光源)</div></div>
+      <div class="tile"><div class="spr"><div class="grd"></div><div class="blk" style="left:30px;bottom:30px;width:18px;height:16px;background:#4f8a5a"></div><div class="blk" style="left:33px;bottom:14px;width:12px;height:16px;background:#9a7350"></div></div><div class="cap"><b>绿植</b> plant</div></div>
+      <div class="tile"><div class="spr"><div class="grd"></div><div class="blk" style="left:22px;bottom:16px;width:36px;height:26px;background:#2a2f4d;box-shadow:inset 0 0 0 2px #473b5e"></div><div class="blk" style="left:28px;bottom:22px;width:8px;height:14px;background:#ff9d4d;box-shadow:0 0 10px 4px #ff9d4d88"></div><div class="pr" style="left:30px;bottom:36px;color:#ffd27a">✸</div></div><div class="cap"><b>壁炉/暖炉 ✱</b> fire(暖光动画)</div></div>
+      <div class="tile"><div class="spr"><div class="grd"></div><div class="blk" style="left:30px;bottom:18px;width:16px;height:14px;background:#cfe;box-shadow:1px 1px 0 #0004"></div><div class="blk" style="left:44px;bottom:22px;width:5px;height:6px;background:#cfe"></div><div class="pr" style="left:30px;bottom:32px;color:#fff">~</div></div><div class="cap"><b>咖啡机/杯</b> mug</div></div>
+      <div class="tile"><div class="spr"><div class="grd"></div><div class="blk" style="left:26px;bottom:16px;width:10px;height:24px;background:#e2748a"></div><div class="blk" style="left:36px;bottom:16px;width:10px;height:24px;background:#7aa7e6"></div><div class="blk" style="left:46px;bottom:16px;width:8px;height:24px;background:#7bbf7e"></div></div><div class="cap"><b>书架/书堆</b> books</div></div>
+    </div>
+  </div>
+
+  <!-- 特效 -->
+  <div class="sec">
+    <div class="secT">⑥ 特效 FX <span>透明小素材;部分低帧循环</span></div>
+    <div class="row">
+      <div class="tile"><div class="spr"><div class="grd"></div><div class="pr" style="left:20px;top:18px;color:#ffd27a">✦</div><div class="pr" style="left:40px;top:30px;color:#e2748a">✦</div><div class="pr" style="left:30px;top:46px;color:#7aa7e6">✦</div></div><div class="cap"><b>confetti</b> 庆祝彩纸</div></div>
+      <div class="tile"><div class="spr"><div class="grd"></div><div class="blk" style="left:36px;top:24px;width:6px;height:9px;background:#7aa7e6;border-radius:0 0 3px 3px"></div></div><div class="cap"><b>sweat</b> 汗滴</div></div>
+      <div class="tile"><div class="spr"><div class="grd"></div><div class="pr" style="left:28px;top:20px;color:#cfe">z</div><div class="pr" style="left:40px;top:30px;color:#9ab">z</div></div><div class="cap"><b>zzz</b> 待机困</div></div>
+      <div class="tile"><div class="spr"><div class="grd"></div><div class="blk" style="left:30px;top:24px;width:8px;height:8px;background:#cfd8e8"></div><div class="blk" style="left:40px;top:34px;width:11px;height:11px;background:#aab6c8"></div></div><div class="cap"><b>smoke ✱</b> 故障烟</div></div>
+      <div class="tile"><div class="spr"><div class="grd"></div><div class="blk" style="left:22px;top:18px;width:36px;height:22px;background:#f3e6d0;box-shadow:1px 1px 0 #0006"></div><div class="pr" style="left:36px;top:20px;color:#15131a">!</div></div><div class="cap"><b>!气泡</b> 等你处理</div></div>
+      <div class="tile"><div class="spr"><div class="grd"></div><div class="blk" style="left:24px;top:24px;width:32px;height:22px;background:#ffd27a;opacity:.4;box-shadow:0 0 16px 8px #ffd27a55"></div></div><div class="cap"><b>glow</b> 暖光晕</div></div>
+    </div>
+  </div>
+
+  <!-- UI 套件 -->
+  <div class="sec">
+    <div class="secT">⑦ UI 套件 UI KIT <span>面板/按钮/预算条/图标/字标 · 同调色板</span></div>
+    <div class="row">
+      <div class="tile" style="padding:0;overflow:hidden">
+        <div style="width:200px;background:#141b33;border:2px solid #2a2f4d">
+          <div style="background:#2a2f4d;padding:5px 8px;font-size:11px;color:#ffd27a;text-align:left">▤ 工位详情</div>
+          <div style="padding:10px;text-align:left;font-size:10.5px;color:#8b94a6">花费 $0.42 · 已合并<br><span style="color:#7bbf7e">●</span> verified</div>
+        </div>
+        <div class="cap"><b>面板 panel</b></div>
+      </div>
+      <div class="tile">
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:center;padding:6px 0">
+          <div style="background:#ffd27a;color:#15131a;font-size:11px;padding:5px 14px;box-shadow:2px 2px 0 #0006">运行</div>
+          <div style="background:#2a2f4d;color:#e6e9f0;font-size:11px;padding:5px 14px;box-shadow:2px 2px 0 #0006">设置</div>
+        </div>
+        <div class="cap"><b>按钮 button</b></div>
+      </div>
+      <div class="tile">
+        <div style="width:140px;height:14px;background:#141b33;border:1px solid #2a2f4d;display:flex">
+          <div style="width:62%;background:#7bbf7e"></div><div style="width:20%;background:#ffd27a"></div>
+        </div>
+        <div class="cap"><b>预算条</b> $ budget(绿→黄→红)</div>
+      </div>
+      <div class="tile">
+        <div style="display:flex;gap:8px;font-size:16px;color:#ffd27a;padding:6px 4px">⚙ ▶ ✎ ✓ ✕</div>
+        <div class="cap"><b>图标 icons</b></div>
+      </div>
+      <div class="tile">
+        <div style="padding:12px 8px;font-size:22px;letter-spacing:3px;color:#ffd27a;font-weight:bold;text-shadow:2px 2px 0 #0008">QUIVER</div>
+        <div class="cap"><b>字标 wordmark</b>(像素字)</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    这是 01「深夜工作室」的<b>美术资产全景 + 锁定调色板</b>。看下来:<br>
+    ① 范围对不对(场景/角色 5 态/4 工人/道具/特效/UI 有没有缺漏);② 配色满意不;③ 角色是"小团子"还是想要更明确的小人(戴耳机/呆毛那种)。<br>
+    定了我就:<b>出 2 张真像素定妆</b>(主大厅 + 1 角色 idle,锁 `--px`/`--colors`)给你拍板质感 → 写进 <b>per-folder assets.json</b>(每张 prompt + pixelize/matte 参数)→ 你过夜 `batch.sh` 跑静态,动画低帧条单独攻。<br>
+    <span style="color:var(--dim)">注:CSS 块状草样,传达配色/构图/范围;最终像素精度由模型出图 + pixelize 决定。</span>
+  </footer>
+</div>
+</body>
+</html>
