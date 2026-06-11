@@ -188,9 +188,16 @@ export function App() {
     try {
       // 先关自治:否则杀了 worker,经理循环还会主动 plan 派新活 / 把被杀的活当失败重跑 ——
       // 急停就形同虚设。关了自治经理就不主动推进,真停下来(CEO 想继续时再去设置开)。
-      await patchSettings({ autonomous: false }).catch(() => {});
+      let autoOff = true;
+      await patchSettings({ autonomous: false }).catch(() => {
+        autoOff = false; // 关自治没成功 —— 绝不假报"已关自治",如实提示 CEO 手动关。
+      });
       const n = await cancelActiveTasks();
-      setCaption(`急停 — 已关自治 + 收回 ${n} 个在途委托的工具权,全公司冻结、main 安全。`);
+      setCaption(
+        autoOff
+          ? `急停 — 已关自治 + 收回 ${n} 个在途委托的工具权,全公司冻结、main 安全。`
+          : `急停 — 已收回 ${n} 个在途委托,但关自治没成功:请去设置手动关自治,否则经理会再派活。`,
+      );
     } catch (e) {
       setCaption(`急停遇到问题:${e instanceof Error ? e.message : String(e)}`);
     }
@@ -319,7 +326,11 @@ export function App() {
       <PersonnelDesk
         open={overlay === 'personnel'}
         roles={personnel.roles}
-        onPatch={(id, patch) => void personnel.patchRole(id, patch).catch(() => {})}
+        onPatch={(id, patch) =>
+          void personnel
+            .patchRole(id, patch)
+            .catch(e => setCaption(`改配置失败:${e instanceof Error ? e.message : String(e)}`))
+        }
         onHire={() => void personnel.hire().catch(e => setCaption(`雇人失败:${e instanceof Error ? e.message : String(e)}`))}
         onFire={id => void personnel.fire(id).catch(e => setCaption(`裁员失败:${e instanceof Error ? e.message : String(e)}`))}
         onClose={() => setOverlay('none')}
