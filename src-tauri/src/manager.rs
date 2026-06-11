@@ -297,6 +297,21 @@ async fn manager_loop(app: AppHandle, store: Arc<Store>, pm: Arc<ProjectManager>
                         tokio::time::sleep(GOAL_START_RETRY_GAP).await;
                         continue;
                     }
+                    // 重试用尽经理还不开工(noop,或幻觉 escalate「已完成」绕过 noop 引导)——「绝对自治」
+                    // 最后保障:系统直接把目标拆一个任务入队,下一拍经理就有 queued 可 spawn(认领),保证真
+                    // 开工、不被 claude 的幻觉/罢工卡死。种一次即够:下拍 goal_progress 非空、走正常调度。
+                    if pure_goal_start {
+                        let mode = store
+                            .get_settings()
+                            .ok()
+                            .map(|s| s.default_mode)
+                            .unwrap_or_else(|| "simulate".to_string());
+                        if seed_goal_task(&store, &project_key, ctx.autonomous_goal.trim(), &mode) {
+                            idle_noops = 0;
+                            pm.wake.notify_one();
+                            continue;
+                        }
+                    }
                     break;
                 }
                 continue;
@@ -307,6 +322,31 @@ async fn manager_loop(app: AppHandle, store: Arc<Store>, pm: Arc<ProjectManager>
             }
         }
     }
+}
+
+/// 「绝对自治」最后保障:经理纯目标启动反复 noop / 幻觉 escalate「已完成」而不肯开工时,系统直接把
+/// 自治目标拆一个任务入队(挂在目标下,追溯室照样画「目标 → 子任务」树)。下一拍经理就有 queued 可
+/// spawn 认领,保证真开工,不被 claude 当拍的幻觉 / 罢工卡死。成功入队返回 true。
+fn seed_goal_task(store: &Arc<Store>, project_key: &str, goal: &str, mode: &str) -> bool {
+    if goal.is_empty() {
+        return false;
+    }
+    let now = crate::now_ms();
+    let id = format!("task-seed-{now}-{}", crate::next_id_seq());
+    let ok = store
+        .enqueue_task(&quiver_store::NewTask {
+            id: id.clone(),
+            project: project_key.to_string(),
+            prompt: goal.to_string(),
+            mode: mode.to_string(),
+            status: "queued".to_string(),
+            created_at: now,
+        })
+        .is_ok();
+    if ok {
+        let _ = store.set_task_parent_goal(&id, goal, now);
+    }
+    ok
 }
 
 /// 执行经理这一拍的 [`Effect`],并 emit 决策事件给前端工作台。返回这拍是否真落地了动作。

@@ -192,8 +192,10 @@ fn build_prompt(ctx: &ManagerContext, system_prompt: &str) -> String {
     } else {
         // 已为这个目标做过的子任务清单(结局)——让经理 plan 时心里有数:做到哪了、别重复、何时收尾。
         let progress = if ctx.goal_progress.is_empty() {
-            "\n  (还没为这个目标做过任何事 —— 现在就 plan 出第一批子任务。队列空 + 目标在 + 你还没动手 \
-             = **必须主动开工**,这一拍**绝不能 noop**:noop 等于对 CEO 的目标罢工、公司空转。)".to_string()
+            "\n  (系统确认:**还没为这个目标派过任何子任务**(下面进展清单为空就是铁证)。别幻觉它已完成、\
+             更**绝不能 escalate 谎报「已交付/已合并/已完整走完」**—— 你连一个子任务都没派过、代码里根本\
+             没有这个东西,任何「已完成」判断都是幻觉。这一拍**必须 plan** 出第一批子任务(2-4 个)真正开工,\
+             **不许 noop、不许 escalate**。)".to_string()
         } else {
             format!(
                 "\n  已为这个目标做过(别重复这些,在此基础上递进):\n{}",
