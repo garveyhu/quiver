@@ -115,7 +115,13 @@ pub async fn run_one_task(
     mode: RunMode,
 ) {
     let project = guard.repo().display().to_string();
-    match run_streaming(app, Some(store), guard, task_id.clone(), prompt.clone(), mode).await {
+    let outcome = run_streaming(app, Some(store), guard, task_id.clone(), prompt.clone(), mode).await;
+    // CEO 中途取消(cancel_task_cmd 已标 cancelled + SIGKILL 了 worker)→ 尊重取消,绝不用完成/失败
+    // 状态覆盖掉 cancelled。否则自治下经理会把它当失败 auto_retry 重跑、取消形同虚设(被杀的活又起来)。
+    if store.get_task(&task_id).ok().flatten().map(|t| t.status == "cancelled").unwrap_or(false) {
+        return;
+    }
+    match outcome {
         Ok(summary) => {
             let _ = store.update_task_status(&task_id, &summary.status, crate::now_ms());
             let _ = store.set_task_cost_branch(

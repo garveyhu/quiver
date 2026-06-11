@@ -89,6 +89,10 @@ pub fn cancel_task_cmd(app: AppHandle, state: State<'_, AppState>, id: String) -
                     if let Ok(mut m) = state.running_pids.lock() {
                         m.remove(&id);
                     }
+                    // 标 cancelled:worker 被 SIGKILL → stdout EOF 会让 run_one_task 想标 failed,但这
+                    // 是 CEO 主动取消、不是失败。先标 cancelled,run_one_task 见状就不覆盖 —— 否则自治下
+                    // 经理把它当失败 auto_retry 重跑,取消形同虚设。
+                    let _ = store.update_task_status(&id, "cancelled", now_ms());
                 }
                 None => return Err("找不到运行中的进程（可能刚结束）".to_string()),
             }
