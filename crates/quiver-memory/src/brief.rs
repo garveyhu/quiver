@@ -60,6 +60,13 @@ impl MemoryStore {
         episode_limit: usize,
     ) -> anyhow::Result<Brief> {
         let mut facts = self.current_facts(project)?;
+        // §6 可信度感知选取:current_facts 是纯 importance 序;进 brief 的有限名额前,按
+        // (importance + 可信度档)综合分重排 —— 别让低可信「员工汇报」靠高 importance 挤掉
+        // 「权威/机械」硬事实,让经理读到的简报优先是可放心依赖的(配合经理按可信度分级采信)。
+        facts.sort_by(|a, b| {
+            let key = |f: &FactRecord| f.importance + trust_rank(&f.trust) * 2;
+            key(b).cmp(&key(a)).then(b.recorded_at.cmp(&a.recorded_at))
+        });
         facts.truncate(fact_limit);
         let recent_episodes = self.episodes_for_project(project, episode_limit as i64)?;
         Ok(Brief {
@@ -67,6 +74,17 @@ impl MemoryStore {
             facts,
             recent_episodes,
         })
+    }
+}
+
+/// §6.2 可信度档的序数权重(高=更可信),用于 brief 选取加权。与 facts::recall 的 trust_weight 同序:
+/// 权威 > 已验证·* > 员工汇报 > 不可信/unknown。
+fn trust_rank(trust: &str) -> i64 {
+    match trust {
+        "权威" => 5,
+        "已验证·机械" | "已验证·印证" => 4,
+        "员工汇报" => 2,
+        _ => 1, // 不可信 / unknown
     }
 }
 
@@ -122,6 +140,23 @@ mod tests {
         assert!(text.contains("/r"));
         assert!(text.contains("top"));
         assert!(text.contains("verified"));
+    }
+
+    /// 带可信度的事实构造:同 fact() 但指定 trust 档。
+    fn fact_trust(project: &str, text: &str, importance: i64, trust: &str) -> NewFact {
+        NewFact { trust: trust.into(), ..fact(project, text, importance) }
+    }
+
+    #[test]
+    fn brief_prefers_trust_over_raw_importance_in_limited_slots() {
+        let store = MemoryStore::open_in_memory().unwrap();
+        // 高 importance 的「员工汇报」(低可信) vs 低 importance 的「权威」(高可信)。
+        store.insert_fact(&fact_trust("/r", "员工说用 RocksDB", 9, "员工汇报")).unwrap();
+        store.insert_fact(&fact_trust("/r", "CEO 定:用 SQLite", 6, "权威")).unwrap();
+        // 只有 1 个名额 → 综合分(importance+可信度档×2):权威 6+10=16 > 员工汇报 9+4=13。
+        let b = store.brief("/r", 1, 5).unwrap();
+        assert_eq!(b.facts.len(), 1);
+        assert!(b.facts[0].text.contains("SQLite"), "高可信的权威事实优先进有限名额,不被低可信带偏");
     }
 
     #[test]
