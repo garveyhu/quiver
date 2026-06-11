@@ -49,12 +49,13 @@ export function MorningReport({ open, data, onRequeue, onMerge, onClose }: Morni
               <span className="st-meta">经理拆解大目标、多员工分工完成的</span>
             </div>
             {collabGoals.map(g => {
-              const allDone = g.done === g.total && g.goal.status === 'done';
+              const allDone = g.done === g.total && g.status === 'done';
               return (
-                <div className="rev" key={g.goal.id}>
-                  <span className="grow">{g.goal.prompt}</span>
+                <div className="rev" key={g.id}>
+                  {g.isAuto && <span className="st-meta">自治目标</span>}
+                  <span className="grow">{g.goalText}</span>
                   <span className={allDone ? 'st-ok' : 'st-bad'}>
-                    {allDone ? '协作完成' : g.goal.status === 'planned' ? '分工中' : '部分失败'}
+                    {allDone ? '协作完成' : g.status === 'planned' ? (g.isAuto ? '自治推进中' : '分工中') : '部分失败'}
                   </span>
                   <span className="st-meta">{g.done}/{g.total} 子任务</span>
                 </div>

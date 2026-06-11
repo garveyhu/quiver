@@ -3,11 +3,16 @@ import { useEffect, useState } from 'react';
 import { getDecisions, getMemoryFacts, getStats, listTasks } from '@/services/commands';
 import type { FactRecord, ManagerDecision, Stats, TaskRecord } from '@/services/wire';
 
-/** 一个协作目标(§5):被经理拆解过的父目标 + 子任务完成统计。 */
+/** 一个协作目标(§5):经理拆解的具体父目标(显式),或 CEO 的自治目标(经理主动 plan 推进)+ 子任务统计。 */
 export interface CollabGoal {
-  goal: TaskRecord;
+  id: string;
+  goalText: string;
   total: number;
   done: number;
+  /** planned(推进中)/ done(协作完成)/ needs_rebase(部分失败)。 */
+  status: string;
+  /** true=主动自治目标(CEO 设的方向、经理主动 plan);false=经理拆解的具体目标。 */
+  isAuto: boolean;
 }
 
 export interface MorningReportData {
@@ -60,17 +65,31 @@ export function useMorningReport(open: boolean): MorningReportData {
         ]);
         if (!alive) return;
         const byUpdated = (a: TaskRecord, b: TaskRecord) => b.updatedAt - a.updatedAt;
+        const subsOf = (goal: string) => all.filter(x => x.parentGoal === goal);
+        const tally = (subs: TaskRecord[]) => subs.filter(x => DONE.has(x.status) || x.status === 'merged').length;
         // 协作父目标 = 有子任务指向它(parentGoal==它的 prompt)。单列出来,不混进普通分类。
         const isParent = (t: TaskRecord) => all.some(x => x.parentGoal === t.prompt);
-        const collabGoals: CollabGoal[] = all
+        const explicitGoals: CollabGoal[] = all
           .filter(g => isParent(g) && COLLAB.has(g.status))
           .sort(byUpdated)
-          .slice(0, 6)
           .map(g => {
-            const subs = all.filter(x => x.parentGoal === g.prompt);
-            const done = subs.filter(x => DONE.has(x.status) || x.status === 'merged').length;
-            return { goal: g, total: subs.length, done };
+            const subs = subsOf(g.prompt);
+            return { id: g.id, goalText: g.prompt, total: subs.length, done: tally(subs), status: g.status, isAuto: false };
           });
+        // 主动自治目标:子任务的 parentGoal 指向一个**没有对应 task 行**的文本(= CEO 的自治目标,
+        // 经理主动 plan 时挂上去的)。它没有 planned 父任务行,所以上面那条认不出 → 这里补:把这些
+        // 孤儿 parentGoal 聚成虚拟目标行,让「绝对自治」的目标进展也进晨报。
+        const taskPrompts = new Set(all.map(t => t.prompt));
+        const autoTexts = [...new Set(all.map(t => t.parentGoal).filter((g): g is string => !!g && !taskPrompts.has(g)))];
+        const autoGoals: CollabGoal[] = autoTexts.map(goal => {
+          const subs = subsOf(goal);
+          const done = tally(subs);
+          const allTerminal = subs.every(x => DONE.has(x.status) || x.status === 'merged' || NEEDS_YOU.has(x.status));
+          const status = done === subs.length ? 'done' : allTerminal ? 'needs_rebase' : 'planned';
+          return { id: `auto-${goal}`, goalText: goal, total: subs.length, done, status, isAuto: true };
+        });
+        // 自治目标在前(CEO 最关心「公司为我的目标推进了多少」),再拆活目标;共上限 8。
+        const collabGoals: CollabGoal[] = [...autoGoals, ...explicitGoals].slice(0, 8);
         setData({
           stats,
           collabGoals,
