@@ -24,7 +24,7 @@ export function MorningReport({ open, data, onRequeue, onMerge, onClose }: Morni
   const { stats, collabGoals, mergedToMain, needsYou, escalations, recent, lessons } = data;
 
   const sub = stats
-    ? `昨晚合进 main ${mergedToMain.length} · 等你处理 ${needsYou.length + escalations.length} · 学到 ${lessons.length} 条教训 · 今夜花费 $${stats.spentDay.toFixed(2)} · Lv${stats.level}`
+    ? `昨晚合进 main ${mergedToMain.length} · 等你处理 ${needsYou.length + escalations.length} · 学到 ${lessons.length} 条知识 · 今夜花费 $${stats.spentDay.toFixed(2)} · Lv${stats.level}`
     : '读取中…';
 
   const nothing =
@@ -121,11 +121,12 @@ export function MorningReport({ open, data, onRequeue, onMerge, onClose }: Morni
         {lessons.length > 0 && (
           <>
             <div className="kv">
-              <b className="st-ok">学到的教训</b>
-              <span className="st-meta">公司从失败里学到、下次会避开的 —— 越用越聪明</span>
+              <b className="st-ok">学到的知识</b>
+              <span className="st-meta">公司从经验沉淀的规则 / 避坑 / 有效做法 —— 越用越聪明</span>
             </div>
             {lessons.map(f => (
               <div className="rev" key={`lesson-${f.id}`}>
+                <span className="st-meta">{f.kind}</span>
                 <span className="grow">{f.text}</span>
                 <span className="st-meta">{f.trust}</span>
               </div>

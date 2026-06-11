@@ -22,7 +22,7 @@ export interface MorningReportData {
   escalations: ManagerDecision[];
   /** 其余近期已结束委托(verified/done 但未走合并的,如 simulate)。 */
   recent: TaskRecord[];
-  /** §6 记忆驱动:近期沉淀的「教训」事实 —— 公司从失败学到、下次会避开的(越用越聪明)。 */
+  /** §6 自学习成果:近期沉淀的知识(教训避坑 / 约定规则 / 有效做法)—— 公司从经验学到的,越用越聪明。 */
   lessons: FactRecord[];
 }
 
@@ -79,9 +79,10 @@ export function useMorningReport(open: boolean): MorningReportData {
           // 升级决策:去重同一任务只留最新一条(经理可能多拍 escalate)。
           escalations: dedupeLatest(decisions.filter(d => d.action === 'escalate' && d.executed)),
           recent: all.filter(t => DONE.has(t.status) && !isParent(t)).sort(byUpdated).slice(0, 8),
-          // §6 记忆驱动成果:近期教训(失败沉淀),最新在前 —— 给 CEO 看"公司学到了什么"。
+          // §6 自学习成果:公司从经验沉淀的知识 —— 教训(避坑)+ 约定(规则)+ 有效做法(成功模式),
+          // 机械教训 + 记忆官提炼都算,最新在前。给 CEO 看"昨晚公司学到了什么、越用越聪明"。
           lessons: facts
-            .filter(f => f.kind === '教训')
+            .filter(f => f.kind === '教训' || f.kind === '约定' || f.kind === '有效做法')
             .sort((a, b) => b.recordedAt - a.recordedAt)
             .slice(0, 6),
         });
