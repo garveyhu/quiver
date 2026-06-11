@@ -62,7 +62,22 @@ pub(super) fn spawn_worker(
             .map(|ep| {
                 let diff = ep.diff_stat.as_deref().filter(|s| !s.trim().is_empty()).unwrap_or("(无文件改动)");
                 let verify = ep.verify_result.as_deref().unwrap_or("-");
-                format!("产出:{diff};验证:{verify}")
+                let mut s = format!("产出:{diff};验证:{verify}");
+                // verify 失败:把失败输出尾巴也给经理 —— 让它诊断是「测试红(改代码)」还是「环境/权限
+                // 问题(escalate 给 CEO)」,而非只看 failed 标签瞎猜(real 实测经理误诊为「结构性问题」)。
+                if verify.contains("fail") {
+                    if let Some(tail) = ep
+                        .summary
+                        .as_deref()
+                        .and_then(|sm| sm.split("[验证失败输出]").nth(1))
+                    {
+                        let tail: String = tail.trim().chars().take(220).collect();
+                        if !tail.is_empty() {
+                            s.push_str(&format!(";失败详情:{tail}"));
+                        }
+                    }
+                }
+                s
             });
         pm.reviews.lock().await.push(PendingReview {
             node_id: node_id.clone(),

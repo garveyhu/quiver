@@ -75,6 +75,9 @@ pub struct RunSummary {
     pub commit_sha: Option<String>,
     /// `git diff --shortstat <base>` for the attempt (§6.2) — bound onto the episode.
     pub diff_stat: Option<String>,
+    /// verify 失败时的失败输出 tail(§7) —— 持久化进 episode,让经理诊断 / 记忆官提炼 / CEO 追溯看得到
+    /// 真因(测试红? 还是环境/权限问题?)。passed / 其它 → None。
+    pub verify_output: Option<String>,
 }
 
 /// A terminal event synthesized AFTER `run_task` returns, carrying the §5.2
@@ -139,12 +142,22 @@ pub async fn run_one_task(
             );
             // Record a §6.2 episode (before `project`/`prompt`/`status` move into the
             // run-history row below). Mechanical: what happened + its terminal status.
+            // verify 失败时把失败输出(tail)拼进 episode 摘要 —— 否则真实原因(测试红? 还是
+            // PermissionError / 环境问题?)被丢弃,经理只看到「verify_failed」、CEO 追溯/晨报也看不到
+            // 真因(real 实测:一个沙箱写隔离 PermissionError 让所有 verify 失败,详情被丢、藏得极深)。
+            // 记进 episode → 经理复核能据此诊断、记忆官能提炼教训、CEO 看得到。
+            let ep_summary = match &summary.verify_output {
+                Some(out) if summary.status == "verify_failed" && !out.trim().is_empty() => {
+                    format!("{prompt}\n[验证失败输出]\n{}", out.trim())
+                }
+                _ => prompt.clone(),
+            };
             record_episode(
                 app,
                 &project,
                 &task_id,
                 &summary.status,
-                &prompt,
+                &ep_summary,
                 summary.commit_sha.as_deref(),
                 summary.diff_stat.as_deref(),
             );
@@ -469,7 +482,7 @@ pub async fn run_streaming(
         status: status_label.clone(),
         cost_usd: last_cost,
         branch: branch.clone(),
-        verify_output,
+        verify_output: verify_output.clone(),
     };
     if let Some(store) = store {
         if let Ok(payload) = serde_json::to_string(&finished) {
@@ -494,6 +507,7 @@ pub async fn run_streaming(
         branch,
         commit_sha: outcome.commit_sha,
         diff_stat: outcome.diff_stat,
+        verify_output,
     })
 }
 
