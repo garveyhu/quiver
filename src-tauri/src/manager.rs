@@ -32,9 +32,9 @@ use quiver_core::merge::MergeLock;
 use quiver_orchestrator::{
     Decision, Effect, ManagerContext, Orchestrator, PendingReview, Step,
 };
-use quiver_store::Store;
+use quiver_store::{Settings, Store};
 
-use crate::run::RunMode;
+use crate::run::{resolve_agent_bin, RunMode};
 use crate::scheduler::TASK_EVENT_CHANNEL;
 
 // 按职责拆出的子模块(单一职责):ctx 组装只读 helper、决策→前端工作台投影、worker 生命周期 +
@@ -237,7 +237,7 @@ async fn manager_loop(app: AppHandle, store: Arc<Store>, pm: Arc<ProjectManager>
         //    人事部改了「经理大脑」下一拍立即生效,没有缓存失效问题。decide 不持 orch 锁
         //    (ClaudeBrain 要等 claude 想几秒,期间不能堵 worker 回流);拿到 decision 后
         //    才持锁瞬间 apply(分配 node/fence/seq)。
-        let brain = crate::manager_brain(
+        let brain = manager_brain(
             &app,
             &store,
             &settings.clone().unwrap_or_default(),
@@ -511,4 +511,62 @@ async fn execute_effect(
     .await;
 
     progressed
+}
+
+/// 经理**思考流**推给前端的形(camelCase):经理用 claude 决策时,claude 每吐一段思考就发一条,
+/// 让 CEO 点开经理实时看到它在想什么。project 用于前端按当前项目过滤。
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ManagerThinkingEvent {
+    project: String,
+    text: String,
+}
+
+/// 给某 project 的经理控制循环选大脑(DESIGN §5/§21/§14)。
+///
+/// **唯一的选脑依据是人事部「经理」角色的 `brain` 字段**(用户在人事部显式改,seed 为
+/// 免费 `rule`):`claude` → 真 claude 经理([`ClaudeBrain`](crate::claude_brain),用该角色
+/// 配置的 model,走 headless 额度);其余/读不到/二进制解析失败 → 免费 `RuleBrain`。
+///
+/// 教训(2026-06-10 实测,绝不回退):曾按 `default_mode=="real"` 自动选 ClaudeBrain,结果
+/// simulate 任务被真 claude 经理连环想、烧额度毫无感知。`default_mode` 是"任务跑什么
+/// 模式",不是"经理用什么脑"——烧钱的大脑只能由这个显式旋钮打开(蓝图 §7),
+/// 不搭任何其他设置的便车。
+fn manager_brain(
+    app: &AppHandle,
+    store: &Arc<Store>,
+    settings: &Settings,
+    cwd: PathBuf,
+    project_key: &str,
+) -> Arc<dyn quiver_orchestrator::ManagerBrain> {
+    let role = store.get_role("manager").ok().flatten();
+    if let Some(role) = role.filter(|r| r.brain == "claude") {
+        // claude 经理走 ClaudeBrain 路径(spawn 进程→parse 决策 JSON→执行)。**simulate 模式
+        // 用 fake-claude bin 免费跑这条路径**(fake-claude 识别决策 prompt、输出桩决策):让用户
+        // 不烧钱就能预演 claude 经理的完整工作流、也验证开真 claude 前管道无断点。real 模式才
+        // 用真 claude bin(真智能决策、烧 headless 额度)。
+        let mode = if settings.default_mode == "real" {
+            RunMode::Real
+        } else {
+            RunMode::Simulate
+        };
+        if let Ok(bin) = resolve_agent_bin(settings, mode) {
+            // 思考流回调:claude 每吐一段思考就 emit 到前端(可见性)——经理不再是黑箱。
+            let app2 = app.clone();
+            let proj = project_key.to_string();
+            let sink = std::sync::Arc::new(move |text: &str| {
+                let _ = app2.emit(
+                    MANAGER_THINKING_CHANNEL,
+                    ManagerThinkingEvent { project: proj.clone(), text: text.to_string() },
+                );
+            });
+            // CEO 在人事部给经理写的工作准则/性格注入决策(§14 丰富配置)。
+            return Arc::new(
+                crate::claude_brain::ClaudeBrain::new(bin, cwd, role.model)
+                    .with_system_prompt(role.system_prompt)
+                    .with_thinking_sink(sink),
+            );
+        }
+    }
+    Arc::new(quiver_orchestrator::RuleBrain)
 }
