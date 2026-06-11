@@ -308,7 +308,11 @@ pub async fn run_streaming(
         if text.trim().is_empty() {
             String::new()
         } else {
-            format!("[项目记忆] 这个项目沉淀的约定与经验,干活时遵循、别重蹈覆辙:\n{text}\n\n")
+            format!(
+                "[项目记忆] 这个项目沉淀的约定与经验,干活时遵循、别重蹈覆辙(每条带可信度:\
+                 「权威 / 已验证」是硬约定务必照做,「员工汇报」参考即可、与现实冲突时以实际为准):\
+                 \n{text}\n\n"
+            )
         }
     };
     // §5 双向协作(worker→经理):告诉 worker 卡住别硬猜 —— 遇到该上级拍板的点写 NEEDS_INPUT,
