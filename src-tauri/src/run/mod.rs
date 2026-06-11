@@ -525,18 +525,24 @@ fn finish_status_label(status: FinishStatus) -> &'static str {
 /// 一处(worker 可能边做边改主意,最后那次请示最准),问题取该标记后的同一行。没有 → None。
 fn extract_needs_input(events: &[AgentEvent]) -> Option<String> {
     const TAG: &str = "NEEDS_INPUT:";
+    // worker 的输出是流式 chunk,「NEEDS_INPUT: 问题」这行可能被切在两个 chunk 的边界
+    // (如 "NEEDS_IN" | "PUT: ...") → 先把所有 OutputChunk 拼成完整文本再整体按行扫,逐 chunk
+    // 解析会漏掉跨边界的真请示,让 worker 的请示石沉大海(经理当普通完工裁决,卡住没人管)。
+    let full: String = events
+        .iter()
+        .filter_map(|ev| match &ev.payload {
+            AgentEventPayload::OutputChunk { text } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
     let mut found = None;
-    for ev in events {
-        if let AgentEventPayload::OutputChunk { text } = &ev.payload {
-            // 只认**单独起一行**的 NEEDS_INPUT(worker 真请示) —— 不误匹配注入的协作约定里那句
-            // 行内示例「写 `NEEDS_INPUT: <你的具体问题>`」(它行首是别的字),占位 <...> 也排除。
-            for line in text.lines() {
-                if let Some(q) = line.trim().strip_prefix(TAG) {
-                    let q = q.trim();
-                    if !q.is_empty() && !q.starts_with('<') {
-                        found = Some(q.to_string());
-                    }
-                }
+    // 只认**单独起一行**的 NEEDS_INPUT(worker 真请示) —— 不误匹配注入的协作约定里那句行内示例
+    // 「写 `NEEDS_INPUT: <你的具体问题>`」(它行首是别的字),占位 <...> 也排除。取最后一处。
+    for line in full.lines() {
+        if let Some(q) = line.trim().strip_prefix(TAG) {
+            let q = q.trim();
+            if !q.is_empty() && !q.starts_with('<') {
+                found = Some(q.to_string());
             }
         }
     }
@@ -568,6 +574,13 @@ mod tests {
         assert_eq!(extract_needs_input(&convention), None);
         // 正常完成、没请示 → None。
         assert_eq!(extract_needs_input(&[chunk("已完成排序函数并通过测试")]), None);
+    }
+
+    #[test]
+    fn extract_needs_input_survives_chunk_split() {
+        // 流式切断:NEEDS_INPUT 这行被劈成两个 chunk → 拼接后仍能提取(逐 chunk 解析会漏掉它)。
+        let split = [chunk("做完了一版。\nNEEDS_IN"), chunk("PUT: 用 Redis 还是内存缓存?")];
+        assert_eq!(extract_needs_input(&split).as_deref(), Some("用 Redis 还是内存缓存?"));
     }
 
     #[test]
