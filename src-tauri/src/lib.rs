@@ -207,16 +207,34 @@ pub fn run() {
                     let n = if autonomous {
                         app_state
                             .manager
-                            .reconcile(handle.clone(), store, max_workers)
+                            .reconcile(handle.clone(), store.clone(), max_workers)
                             .await
                     } else {
                         app_state
                             .scheduler
-                            .reconcile(handle.clone(), store, max_workers)
+                            .reconcile(handle.clone(), store.clone(), max_workers)
                             .await
                     };
                     if n > 0 {
                         eprintln!("reconcile: requeued {n} interrupted task(s) from a prior session");
+                    }
+                    // 「给个方向就自治」重启后也恢复:autonomous + 设了目标但无 pending 任务时,
+                    // reconcile 只管有 pending 活的项目 → 不会启动任何循环,纯目标自治推不动。补:有
+                    // 自治目标 + current project → 主动起经理循环(它会主动 plan 推进目标),过夜关机
+                    // 重启也能续上。
+                    if autonomous {
+                        let goal = settings
+                            .as_ref()
+                            .map(|s| s.autonomous_goal.trim().to_string())
+                            .unwrap_or_default();
+                        if !goal.is_empty() {
+                            if let Ok(project) = crate::current_project(&app_state) {
+                                app_state
+                                    .manager
+                                    .ensure_running(handle.clone(), store, project, max_workers.max(1))
+                                    .await;
+                            }
+                        }
                     }
                 });
             }
