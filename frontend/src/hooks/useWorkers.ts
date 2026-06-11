@@ -31,6 +31,8 @@ export function useWorkers(layout: Layout, empNames: string[] = []): PlacedWorke
   // 经理是否在用 claude 思考:收到 manager-thinking 即 true,停流 THINK_LINGER_MS 后归 false ——
   // 驱动经理小人头顶冒思考点,让 CEO 不点开也能看到「AI 正在决策」。
   const [mgrThinking, setMgrThinking] = useState(false);
+  // 休息中员工偶尔的小动作:每隔几秒随机挑一个待命员工喝口水/伸个懒腰,让公司有生气、不死板站着。
+  const [idleAct, setIdleAct] = useState<{ id: string; act: 'sip' | 'stretch' } | null>(null);
   // 上一轮的在途清单(diff 出"刚完工"的用),避免在 setState 回调里再 setState。
   const prevActive = useRef<TaskRecord[]>([]);
 
@@ -105,11 +107,32 @@ export function useWorkers(layout: Layout, empNames: string[] = []): PlacedWorke
     };
   }, []);
 
+  // 待命小动作的节拍器:每 4-7s 随机点一个员工喝口水/伸个懒腰,1.4s 后归位。挑到正在干活的
+  // 无妨(placeWorkers 只给休息中的应用)——让满屏待命的员工偶尔有个小动作,公司不死气沉沉。
+  useEffect(() => {
+    let alive = true;
+    let t: number | undefined;
+    const EMP_COUNT = 5; // 与 workers.ts 的 EMP_COUNT 一致
+    const tick = () => {
+      if (!alive) return;
+      const i = Math.floor(Math.random() * EMP_COUNT);
+      const act: 'sip' | 'stretch' = Math.random() < 0.5 ? 'sip' : 'stretch';
+      setIdleAct({ id: `emp${i}`, act });
+      window.setTimeout(() => alive && setIdleAct(null), 1400);
+      t = window.setTimeout(tick, 4000 + Math.random() * 3000);
+    };
+    t = window.setTimeout(tick, 2500 + Math.random() * 2000);
+    return () => {
+      alive = false;
+      window.clearTimeout(t);
+    };
+  }, []);
+
   const empKey = empNames.join(',');
   return useMemo(
-    () => placeWorkers(layout, active, bubbles, lingering, mgrThinking, empNames),
+    () => placeWorkers(layout, active, bubbles, lingering, mgrThinking, empNames, idleAct),
     // empNames 是数组每帧新引用 → 用其内容 join 当依赖键,避免无谓重算。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [layout, active, bubbles, lingering, mgrThinking, empKey],
+    [layout, active, bubbles, lingering, mgrThinking, empKey, idleAct],
   );
 }

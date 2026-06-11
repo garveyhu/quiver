@@ -14,10 +14,10 @@ interface WorkerProps {
  * 本刀只渲染静态站姿;走位/敲键/庆祝等动画 class 已在 CSS 备好，待下一刀的事件驱动接上。
  */
 export function Worker({ worker, onDive }: WorkerProps) {
-  const { role, x, y, z, hood, awaiting, lean, working, label, thinking } = worker;
+  const { role, x, y, z, hood, awaiting, lean, working, label, thinking, idleAction } = worker;
   const [hoodColor, torsoColor] = hood;
 
-  const className = ['worker', role, awaiting && 'awaiting', lean && 'lean', working && 'working', thinking && 'thinking', label && 'talk']
+  const className = ['worker', role, awaiting && 'awaiting', lean && 'lean', working && 'working', thinking && 'thinking', label && 'talk', idleAction]
     .filter(Boolean)
     .join(' ');
 

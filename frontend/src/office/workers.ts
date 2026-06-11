@@ -30,6 +30,8 @@ export interface PlacedWorker {
   workerRole?: string;
   /** 经理正在用 claude 思考决策(头顶冒思考点 + 轻浮动)——让 CEO 扫一眼就知道 AI 在工作。 */
   thinking?: boolean;
+  /** 休息中偶尔的小动作(sip 喝水 / stretch 伸展)—— 让待命的员工有生气,不死板站着。 */
+  idleAction?: 'sip' | 'stretch';
 }
 
 /** 连帽衫配色池(移植原型 HOODS)。 */
@@ -94,6 +96,7 @@ export function placeWorkers(
   lingering: LingeringTask[] = [],
   mgrThinking = false,
   empNames: string[] = [],
+  idleAct: { id: string; act: 'sip' | 'stretch' } | null = null,
 ): PlacedWorker[] {
   const cells = loungeCells();
   const workers: PlacedWorker[] = [];
@@ -140,6 +143,7 @@ export function placeWorkers(
         hood,
         awaiting: i === EMP_COUNT - 1 && busy === 0,
         workerRole: empNames.length ? empNames[i % empNames.length] : undefined,
+        idleAction: idleAct?.id === `emp${i}` ? idleAct.act : undefined,
       });
     }
   }
