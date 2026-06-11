@@ -181,12 +181,22 @@ fn build_prompt(ctx: &ManagerContext, system_prompt: &str) -> String {
     let goal = if ctx.autonomous_goal.trim().is_empty() {
         String::new()
     } else {
+        // 已为这个目标做过的子任务清单(结局)——让经理 plan 时心里有数:做到哪了、别重复、何时收尾。
+        let progress = if ctx.goal_progress.is_empty() {
+            "\n  (还没为这个目标做过事 —— 这是第一批。)".to_string()
+        } else {
+            format!(
+                "\n  已为这个目标做过(别重复这些,在此基础上递进):\n{}",
+                ctx.goal_progress.iter().map(|p| format!("  · {p}\n")).collect::<String>()
+            )
+        };
         format!(
             "\n\n【自治目标】CEO 要你持续推进:「{}」。**如果队列空了(排队 0)**,别 noop 收工 —— \
-             看项目简报里已经做过什么,主动 plan 出推进这个目标的下一批具体子任务(2-4 个,别重复\
-             已做的、按记忆里的经验来)。目标看着推进得差不多了、或拿不准下一步、或预算紧 → 才\
-             escalate 给 CEO 或 noop。队列非空时照常先处理在手的活。",
-            ctx.autonomous_goal.trim()
+             主动 plan 出推进这个目标的下一批具体子任务(2-4 个,别重复已做的、按记忆里的经验来)。{}\
+             \n看上面的进展:已经做得差不多、或该收口验收、或拿不准下一步、或预算紧 → 就 escalate 给 \
+             CEO 或 noop,别为凑数无限铺活。队列非空时照常先处理在手的活。",
+            ctx.autonomous_goal.trim(),
+            progress
         )
     };
     format!(

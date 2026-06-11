@@ -102,6 +102,39 @@ pub(super) fn budget_remaining(store: &Arc<Store>, settings: Option<&Settings>) 
     }
 }
 
+/// 已为自治目标做过的子任务(标题 + 结局),最近 8 条 —— 让经理主动 plan 时知道目标推进到哪了:
+/// 不重复已做的、在已有基础上递进、做得差不多就理性收尾(escalate/noop)。goal 空 → 空。
+pub(super) fn goal_progress(store: &Arc<Store>, project_key: &str, goal: &str) -> Vec<String> {
+    if goal.trim().is_empty() {
+        return Vec::new();
+    }
+    let Ok(tasks) = store.list_tasks(Some(project_key), None) else {
+        return Vec::new();
+    };
+    let mut subs: Vec<_> = tasks
+        .into_iter()
+        .filter(|t| t.parent_goal.as_deref() == Some(goal))
+        .collect();
+    subs.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    subs.into_iter()
+        .take(8)
+        .map(|t| format!("{} [{}]", t.prompt, status_cn(&t.status)))
+        .collect()
+}
+
+/// 任务状态 → 给经理看的中文结局(目标进展用)。
+fn status_cn(s: &str) -> &str {
+    match s {
+        "merged" => "已合并",
+        "verified" | "done" => "完成",
+        "running" => "进行中",
+        "queued" => "排队中",
+        "failed" | "verify_failed" => "失败",
+        "needs_rebase" => "待处理",
+        _ => s,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

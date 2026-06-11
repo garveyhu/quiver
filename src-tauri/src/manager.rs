@@ -44,7 +44,9 @@ mod context;
 mod delivery;
 mod events;
 mod worker;
-use context::{budget_remaining, count_queued, memory_brief, peek_next_task, team_specialties};
+use context::{
+    budget_remaining, count_queued, goal_progress, memory_brief, peek_next_task, team_specialties,
+};
 use delivery::{deliver_merge, record_decision_episode, record_failure_lesson};
 use events::emit_decision;
 use worker::{auto_retry, kill_orphan_worker, spawn_worker, MAX_AUTO_RETRY};
@@ -231,6 +233,12 @@ async fn manager_loop(app: AppHandle, store: Arc<Store>, pm: Arc<ProjectManager>
             team: team_specialties(&store),
             // §5 主动自治:CEO 的高层方向。非空 + 队列空时,经理主动 plan 推进(而非 noop 退出)。
             autonomous_goal: settings.as_ref().map(|s| s.autonomous_goal.clone()).unwrap_or_default(),
+            // §5 目标进展:已为这个自治目标做过的子任务(结局)——让经理 plan 时知道推进到哪了,
+            // 不重复、递进、理性收尾,而非每拍从零铺活。
+            goal_progress: settings
+                .as_ref()
+                .map(|s| goal_progress(&store, &project_key, &s.autonomous_goal))
+                .unwrap_or_default(),
         };
 
         // 2. 经理拍决策:**每拍现场按人事部配置选脑**(rule 免费/claude 真想,§14)——

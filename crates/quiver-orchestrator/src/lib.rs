@@ -103,6 +103,11 @@ pub struct ManagerContext {
     /// 「绝对听话」(被动等派活)的分界。空 = 被动模式,队列空就停。
     #[serde(default)]
     pub autonomous_goal: String,
+    /// 已为 `autonomous_goal` 做过的子任务(标题 + 结局),最近若干 —— 让经理主动 plan 时知道「这个
+    /// 目标已经推进到哪了」:别重复已做的、在已有基础上递进、做得差不多了就理性收尾(escalate/noop)而
+    /// 非无限铺活。空 = 还没为这个目标做过事。
+    #[serde(default)]
+    pub goal_progress: Vec<String>,
 }
 
 /// [`RuleBrain`] spawn 决策的占位 prompt:表示"原样认领队列下一个任务"(执行层据此用
