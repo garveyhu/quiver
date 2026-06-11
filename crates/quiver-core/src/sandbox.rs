@@ -39,6 +39,24 @@ fn secret_dirs() -> Vec<PathBuf> {
         .collect()
 }
 
+/// 构建/测试工具普遍要写的工作区**外**缓存/临时目录:py_compile 的字节码缓存(Apple python3 写到
+/// `~/Library/Caches/com.apple.python`)、cargo/npm/pip 等的 `~/.cache`、`/tmp` 临时文件。verify 在
+/// worktree 写隔离下若不放行这些,几乎所有真实 verify 命令都会因写缓存 PermissionError 而失败
+/// (2026-06 real 实测:py_compile 写 .pyc 到 home 缓存目录被拒 → 所有 Python 任务 verify_failed、
+/// worker 白干、永远 0 交付)。放行它们(非源码、非密钥 —— 密钥目录不在缓存目录里、源码改动仍只能落
+/// worktree)既让 verify 跑得起来,又不破 §7「worker 碰不到工作区之外的源码/凭据」的安全本体。
+fn tool_cache_dirs() -> Vec<PathBuf> {
+    let mut v = vec![
+        PathBuf::from("/private/tmp"),
+        PathBuf::from("/private/var/folders"),
+    ];
+    if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+        v.push(home.join("Library/Caches"));
+        v.push(home.join(".cache"));
+    }
+    v
+}
+
 impl SandboxPolicy {
     /// 收紧默认(§7):只能写自己的 `worktree`、不出网。读面可再 [`allow_read`] 加。
     /// 用于 **verify 命令**(worker 改过的测试脚本)——它只需写 worktree 内的编译产物。
@@ -49,11 +67,18 @@ impl SandboxPolicy {
         // canonicalize:seatbelt 按内核真实路径匹配,/tmp→/private/tmp 等符号链接不归一会让
         // 可写子树对不上、写被误拒(2026-06 实测)。canonicalize 失败(路径还不存在)就用原路径。
         let wt = std::fs::canonicalize(&wt).unwrap_or(wt);
+        // verify 在写隔离下跑,但构建/测试工具普遍要写工作区外的缓存(py_compile 的 .pyc、cargo/npm
+        // 缓存、/tmp)。不放行 → 真实 verify 几乎必因写缓存 PermissionError 失败、worker 白干、永远
+        // 0 交付(2026-06 real 实测)。放行缓存/临时目录(非源码非密钥),verify 才跑得起来。
+        let mut writable = vec![wt.clone()];
+        for c in tool_cache_dirs() {
+            writable.push(std::fs::canonicalize(&c).unwrap_or(c));
+        }
         Self {
             allow_network: false,
             restrict_writes: true,
-            readable_paths: vec![wt.clone()],
-            writable_paths: vec![wt],
+            readable_paths: vec![wt],
+            writable_paths: writable,
             deny_read_paths: Vec::new(),
         }
     }
@@ -160,7 +185,10 @@ mod tests {
         let real = std::fs::canonicalize(&dir).unwrap();
         let p = SandboxPolicy::for_worktree(&dir);
         assert!(!p.allow_network, "默认不出网");
-        assert_eq!(p.writable_paths, vec![real.clone()], "可写子树 = canonicalize 后的真实路径");
+        // 可写子树:worktree 打头(canonicalize 后的真实路径)+ 工具缓存/临时目录(让 verify 能写
+        // .pyc / 构建缓存,否则真实 verify 写缓存被拒、worker 白干 —— 见 tool_cache_dirs)。
+        assert_eq!(p.writable_paths.first(), Some(&real), "worktree 是第一个可写子树");
+        assert!(p.writable_paths.len() > 1, "还放行了工具缓存/临时目录,否则真实 verify 写缓存会被拒");
         assert_eq!(p.readable_paths, vec![real]);
     }
 
