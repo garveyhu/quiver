@@ -360,10 +360,23 @@ async fn execute_effect(
             if let Some(p) = &parent {
                 let _ = store.update_task_status(&p.id, "planned", crate::now_ms());
             }
-            let parent_goal = parent.as_ref().map(|t| t.prompt.clone());
+            // 主动自治(队列空、无队首原任务)时:父目标退回 CEO 的自治目标 → 子任务仍挂在目标下,
+            // 追溯室照样画「自治目标 → 子任务」树;mode 也退回设置的默认模式,而非写死 simulate ——
+            // 否则 CEO 开了 real 自治、经理主动 plan 的子任务却全 simulate(假干、不真推进目标)。
+            let settings = store.get_settings().ok();
+            let parent_goal = parent
+                .as_ref()
+                .map(|t| t.prompt.clone())
+                .or_else(|| {
+                    settings
+                        .as_ref()
+                        .map(|s| s.autonomous_goal.clone())
+                        .filter(|g| !g.trim().is_empty())
+                });
             let mode = parent
                 .as_ref()
                 .map(|t| t.mode.clone())
+                .or_else(|| settings.as_ref().map(|s| s.default_mode.clone()))
                 .unwrap_or_else(|| "simulate".to_string());
             let now = crate::now_ms();
             for (i, sub) in subtasks.iter().enumerate() {
