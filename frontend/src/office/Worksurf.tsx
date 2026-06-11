@@ -2,10 +2,22 @@ import { useEffect, useState } from 'react';
 
 import { MarkdownLite } from '@/components/MarkdownLite';
 import { TaskJourney } from '@/components/TaskJourney';
-import { listTasks } from '@/services/commands';
-import type { AgentRole, StoredEvent } from '@/services/wire';
+import { getDecisions, listTasks } from '@/services/commands';
+import type { AgentRole, ManagerDecision, StoredEvent } from '@/services/wire';
 
 const OK = new Set(['verified', 'merged', 'done']);
+
+/** 决策动作中文名 —— 经理面板里显示「拍了什么」。 */
+const ACT_CN: Record<string, string> = {
+  spawn: '派活',
+  plan: '拆活分工',
+  continue: '续跑改进',
+  deliver: '验收交付',
+  block: '拦下',
+  escalate: '上报你',
+  refresh_memory: '翻记忆',
+  noop: '观望',
+};
 
 /** 一个员工的历史战绩(从所有任务里按 workerRole 聚合)。 */
 interface Perf {
@@ -183,6 +195,22 @@ export function Worksurf({ worker, events, roles, managerThinking, onClose, onOp
   // 剥掉难读的决策 JSON,只留自然语言思路(规则经理/fake 只吐 JSON → 滤后为空,显示提示)。
   const isMgr = worker?.role === 'mgr';
   const thinking = stripDecisionJson(managerThinking ?? '');
+  // 实时思考流只从「点开这一刻」起订阅,之前的决策没捕获 → 第一次点开常是空的。补拉经理最近的
+  // 决策历史(get_decisions,落库、重启不丢),让点经理总能看到 ta 刚做了什么,而不是空白提示。
+  const [recentDec, setRecentDec] = useState<ManagerDecision[]>([]);
+  useEffect(() => {
+    if (!isMgr) {
+      setRecentDec([]);
+      return;
+    }
+    let alive = true;
+    void getDecisions(8)
+      .then(d => alive && setRecentDec(d.filter(x => x.action !== 'noop').slice(0, 6)))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [isMgr]);
   return (
     <div className={`worksurf${worker ? ' on' : ''}`}>
       {worker && (
@@ -214,10 +242,26 @@ export function Worksurf({ worker, events, roles, managerThinking, onClose, onOp
                     </div>
                   </div>
                 </div>
+              ) : recentDec.length > 0 ? (
+                <>
+                  <div className="trc-ev st-meta">
+                    经理此刻没在出声思考。下面是 ta 最近拍的决策 —— 点右上角「经理」看完整工作台。
+                  </div>
+                  {recentDec.map(d => (
+                    <div className="trc-ev" key={`${d.seq}-${d.tsMs}`}>
+                      <span className="trc-k">{ACT_CN[d.action] ?? d.action}</span>
+                      <div className="trc-t">
+                        {d.taskPrompt
+                          ? `派的活:${d.taskPrompt.length > 44 ? `${d.taskPrompt.slice(0, 44)}…` : d.taskPrompt}`
+                          : d.reason || '—'}
+                      </div>
+                    </div>
+                  ))}
+                </>
               ) : (
                 <div className="trc-ev st-meta">
-                  经理空闲中,或经理大脑还是「规则」(免费、按固定策略走、不用 claude 思考)。
-                  去人事部把经理大脑切成 claude,它决策时这里就会实时流出思路。
+                  经理还没拍过决策。派一件事给公司(右上角「CEO 下目标」/⌘K),它就会开始决策;
+                  把经理大脑切成 claude(人事部)能看到它实时的思考过程。
                 </div>
               )}
             </div>
