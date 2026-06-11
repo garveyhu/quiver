@@ -70,6 +70,10 @@ const MAX_TICKS_PER_LOOP: u64 = 200;
 /// 续跑,摘出复核队、标 needs_rebase 上报 CEO。claude 经理再想 continue 也挡得住 —— 自治不靠
 /// 经理自觉收手,系统兜底保证「救不动就停、不无限烧」(预算闸只挡总额,这道挡单任务空耗)。
 const MAX_CONTINUE_ROUNDS: u32 = 3;
+/// plan 子任务 id 的全局唯一序号:同一毫秒内连拍两次 plan(fake 低延迟下经理快速空转会发生)时,
+/// 只靠 {i}-{now} 会撞 id → enqueue 的 `ON CONFLICT DO UPDATE` 把前一拍的子任务覆盖掉(静默丢活)。
+/// 加这个单调序号杜绝相撞。
+static SUB_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// 经理编排运行时,挂在 `AppState`(类比 [`Scheduler`](crate::scheduler::Scheduler))。
 /// 每个 project 一个 [`ProjectManager`](懒创建、单循环)。
@@ -392,7 +396,8 @@ async fn execute_effect(
                 .unwrap_or_else(|| "simulate".to_string());
             let now = crate::now_ms();
             for (i, sub) in subtasks.iter().enumerate() {
-                let id = format!("task-sub-{i}-{now}");
+                let seq = SUB_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                let id = format!("task-sub-{now}-{i}-{seq}");
                 let _ = store.enqueue_task(&quiver_store::NewTask {
                     id: id.clone(),
                     project: project_key.to_string(),
