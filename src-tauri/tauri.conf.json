@@ -15,10 +15,10 @@
       {
         "label": "main",
         "title": "Quiver",
-        "width": 960,
-        "height": 720,
-        "minWidth": 640,
-        "minHeight": 480,
+        "width": 1280,
+        "height": 820,
+        "minWidth": 880,
+        "minHeight": 600,
         "resizable": true
       }
     ],
