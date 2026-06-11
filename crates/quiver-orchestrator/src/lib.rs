@@ -72,6 +72,10 @@ pub struct PendingReview {
     /// continue 回答它。普通完工 → None。
     #[serde(default)]
     pub question: Option<String>,
+    /// worker 这一轮**实际产出的摘要**(改了什么 diff_stat + 验证结果)——让经理复核时看产出、
+    /// 而非凭终态标签盲裁:产出对路就 Deliver,方向偏/没覆盖到就 Continue 给指导,跑歪了就 Block。
+    #[serde(default)]
+    pub summary: Option<String>,
 }
 
 /// 经理这一拍看到的、已压扁的局面(§5)。随阶段增长(在途明细、最近 episode、风险信号…)。
@@ -229,7 +233,7 @@ mod tests {
             pending_reviews: vec![PendingReview {
                 node_id: "n1".into(),
                 task_id: "t1".into(),
-                status: "verified".into(), round: 0, question: None,
+                status: "verified".into(), round: 0, question: None, summary: None,
             }],
             ..ManagerContext::default()
         };
@@ -242,7 +246,7 @@ mod tests {
             pending_reviews: vec![PendingReview {
                 node_id: "n2".into(),
                 task_id: "t2".into(),
-                status: "failed".into(), round: 0, question: None,
+                status: "failed".into(), round: 0, question: None, summary: None,
             }],
             ..ctx.clone()
         };

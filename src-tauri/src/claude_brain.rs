@@ -151,10 +151,16 @@ fn build_prompt(ctx: &ManagerContext, system_prompt: &str) -> String {
                     Some(q) => format!(" —— ⚠ worker 卡住请示:「{q}」(用 continue,prompt 写你的解答)"),
                     None => String::new(),
                 };
-                format!("- 节点 {} 完工,终态 {}(任务 {}{}){}\n", r.node_id, r.status, r.task_id, round, ask)
+                // §5 看产出再裁:列出 worker 实际改了什么 + 验证结果,引导经理据此判断 deliver/continue/block。
+                let out = match &r.summary {
+                    Some(s) => format!("\n    {s}"),
+                    None => String::new(),
+                };
+                format!("- 节点 {} 完工,终态 {}(任务 {}{}){}{}\n", r.node_id, r.status, r.task_id, round, ask, out)
             })
             .collect();
-        format!("\n完工待你复核裁决(deliver 交付 / continue 给指导再跑一轮改进 / block 拦下):\n{lines}")
+        format!("\n完工待你复核裁决 —— **看每条下面的产出(改了什么 + 验证结果)再判断**:产出对路就 \
+                 deliver 交付;方向偏 / 没覆盖到 / 质量不够就 continue 给具体指导再跑一轮;跑歪了就 block 拦下:\n{lines}")
     };
     // §14 团队专长:列出员工各擅长什么,经理派活时在任务描述里点明所需专长 → 派给对的人。
     let team = if ctx.team.is_empty() {
@@ -269,7 +275,7 @@ mod tests {
             pending_reviews: vec![PendingReview {
                 node_id: "node-7".into(),
                 task_id: "task-1".into(),
-                status: "verified".into(), round: 0, question: None,
+                status: "verified".into(), round: 0, question: None, summary: None,
             }],
             team: vec!["员工 2 · 测试".into(), "员工 3 · 前端".into()],
             ..ManagerContext::default()

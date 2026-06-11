@@ -2,7 +2,7 @@
 //! result + diff. Mechanical (no AI) — the durable "what happened" the librarian
 //! later distills into facts (§6.4). Append-only.
 
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
 
 use crate::MemoryStore;
 
@@ -97,6 +97,38 @@ impl MemoryStore {
             })?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
+    }
+
+    /// The most-recent episode for a specific `task_id` (newest first). Its
+    /// `diff_stat` + `verify_result` are what a worker actually produced —
+    /// the manager reads them to review the output before ruling Deliver/Block
+    /// (§5 复核裁决:看产出再裁,不凭终态标签盲裁)。`None` if no episode yet.
+    pub fn latest_episode_for_task(&self, task_id: &str) -> anyhow::Result<Option<EpisodeRecord>> {
+        let conn = self.conn.lock().expect("memory store lock");
+        let row = conn
+            .query_row(
+                "SELECT id, project, node_id, task_id, commit_sha, merge_seq,
+                        verify_result, diff_stat, summary, created_at
+                 FROM episode WHERE task_id = ?1
+                 ORDER BY created_at DESC, id DESC LIMIT 1",
+                params![task_id],
+                |row| {
+                    Ok(EpisodeRecord {
+                        id: row.get(0)?,
+                        project: row.get(1)?,
+                        node_id: row.get(2)?,
+                        task_id: row.get(3)?,
+                        commit_sha: row.get(4)?,
+                        merge_seq: row.get(5)?,
+                        verify_result: row.get(6)?,
+                        diff_stat: row.get(7)?,
+                        summary: row.get(8)?,
+                        created_at: row.get(9)?,
+                    })
+                },
+            )
+            .optional()?;
+        Ok(row)
     }
 }
 

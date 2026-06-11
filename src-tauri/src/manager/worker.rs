@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 use quiver_orchestrator::PendingReview;
 use quiver_store::{Store, TaskRecord};
@@ -54,12 +54,23 @@ pub(super) fn spawn_worker(
         } else {
             None
         };
+        // §5 复核裁决看产出:读这个 task 刚落的 episode,把 worker **实际改了什么**(diff_stat)+
+        // 验证结果摘出来给经理 —— 经理据此看产出再裁决(Deliver/Continue/Block),不凭终态标签盲裁。
+        let summary = app
+            .try_state::<crate::AppState>()
+            .and_then(|st| st.memory.get().and_then(|m| m.latest_episode_for_task(&task_id).ok().flatten()))
+            .map(|ep| {
+                let diff = ep.diff_stat.as_deref().filter(|s| !s.trim().is_empty()).unwrap_or("(无文件改动)");
+                let verify = ep.verify_result.as_deref().unwrap_or("-");
+                format!("产出:{diff};验证:{verify}")
+            });
         pm.reviews.lock().await.push(PendingReview {
             node_id: node_id.clone(),
             task_id,
             status,
             round, // §5 双向协作:这是第几轮(首跑 0,经理每 continue 一次 +1)
             question,
+            summary,
         });
         // 回流(§5.5 栅栏对账):栅栏匹配才释放名额,挡掉过期/重复。
         pm.orch.lock().await.on_complete(&node_id, fence);
