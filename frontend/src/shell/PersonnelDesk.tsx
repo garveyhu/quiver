@@ -162,6 +162,23 @@ export function PersonnelDesk({ open, roles, onPatch, onHire, onFire, onClose }:
               )}
               {r.kind === 'worker' && (
                 <div className="kv">
+                  <b>工作准则</b>
+                  <span>
+                    <input
+                      className="field"
+                      defaultValue={r.systemPrompt}
+                      placeholder="给这个员工的干活准则(如:测试覆盖边界 case / 改动写清注释),注入它的 claude"
+                      onBlur={e => {
+                        const v = e.target.value;
+                        if (v !== r.systemPrompt) onPatch(r.id, { systemPrompt: v });
+                      }}
+                    />
+                    <span className="st-meta">真实干活时注入这个员工的 claude,塑造它做事的风格</span>
+                  </span>
+                </div>
+              )}
+              {r.kind === 'worker' && (
+                <div className="kv">
                   <b>硬限</b>
                   <span>
                     单任务 $
