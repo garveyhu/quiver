@@ -23,6 +23,13 @@ const BRAIN_CN: Record<string, [string, string]> = {
   librarian: ['休眠 · 不提炼', 'claude · 提炼事实'],
 };
 
+/** 经理工作准则的预设模板 —— 一键塑造经理判断风格(claude 大脑生效),CEO 不用从零写。 */
+const MGR_PRESETS: ReadonlyArray<{ name: string; text: string }> = [
+  { name: '激进并行', text: '尽量并行多派活、快速推进;能自己合理决定的别请示,只在重大架构取舍或缺关键信息时才上报 CEO。' },
+  { name: '稳健质量', text: '质量优先:每个产出严格复核,拿不准就打回重做,宁可慢也别让带病的产物合进 main。' },
+  { name: '预算敏感', text: '预算紧:优先复核交付、清空在途,少铺新活;接近预算上限就收敛、把拿不准的上报 CEO。' },
+];
+
 /** 数字输入的解析:空串=显式清除(null),非法=不动(undefined)。 */
 function parseNum(raw: string): number | null | undefined {
   const t = raw.trim();
@@ -111,9 +118,26 @@ export function PersonnelDesk({ open, roles, onPatch, onHire, onFire, onClose }:
                         if (v !== r.systemPrompt) onPatch(r.id, { systemPrompt: v });
                       }}
                     />
-                    <span className="st-meta" style={{ marginLeft: 8 }}>
-                      注入 claude 经理决策,塑造判断风格
+                    <span className="mgr-presets">
+                      {MGR_PRESETS.map(p => (
+                        <button
+                          key={p.name}
+                          className="pbtn preset"
+                          type="button"
+                          title={p.text}
+                          onClick={e => {
+                            const inp = e.currentTarget
+                              .closest('.kv')
+                              ?.querySelector('input.field') as HTMLInputElement | null;
+                            if (inp) inp.value = p.text;
+                            onPatch(r.id, { systemPrompt: p.text });
+                          }}
+                        >
+                          {p.name}
+                        </button>
+                      ))}
                     </span>
+                    <span className="st-meta">注入 claude 经理决策,塑造判断风格 —— 点预设一键填,也可自己改</span>
                   </span>
                 </div>
               )}
