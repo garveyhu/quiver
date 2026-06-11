@@ -11,6 +11,8 @@ use quiver_store::{Settings, Store};
 /// 没设夜预算时视为充裕(不因预算挡经理),与 `manager_preview` 同口径。
 const BUDGET_UNCAPPED: f64 = 1_000_000.0;
 const DAY_MS: i64 = 86_400_000;
+/// 月额度窗口 = 30 天(与 scheduler 的 spent_month = cost_since(now - 30*DAY_MS) 同口径)。
+const MONTH_MS: i64 = 30 * DAY_MS;
 
 /// 组装项目记忆简报文本(§6):前 8 条当前事实 + 近 6 条 episode。记忆是加性依赖 ——
 /// MemoryStore 未装好/读错都返回空串,绝不挡经理决策(操作真值只来自 orchestration store)。
@@ -93,13 +95,19 @@ pub(super) fn budget_remaining(store: &Arc<Store>, settings: Option<&Settings>) 
     let Some(settings) = settings else {
         return BUDGET_UNCAPPED;
     };
-    match settings.nightly_budget_usd {
-        Some(cap) if cap > 0.0 => {
-            let spent = store.cost_since(crate::now_ms() - DAY_MS).unwrap_or(0.0);
-            (cap - spent).max(0.0)
+    // §10 双窗预算闸:夜额度(近 24h)与月额度(近 30d)各算剩余,取**更紧的那个** —— 哪个先见底都该
+    // 停。自治模式此前只守夜额度、漏了月额度(scheduler 两个都查),会烧穿月度配额。同口径修齐。
+    let remaining = |cap: Option<f64>, window_ms: i64| -> f64 {
+        match cap {
+            Some(c) if c > 0.0 => {
+                let spent = store.cost_since(crate::now_ms() - window_ms).unwrap_or(0.0);
+                (c - spent).max(0.0)
+            }
+            _ => BUDGET_UNCAPPED,
         }
-        _ => BUDGET_UNCAPPED,
-    }
+    };
+    remaining(settings.nightly_budget_usd, DAY_MS)
+        .min(remaining(settings.monthly_credit_cap_usd, MONTH_MS))
 }
 
 /// 已为自治目标做过的子任务(标题 + 结局),最近 8 条 —— 让经理主动 plan 时知道目标推进到哪了:
@@ -157,5 +165,17 @@ mod tests {
         assert_eq!(budget_remaining(&store, Some(&settings)), 10.0);
         settings.nightly_budget_usd = Some(0.0);
         assert_eq!(budget_remaining(&store, Some(&settings)), BUDGET_UNCAPPED);
+    }
+
+    #[test]
+    fn budget_remaining_honors_monthly_cap_and_takes_tighter() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let mut settings = store.get_settings().unwrap();
+        // 只设月额度(无夜额度)→ 自治模式也该守它(此前漏掉、会烧穿月度配额)。
+        settings.monthly_credit_cap_usd = Some(20.0);
+        assert_eq!(budget_remaining(&store, Some(&settings)), 20.0);
+        // 夜 + 月都设 → 取更紧的那个(夜 10 < 月 20 → 10)。
+        settings.nightly_budget_usd = Some(10.0);
+        assert_eq!(budget_remaining(&store, Some(&settings)), 10.0);
     }
 }
