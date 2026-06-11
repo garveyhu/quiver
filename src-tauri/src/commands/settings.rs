@@ -31,7 +31,18 @@ pub async fn update_settings(
     // 经理循环复用各 project 首次注册时存的大脑,故这里无需再传。
     state.scheduler.resume_all(app.clone(), store.clone()).await;
     if settings.autonomous {
-        state.manager.resume_all(app, store.clone()).await;
+        state.manager.resume_all(app.clone(), store.clone()).await;
+        // 「给个方向就自治」:CEO 刚开自治、却还没派过任何活时,current project 从没 ensure_running
+        // 注册过经理循环 → resume_all 没它可重启,自治目标推不动(经理循环根本没起来)。这里主动
+        // ensure_running 当前项目,让**纯目标驱动**的绝对自治也能启动(派过活的项目 ensure_running
+        // 幂等 no-op,不会重复起循环)。
+        if let Ok(project) = crate::current_project(&state) {
+            let max_workers = (settings.max_workers as usize).max(1);
+            state
+                .manager
+                .ensure_running(app, store.clone(), project, max_workers)
+                .await;
+        }
     }
     Ok(settings)
 }
