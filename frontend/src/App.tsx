@@ -321,6 +321,7 @@ export function App() {
         open={overlay === 'settings'}
         settings={settings}
         onPatch={p => void patchSettings(p).catch(e => setCaption(`改设置失败:${e instanceof Error ? e.message : String(e)}`))}
+        onToast={setCaption}
         onClose={() => setOverlay('none')}
       />
       <PersonnelDesk

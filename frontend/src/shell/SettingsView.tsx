@@ -5,6 +5,8 @@ interface SettingsViewProps {
   open: boolean;
   settings: Settings | null;
   onPatch: (p: SettingsPatch) => void;
+  /** 切经理大脑失败时的反馈(写操作绝不静默吞、假报成功)。 */
+  onToast: (msg: string) => void;
   onClose: () => void;
 }
 
@@ -21,9 +23,12 @@ function num(raw: string): number | null | undefined {
  * 改动立即生效(immediate-apply)。**运行模式**是这里最关键的:simulate 免费、real 走
  * 订阅 headless 额度,CEO 下目标按这个模式跑。
  */
-export function SettingsView({ open, settings, onPatch, onClose }: SettingsViewProps) {
+export function SettingsView({ open, settings, onPatch, onToast, onClose }: SettingsViewProps) {
   const s = settings;
   const { brain, setBrain } = useManagerBrain();
+  // 切经理大脑是写操作,失败如实反馈(绝不 void 吞掉、假报成功)。
+  const switchBrain = (b: 'rule' | 'claude') =>
+    void setBrain(b).catch(e => onToast(`切经理大脑失败:${e instanceof Error ? e.message : String(e)}`));
   // 「聪明的真实自治」三件套:自治开(经理接管) + 经理大脑 claude(聪明决策) + 员工真干。
   // 缺任一,经理就不会真正决策(尤其自治关时派活直接走流水线,经理工作台是空的)。
   const autonomousOn = !!s?.autonomous;
@@ -33,7 +38,7 @@ export function SettingsView({ open, settings, onPatch, onClose }: SettingsViewP
   const previewMgr = brain === 'claude' && s?.defaultMode === 'simulate';
   const startPreview = () => {
     onPatch({ defaultMode: 'simulate', autonomous: true });
-    void setBrain('claude');
+    switchBrain('claude');
   };
   return (
     <div className={`panel${open ? ' on' : ''}`}>
@@ -139,7 +144,7 @@ export function SettingsView({ open, settings, onPatch, onClose }: SettingsViewP
                 <button
                   className={`pbtn${brain === 'rule' ? ' go' : ''}`}
                   type="button"
-                  onClick={() => void setBrain('rule')}
+                  onClick={() => switchBrain('rule')}
                 >
                   规则 · 免费
                 </button>
@@ -147,7 +152,7 @@ export function SettingsView({ open, settings, onPatch, onClose }: SettingsViewP
                   className={`pbtn${brain === 'claude' ? ' go' : ''}`}
                   type="button"
                   style={{ marginLeft: 6 }}
-                  onClick={() => void setBrain('claude')}
+                  onClick={() => switchBrain('claude')}
                 >
                   claude · 真思考
                 </button>
