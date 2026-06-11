@@ -6,11 +6,15 @@ use std::sync::Arc;
 
 use tauri::{AppHandle, Manager};
 
-use quiver_core::merge::{merge_and_reverify, MergeDecision};
+use quiver_core::merge::{merge_and_reverify, MergeDecision, RebaseReason};
 use quiver_core::verify::VerifyCommand;
 use quiver_memory::NewFact;
 use quiver_orchestrator::Decision;
-use quiver_store::{Store, TaskRecord};
+use quiver_store::{NewTask, Store, TaskRecord};
+
+/// 自治「在最新 main 上重做」的重试上限:并行 worker 改同一文件 → 合并冲突,重做一两次基本就能
+/// 错开(前面的合并已落地)。限次防：重做又撞并行、无限循环。
+const MAX_REBASE_RETRY: u32 = 2;
 
 use super::ProjectManager;
 
@@ -124,10 +128,59 @@ pub(super) async fn deliver_merge(
         Ok(report) if report.decision == MergeDecision::Merged => {
             let _ = store.update_task_status(task_id, "merged", crate::now_ms());
         }
-        Ok(_) => {
-            // 冲突 / 合并后重验红 —— main 已被护栏还原,任务留分支等人工(绝不自动解决冲突)。
+        Ok(report) => {
+            // main 已被护栏还原。原任务标 needs_rebase 留痕(绝不自动解冲突)。但在「绝对自治」下,纯
+            // 冲突(worker 基于的 main 已被并行 worker 推进)不该死等人工 —— 否则多 worker 并行改同一
+            // 文件时,只有一个能合、其余子任务永远卡 needs_rebase、目标永不完整(real 实测:3 子任务
+            // 只成 2)。所以自治 + 纯冲突 → **在最新 main 上重做**:重新入队这个任务,worker 基于已落地
+            // 的 main 重做(那时不再冲突)。注意是「重做」不是「自动解冲突」。重验红(A+B 一起红)需人看,
+            // 不自动重做;非自治也留人工(现状)。
             let _ = store.update_task_status(task_id, "needs_rebase", crate::now_ms());
+            let autonomous = store.get_settings().ok().map(|s| s.autonomous).unwrap_or(false);
+            let pure_conflict = matches!(
+                report.reason,
+                Some(RebaseReason::ProbeConflict | RebaseReason::MergeConflict)
+            );
+            if autonomous && pure_conflict && requeue_for_rebase(store, task_id) {
+                pm.wake.notify_one();
+            }
         }
         Err(_) => { /* 合并管线本身出错:不改状态,留分支,best-effort */ }
     }
+}
+
+/// 自治「在最新 main 上重做」:把纯冲突的任务重新入队一份(挂回同一父目标,worker 基于已推进的 main
+/// 重做、不再冲突)。用 id 里的 rebase 代数计数,超 [`MAX_REBASE_RETRY`] 不再重做(防重做又撞并行的
+/// 无限循环)。成功入队返回 true。
+fn requeue_for_rebase(store: &Arc<Store>, task_id: &str) -> bool {
+    let Some(task) = store.get_task(task_id).ok().flatten() else {
+        return false;
+    };
+    // id 形如 task-rebase-{gen}-… → 解析重做代数,否则视为第 0 代。
+    let gen = task_id
+        .strip_prefix("task-rebase-")
+        .and_then(|s| s.split('-').next())
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(0);
+    if gen >= MAX_REBASE_RETRY {
+        return false;
+    }
+    let now = crate::now_ms();
+    let id = format!("task-rebase-{}-{now}-{}", gen + 1, crate::next_id_seq());
+    let ok = store
+        .enqueue_task(&NewTask {
+            id: id.clone(),
+            project: task.project.clone(),
+            prompt: task.prompt.clone(),
+            mode: task.mode.clone(),
+            status: "queued".to_string(),
+            created_at: now,
+        })
+        .is_ok();
+    if ok {
+        if let Some(g) = task.parent_goal.as_deref() {
+            let _ = store.set_task_parent_goal(&id, g, now);
+        }
+    }
+    ok
 }
