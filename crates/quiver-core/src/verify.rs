@@ -15,8 +15,13 @@
 //! red test.
 
 use std::path::Path;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
+
+/// verify 命令的硬超时:跑的是 worker 改过的代码,可能死循环/挂起。超了就判失败 + 杀进程,绝不让
+/// 一个卡住的 verify 持着全局合并锁、锁死整条交付链路(§7)。10 分钟对正常 build/test 足够宽。
+const VERIFY_TIMEOUT: Duration = Duration::from_secs(600);
 
 /// A configurable verify command (DESIGN §7): the argv executed in the task's
 /// worktree to decide whether the work is green.
@@ -66,6 +71,15 @@ impl VerifyCommand {
     /// (combined stdout+stderr, tail-truncated). The pre-merge gate uses this so a
     /// red verify can show the user *why* it failed, not just that it did.
     pub async fn run_capturing(&self, dir: &Path) -> Result<(VerifyResult, String)> {
+        self.run_capturing_to(dir, VERIFY_TIMEOUT).await
+    }
+
+    /// `run_capturing` 的可注入超时版(测试用短超时验证「卡住的 verify 判失败、不挂起」)。
+    async fn run_capturing_to(
+        &self,
+        dir: &Path,
+        timeout: Duration,
+    ) -> Result<(VerifyResult, String)> {
         let (program, args) = self
             .argv
             .split_first()
@@ -94,12 +108,29 @@ impl VerifyCommand {
             c
         };
 
-        let output = cmd
+        // §7 verify 超时硬上限:merge_and_reverify 全程持全局合并锁 → 一个卡住的 verify(测试死循环/
+        // 挂起)会**锁死整条交付链路**(后续所有交付阻塞)。超时即判失败(red,不是配错)并杀进程
+        // (kill_on_drop:future 被 timeout drop → child drop → 杀进程组)。stdin null 已防等输入。
+        let child = cmd
             .current_dir(dir)
             .stdin(std::process::Stdio::null())
-            .output()
-            .await
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
             .with_context(|| format!("failed to spawn verify command {program:?}"))?;
+        let output = match tokio::time::timeout(timeout, child.wait_with_output()).await {
+            Ok(res) => res.with_context(|| format!("verify command {program:?} failed to run"))?,
+            Err(_) => {
+                return Ok((
+                    VerifyResult::Failed,
+                    format!(
+                        "verify 命令超过 {}s 未结束,已判失败并终止(防卡死交付链路 §7)",
+                        timeout.as_secs()
+                    ),
+                ));
+            }
+        };
 
         let result = if output.status.success() {
             VerifyResult::Passed
@@ -239,5 +270,20 @@ mod tests {
         assert_eq!(res, VerifyResult::Failed);
         assert!(out.contains("out-line"), "stdout should be captured: {out:?}");
         assert!(out.contains("err-line"), "stderr should be captured: {out:?}");
+    }
+
+    #[tokio::test]
+    async fn hung_verify_times_out_as_failed_not_hang() {
+        // 卡住的 verify(sleep 30)在短超时下应判失败并立刻返回(不挂起锁死交付链路),进程被杀。
+        let dir = TempDir::new().expect("tempdir");
+        let cmd = VerifyCommand::shell("sleep 30");
+        let started = std::time::Instant::now();
+        let (res, out) = cmd
+            .run_capturing_to(dir.path(), Duration::from_millis(300))
+            .await
+            .expect("run");
+        assert_eq!(res, VerifyResult::Failed, "卡住的 verify 应判失败");
+        assert!(out.contains("超过"), "应说明是超时: {out:?}");
+        assert!(started.elapsed() < Duration::from_secs(5), "应在超时后立刻返回,不等命令跑完");
     }
 }
