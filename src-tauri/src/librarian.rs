@@ -80,10 +80,11 @@ async fn try_distill(app: &AppHandle, store: &Arc<Store>, project: &str) -> anyh
     let settings = store.get_settings()?;
     let bin = crate::run::resolve_agent_bin(&settings, RunMode::from_label(&settings.default_mode))?;
     let prompt = format!(
-        "你是项目记忆库的记忆官。下面是项目「{project}」最近的工作记录(含经理裁决)。\
-         从中提炼最多 {MAX_FACTS_PER_DISTILL} 条**值得长期记住**的项目事实(模式、约定、反复出现的问题、\
-         有效的做法),不要复述单次流水。只输出一个 JSON 数组,不要任何解释、不要修改文件:\n\
-         [{{\"text\":\"事实陈述\",\"importance\":1到9}}]\n\
+        "你是项目记忆库的记忆官。下面是项目「{project}」最近的工作记录(含经理裁决)。从中提炼最多 \
+         {MAX_FACTS_PER_DISTILL} 条**值得长期记住**的项目知识,不要复述单次流水。每条标一个种类:\
+         「约定」(该遵守的规则)/「教训」(踩过的坑、下次避开)/「有效做法」(被验证管用的方法)。\
+         只输出一个 JSON 数组,不要任何解释、不要修改文件:\n\
+         [{{\"kind\":\"约定|教训|有效做法\",\"text\":\"事实陈述\",\"importance\":1到9}}]\n\
          没有值得记的就输出 []。\n\n工作记录:\n{log}"
     );
     let runner = ClaudeRunner::new("librarian").with_extra_args(["--model", role.model.as_str()]);
@@ -101,7 +102,7 @@ async fn try_distill(app: &AppHandle, store: &Arc<Store>, project: &str) -> anyh
         let _ = mem.insert_fact(&NewFact {
             project: project.to_string(),
             scope: None,
-            kind: DISTILL_KIND.to_string(),
+            kind: distill_kind(&f.kind),
             text: f.text.clone(),
             entities: None,
             entity: None,
@@ -130,6 +131,9 @@ fn last_distill_at(mem: &MemoryStore, project: &str) -> Option<i64> {
 /// 提炼出的一条事实(claude 输出的 JSON 数组元素)。
 #[derive(Debug, serde::Deserialize)]
 struct DistilledFact {
+    /// 种类:约定/教训/有效做法。缺/不认识 → 退回笼统「提炼」(`distill_kind` 兜)。
+    #[serde(default)]
+    kind: String,
     text: String,
     #[serde(default = "default_importance")]
     importance: i64,
@@ -137,6 +141,14 @@ struct DistilledFact {
 
 fn default_importance() -> i64 {
     5
+}
+
+/// 把 claude 提炼出的种类约束到记忆库认的几类(配合记忆库按种类分组);不认识的归笼统「提炼」。
+fn distill_kind(raw: &str) -> String {
+    match raw.trim() {
+        "约定" | "教训" | "有效做法" | "状态" => raw.trim().to_string(),
+        _ => DISTILL_KIND.to_string(),
+    }
 }
 
 /// 从 claude 的(可能带围栏/解释的)输出里解析事实数组;解析不出 → 空(安全跳过)。
