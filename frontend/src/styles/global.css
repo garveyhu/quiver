@@ -485,3 +485,6 @@ body {
 /* 经理工作准则预设按钮:小号成排,一键填充准则模板。 */
 .mgr-presets { display: inline-flex; flex-wrap: wrap; gap: 5px; }
 .pbtn.preset { padding: 5px 10px; font-size: 11.5px; font-weight: 500; }
+
+/* 晨报升级行:CEO 补充信息的输入框(回答经理 escalate 缺的信息,打回时带给 worker)。 */
+.esc-answer { flex: 1; min-width: 150px; padding: 6px 9px; font-size: 12px; }

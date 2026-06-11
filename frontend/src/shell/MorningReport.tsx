@@ -4,8 +4,9 @@ import type { TaskRecord } from '@/services/wire';
 interface MorningReportProps {
   open: boolean;
   data: MorningReportData;
-  /** §12 一站式处理:把卡住/升级的任务直接打回重做(经理带记忆再派)。 */
-  onRequeue: (taskId: string) => void;
+  /** §12 一站式处理:把卡住/升级的任务直接打回重做(经理带记忆再派)。answer = CEO 回答经理
+   *  escalate 时缺的信息(可选),注入重做的活 —— CEO→经理→worker 双向闭环。 */
+  onRequeue: (taskId: string, answer?: string) => void;
   /** CEO 接受合并:把一个 verified 且有分支的任务合进 main(§12)。 */
   onMerge: (taskId: string) => void;
   onClose: () => void;
@@ -74,11 +75,30 @@ export function MorningReport({ open, data, onRequeue, onMerge, onClose }: Morni
               <div className="rev" key={`esc-${d.seq}-${d.tsMs}`}>
                 <span className="grow">{d.reason ?? '(未给原因)'}</span>
                 {d.taskId && (
-                  <button className="pbtn" type="button" onClick={() => onRequeue(d.taskId as string)}>
-                    打回重做 ↻
-                  </button>
+                  <>
+                    <input
+                      className="field esc-answer"
+                      placeholder="回答经理缺的信息(可选),打回时带给 worker"
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          onRequeue(d.taskId as string, (e.target as HTMLInputElement).value);
+                        }
+                      }}
+                    />
+                    <button
+                      className="pbtn"
+                      type="button"
+                      onClick={e => {
+                        const inp = e.currentTarget
+                          .closest('.rev')
+                          ?.querySelector('input.esc-answer') as HTMLInputElement | null;
+                        onRequeue(d.taskId as string, inp?.value);
+                      }}
+                    >
+                      打回重做 ↻
+                    </button>
+                  </>
                 )}
-                <span className="st-meta">{d.taskId ?? ''}</span>
               </div>
             ))}
           </>

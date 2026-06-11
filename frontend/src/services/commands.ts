@@ -37,9 +37,10 @@ export const getInitialState = (): Promise<InitialState> => call<InitialState>('
 export const enqueueTask = (prompt: string, mode: RunMode = 'simulate'): Promise<TaskRecord> =>
   call<TaskRecord>('enqueue_task_cmd', { prompt, mode });
 
-/** 打回重做(§12 回流):已终结任务作为新任务重新入队(老行留档),经理会带记忆再派。 */
-export const requeueTask = (taskId: string): Promise<TaskRecord> =>
-  call<TaskRecord>('requeue_task_cmd', { taskId });
+/** 打回重做(§12 回流):已终结任务作为新任务重新入队(老行留档),经理会带记忆再派。
+ *  answer = CEO 补充给经理 escalate 的信息(可选),注入重做的活让 worker 带着答案干。 */
+export const requeueTask = (taskId: string, answer?: string): Promise<TaskRecord> =>
+  call<TaskRecord>('requeue_task_cmd', { taskId, answer: answer ?? null });
 
 /** CEO 接受合并(§12):把一个 verified 且有分支的任务合进 main,返回结果文案。 */
 export const mergeTask = (taskId: string): Promise<string> =>

@@ -179,6 +179,7 @@ pub async fn requeue_task_cmd(
     app: AppHandle,
     state: State<'_, AppState>,
     task_id: String,
+    answer: Option<String>,
 ) -> Result<TaskRecord, String> {
     let store = state.store()?;
     let old = store
@@ -189,11 +190,15 @@ pub async fn requeue_task_cmd(
         return Err("任务还在进行中,不能打回重做".to_string());
     }
     let old_session = store.task_session_id(&old.id).ok().flatten();
-    let prompt = if old_session.is_some() {
+    // §5 CEO→经理→worker 双向闭环:经理升级(escalate)是因为缺 CEO 才能给的决策/信息。CEO 打回
+    // 时若补充了答案 → 注入重做的活,让 worker 这次带着 CEO 的信息干,而非缺着同样的信息再卡一次。
+    let ans = answer.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    let prompt = match (old_session.is_some(), ans) {
+        // 有补充:不管有没有老会话,都把 CEO 的答案摆在最前(worker 据此修复)。
+        (_, Some(a)) => format!("(返工)CEO 补充了信息:{a}。请据此修复后重新交付。原任务:{}", old.prompt),
         // 续会话返工:worker 记得上次的上下文,指引点明这次要干嘛。
-        format!("(返工)上次运行的成果未通过验收,请修复问题后重新交付。原任务:{}", old.prompt)
-    } else {
-        old.prompt
+        (true, None) => format!("(返工)上次运行的成果未通过验收,请修复问题后重新交付。原任务:{}", old.prompt),
+        (false, None) => old.prompt,
     };
     let new = enqueue_task_cmd(app, state, prompt, RunMode::from_label(&old.mode)).await?;
     if let Some(sid) = old_session {

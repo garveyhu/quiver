@@ -59,9 +59,16 @@ export function App() {
   const completionFx = useCompletionFx();
 
   // §12 一站式打回:晨报/工作台共用 —— 把卡住/升级的任务作为新任务重派(经理带记忆)。
-  const onRequeue = useCallback((taskId: string) => {
-    void requeueTask(taskId)
-      .then(t => setCaption(`已打回重做 —— 新任务 ${t.id} 入队,经理会带着上次的记忆再派。`))
+  // answer = CEO 回答经理 escalate 时缺的信息(可选),注入重做的活 → 双向闭环。
+  const onRequeue = useCallback((taskId: string, answer?: string) => {
+    void requeueTask(taskId, answer)
+      .then(t =>
+        setCaption(
+          answer?.trim()
+            ? `已带你的补充打回重做 —— 新任务 ${t.id} 入队,worker 会据此修复。`
+            : `已打回重做 —— 新任务 ${t.id} 入队,经理会带着上次的记忆再派。`,
+        ),
+      )
       .catch(e => setCaption(`打回失败:${e instanceof Error ? e.message : String(e)}`));
   }, []);
   const onMerge = useCallback((taskId: string) => {
