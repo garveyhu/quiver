@@ -100,7 +100,18 @@ async fn try_distill(app: &AppHandle, store: &Arc<Store>, project: &str) -> anyh
 
     // 5. 解析 + 写入(员工汇报档,§6.2;坏输出安全跳过)。
     let facts = parse_facts(&out);
+    // 已有当前事实 + 这批的代表 episode:提炼出和已有**完全同文本**的事实 → 印证它(反复从不同批
+    // 工作记录提炼出同一事实 = 项目稳定特征 → corroborate 升「已验证·印证」,§6.2),而非重复记一条。
+    let existing = mem.current_facts(project).unwrap_or_default();
+    let latest_ep = episodes.first().map(|e| e.id);
     for f in facts.iter().take(MAX_FACTS_PER_DISTILL) {
+        // 同文本已在记忆里 → 这次提炼是再次印证,不重复记;两个不同批次印证够即升档(可信度演化闭环)。
+        if let Some(ex) = existing.iter().find(|x| x.text == f.text) {
+            if let Some(eid) = latest_ep {
+                let _ = mem.corroborate_fact(ex.id, eid);
+            }
+            continue;
+        }
         let kind = distill_kind(&f.kind);
         // 状态事实带上 entity 锚点(模块名)→ insert_fact 自动作废同名旧状态,记忆跟上现实(§6.4)。
         // 非状态事实 entity 留空(约定/教训/有效做法不互斥、正常并存)。
