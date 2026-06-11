@@ -222,8 +222,8 @@ fn build_prompt(ctx: &ManagerContext, system_prompt: &str) -> String {
          - {{\"action\":\"deliver\",\"node_id\":\"...\"}} —— 交付某节点成果\n\
          - {{\"action\":\"block\",\"node_id\":\"...\",\"reason\":\"...\"}} —— 拦下某节点\n\
          - {{\"action\":\"escalate\",\"reason\":\"...\"}} —— 超出能力,升级给人\n\
-         - {{\"action\":\"refresh_memory\"}} —— 先刷新记忆再决策\n\
-         - {{\"action\":\"noop\"}} —— 这拍什么都不做",
+         - {{\"action\":\"noop\"}} —— 这拍什么都不做\n\
+         (记忆简报每拍都已是最新,无需「先刷新再决策」——直接基于上面的简报决策即可。)",
         ctx.inflight, ctx.max_inflight, ctx.queued, ctx.budget_remaining_usd,
     )
 }
