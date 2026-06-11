@@ -22,34 +22,36 @@ interface CtrlsProps {
 export function Ctrls({ onCmdk, onReport, onGoal, onManager, onPersonnel, onSettings, onTrace, onMemory, onBoard, mode }: CtrlsProps) {
   return (
     <div className="ctrls">
-      <button className="b-gh" type="button" onClick={onCmdk} title="命令栏:搜索 / 快捷动作">
+      <button className="b-gh b-icon" type="button" onClick={onCmdk} title="命令栏:搜索 / 快捷动作">
         <span className="cmd">⌘K</span>
       </button>
-      <span className="ctrl-div" />
-      {/* 看公司在干嘛:决策 / 队列 / 档案 / 验收 */}
-      <button className="b-gh" type="button" onClick={onManager} title="经理工作台:决策流 / 自治 / 思考">
-        经理
-      </button>
-      <button className="b-gh" type="button" onClick={onBoard} title="调度台:工作队列 / 调优先级 / 取消">
-        队列
-      </button>
-      <button className="b-gh" type="button" onClick={onTrace} title="追溯室:每个任务每一步、花费、结果">
-        追溯
-      </button>
-      <button className="b-gh" type="button" onClick={onReport} title="晨报:合进 main / 卡住 / 等你拍板的结果">
-        晨报
-      </button>
-      <span className="ctrl-div" />
+      {/* 看公司在干嘛:决策 / 队列 / 档案 / 验收 —— 同组,组间靠间距分,不用黑竖线 */}
+      <span className="ctrl-grp">
+        <button className="b-gh" type="button" onClick={onManager} title="经理工作台:决策流 / 自治 / 思考">
+          经理
+        </button>
+        <button className="b-gh" type="button" onClick={onBoard} title="调度台:工作队列 / 调优先级 / 取消">
+          队列
+        </button>
+        <button className="b-gh" type="button" onClick={onTrace} title="追溯室:每个任务每一步、花费、结果">
+          追溯
+        </button>
+        <button className="b-gh" type="button" onClick={onReport} title="晨报:合进 main / 卡住 / 等你拍板的结果">
+          晨报
+        </button>
+      </span>
       {/* 配公司:人事 / 记忆 / 设置 */}
-      <button className="b-gh" type="button" onClick={onPersonnel} title="人事部:配置 / 专长 / 雇人">
-        人事部
-      </button>
-      <button className="b-gh" type="button" onClick={onMemory} title="记忆库:公司记住的事实 / 录入 / 作废">
-        记忆
-      </button>
-      <button className="b-gh" type="button" onClick={onSettings} title="系统设置:模式 / 模型 / 并发 / 预算">
-        设置
-      </button>
+      <span className="ctrl-grp">
+        <button className="b-gh" type="button" onClick={onPersonnel} title="人事部:配置 / 专长 / 雇人">
+          人事部
+        </button>
+        <button className="b-gh" type="button" onClick={onMemory} title="记忆库:公司记住的事实 / 录入 / 作废">
+          记忆
+        </button>
+        <button className="b-gh" type="button" onClick={onSettings} title="系统设置:模式 / 模型 / 并发 / 预算">
+          设置
+        </button>
+      </span>
       <button className="b-go" type="button" onClick={onGoal}>
         CEO 下目标
         <span className="lbl" style={{ marginLeft: 6, opacity: 0.8 }}>

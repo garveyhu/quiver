@@ -15,6 +15,18 @@ body {
    (子像素已无意义、antialiased 更细更好看)。这是非 retina 屏"字糊"最常见的真凶。 */
 @media (max-resolution: 1.5dppx) {
   body { -webkit-font-smoothing: subpixel-antialiased; }
+  /* 但磨砂玻璃(backdrop-filter)会把元素提成合成层 → subpixel 抗锯齿在它上面失效、字又发糊
+     (这正是「有些界面字明显更糊 / 有时清晰有时糊」的真凶:糊的恰好是带磨砂的顶部栏/面板/状态条)。
+     非 retina 屏给它们换接近不透明的实背景、去掉 backdrop-filter,字回到 subpixel 渲染、锐利。
+     retina 屏(DPR≥2)不进这个分支,保留磨砂玻璃。 */
+  .hud, .caption, .ctrls .b-gh, .panel, .worksurf {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .hud, .caption { background: rgba(18, 24, 42, 0.97); }
+  .ctrls .b-gh { background: rgba(26, 33, 56, 0.96); }
+  .panel { background: rgba(22, 29, 50, 0.98); }
+  .worksurf { background: rgba(22, 29, 50, 0.98); }
 }
 .num { font-family: var(--mono); font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1, "ss01" 1; letter-spacing: 0; }
 
@@ -225,8 +237,6 @@ body {
 .hud { display: flex; align-items: center; gap: 18px; padding: 0 18px; height: 42px; min-width: 0;
   background: var(--s-0); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); border: 1px solid var(--bd); border-radius: var(--r-3);
   box-shadow: var(--sh-1), inset 0 1px 0 var(--hairline-top); font-size: 12.5px; }
-.hud .brand { font-weight: 650; letter-spacing: .6px; color: var(--accent); font-size: 12px; }
-.hud .brand small { color: var(--tx-3); font-weight: 400; letter-spacing: .2px; margin-left: 6px; }
 /* 自治状态徽标:自治中=绿(醒目,公司在自主跑)、手动=灰。「绝对自治」打开 app 一眼可见。 */
 .hud-auto { font-size: 11px; font-weight: 600; letter-spacing: .2px; padding: 3px 9px; border-radius: var(--r-pill); color: var(--tx-3); background: var(--s-inset); border: 1px solid var(--bd-soft); white-space: nowrap; max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
 .hud-auto.on { color: #0e1a10; background: linear-gradient(180deg,#a6eaa6,#6cc47a); border-color: transparent; box-shadow: 0 0 12px rgba(108,196,122,.3); }
@@ -236,9 +246,12 @@ body {
 .hud .bar i { display: block; height: 100%; width: 0; border-radius: var(--r-pill); background: linear-gradient(90deg,#6cc47a,var(--accent)); box-shadow: 0 0 10px rgba(255,210,122,.35); transition: width .4s var(--ease); }
 
 /* ===== 右上控件(收进 .topbar,不再独立 fixed) ===== */
-.ctrls { display: flex; gap: 8px; }
-.ctrls button { font-family: var(--ui); font-size: 12.5px; font-weight: 500; letter-spacing: .15px; cursor: pointer; border-radius: var(--r-2); padding: 9px 14px;
-  border: 1px solid var(--bd); display: inline-flex; align-items: center; gap: 7px; transition: background var(--t-fast), border-color var(--t-fast), transform var(--t-fast), box-shadow var(--t-fast); }
+/* 入口按「看公司 / 配公司」分两组,组内紧凑(gap 3)、组间留白(gap 11)区分 —— 不再用黑竖线挤宽度。 */
+.ctrls { display: flex; align-items: center; gap: 11px; }
+.ctrl-grp { display: inline-flex; gap: 3px; }
+.ctrls button { font-family: var(--ui); font-size: 12px; font-weight: 500; letter-spacing: .1px; cursor: pointer; border-radius: var(--r-2); padding: 7px 11px;
+  border: 1px solid var(--bd); display: inline-flex; align-items: center; gap: 7px; -webkit-font-smoothing: antialiased; transition: background var(--t-fast), border-color var(--t-fast), transform var(--t-fast), box-shadow var(--t-fast); }
+.ctrls .b-icon { padding: 7px 9px; }
 .ctrls button:active { transform: translateY(1px) scale(.985); }
 .b-go { color: #0e1a10; font-weight: 600; background: linear-gradient(180deg,#a6eaa6,#6cc47a); border: 0;
   box-shadow: var(--sh-1), 0 6px 18px rgba(108,196,122,.28), inset 0 1px 0 rgba(255,255,255,.4); }
@@ -479,8 +492,6 @@ body {
    保留轻微 sway 呼吸不僵硬。坐姿待:用户给精确像素数值,或画专门的坐姿 sprite。 */
 .worker.mgr .stack { animation: sway 4s ease-in-out infinite; }
 
-/* 菜单入口分组:按职责(看公司/配公司)用竖分隔线分块,不再一长条平铺 → 有层级、不繁琐。 */
-.ctrl-div { width: 1px; height: 16px; background: var(--bd-strong); margin: 0 3px; flex: none; opacity: .6; }
 
 /* 经理工作准则预设按钮:小号成排,一键填充准则模板。 */
 .mgr-presets { display: inline-flex; flex-wrap: wrap; gap: 5px; }

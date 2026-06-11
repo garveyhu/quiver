@@ -18,9 +18,6 @@ export function Hud({ data, budgetCap, autonomous, goal }: HudProps) {
 
   return (
     <div className="hud">
-      <span className="brand">
-        QUIVER <small>· 自治 AI 公司</small>
-      </span>
       {/* 自治状态:打开 app 一眼看到公司在不在自治、为哪个目标 —— 「绝对自治」的顶层可见。 */}
       <span
         className={`hud-auto${autonomous ? ' on' : ''}`}
