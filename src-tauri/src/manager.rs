@@ -436,9 +436,13 @@ async fn execute_effect(
                     // §5 失败自愈(绝对自治):经理拦下的若是**验证失败**的活,公司自己再试一轮
                     // (带返工会话续跑),到上限才停手等 CEO —— 不用 CEO 每次手动打回。
                     if r.status.contains("fail") {
-                        if t.attempt < MAX_AUTO_RETRY {
+                        // 失败自愈是**自治行为**:autonomous 开才自己再试。手动 / 急停(autonomous 关)→
+                        // 不擅自重跑,留 failed 等 CEO —— 尤其急停后(CEO 关了自治 + 杀了 worker),被杀的
+                        // 活绝不能又被自愈拉起来烧钱(否则急停形同虚设)。
+                        let autonomous = store.get_settings().ok().map(|s| s.autonomous).unwrap_or(false);
+                        if autonomous && t.attempt < MAX_AUTO_RETRY {
                             auto_retry(store, pm, project_key, t).await;
-                        } else {
+                        } else if t.attempt >= MAX_AUTO_RETRY {
                             // §6 记忆驱动:自愈都救不动的失败 → 沉淀成一条高可信「教训」事实,经理
                             // 下一拍 brief 按 importance 优先召回,下次接类似活别同样硬上(越用越不重犯)。
                             record_failure_lesson(app, project_key, t, &r.status);

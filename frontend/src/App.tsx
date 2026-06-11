@@ -46,6 +46,8 @@ export function App() {
   const [overlay, setOverlay] = useState<Overlay>('none');
   const [caption, setCaption] = useState(DEFAULT_CAPTION);
   const [frozen, setFrozen] = useState(false);
+  // 急停回调的最新引用:keydown listener(useEffect [])里调,避免把 estop 列进依赖引发 TDZ。
+  const estopRef = useRef<() => void>(() => {});
   const [briefGoal, setBriefGoal] = useState(GOALS[0]);
   const report = useMorningReport(overlay === 'report');
   const metrics = useMetrics(overlay === 'trust');
@@ -95,6 +97,10 @@ export function App() {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setOverlay(o => (o === 'cmdk' ? 'none' : 'cmdk'));
+      } else if (e.ctrlKey && e.key === '.') {
+        // ⌃. 真急停(commandRegistry 标了这个 kbd,之前没绑 listener)——出事时一键停,不必先开命令面板。
+        e.preventDefault();
+        estopRef.current();
       } else if (e.key === 'Escape') {
         setOverlay('none');
       } else if (e.key.toLowerCase() === 'm' && !e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -180,12 +186,16 @@ export function App() {
     setFrozen(true);
     window.setTimeout(() => setFrozen(false), 2200);
     try {
+      // 先关自治:否则杀了 worker,经理循环还会主动 plan 派新活 / 把被杀的活当失败重跑 ——
+      // 急停就形同虚设。关了自治经理就不主动推进,真停下来(CEO 想继续时再去设置开)。
+      await patchSettings({ autonomous: false }).catch(() => {});
       const n = await cancelActiveTasks();
-      setCaption(`急停 — 全公司冻结，main 安全。已收回 ${n} 个在途委托的工具权。`);
+      setCaption(`急停 — 已关自治 + 收回 ${n} 个在途委托的工具权,全公司冻结、main 安全。`);
     } catch (e) {
       setCaption(`急停遇到问题:${e instanceof Error ? e.message : String(e)}`);
     }
-  }, []);
+  }, [patchSettings]);
+  estopRef.current = estop;
 
   const runCommand = useCallback(
     (cmd: QuiverCommand) => {
