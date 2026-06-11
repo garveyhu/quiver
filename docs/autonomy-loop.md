@@ -458,3 +458,30 @@ simulate 发现不了的真 bug(交付/拆活/空转/.quiver/孤儿worktree + �
 
 ### 结论:在真 claude 下,系统确实做到「绝对自治(自己规划)+ 聪明协作(拆活派活)+ 强大记忆决策
 ### (按可信度遵循约定)」。脚手架完整,质量靠 claude 大脑 —— 这正是蓝图「思考全用 claude」的形态。
+
+## CEO 授权 real 系统验证 + 代码审查挖隐藏 bug(2026-06-11)
+
+> CEO:「尽管用真 claude + bridge 调试,确保后端核心功能完全符合预期,token/预算随便用」。
+> 方法:agent 系统性代码审查找「看起来对、实际错」的 bug + 真 claude real 端到端逐链路验证。
+
+**agent 代码审查发现 5 个隐藏 bug(都与上轮 mode-bug 同指纹:行为决定值落空兜底成错误默认):**
+- C1(critical 烧钱):§9 预算硬闸只 gate Spawn,Continue(--resume 续跑)没挡 → 预算耗尽后续跑照
+  烧 headless 额度。**已修**(Continue 也按 budget 闸)。
+- H1(high 假干):Continue 的 mode `unwrap_or("simulate")` → 读不到 task.mode 时 real 任务续跑被
+  降级 simulate 假干。**已修**(读不到就不续跑、回滚名额)。
+- H2(high,待修):经理 claude 大脑的 real/simulate 绑 `default_mode` → 「simulate 任务+claude 经理」
+  配置下经理跑 fake 桩(假思考)。CEO 想「省钱任务+真经理」做不到。
+- M1(medium,待修):maybe_complete_parent_goal 按 prompt 文本匹配父任务 → 重复 prompt 关错目标。
+- M2(medium,待修):Plan 在 settings 读失败时仍兜底 simulate(C1 的窄实例)。
+
+**真 claude real 验证(总约 $0.74):**
+- 场景A 交付+main永不坏:经理 spawn→deliver,worker 产 q_gcd 合进 main(d3a3027→177c2da),main 仍
+  py_compile ✓
+- 场景D 绝对自治(验上轮 mode 修复):经理做完第一个 → 主动 plan,子任务 mode=**real**(真干、非假干
+  simulate)+ 挂自治目标,产出 q_factorial/q_is_prime ✓
+- 记忆+可信度:worker 全部带 q_ 前缀(遵循权威约定)+ 类型注解 ✓
+- 场景B 经理智能边界:汇率任务缺 CEO 拍板数据源 → 经理 escalate 上报(不瞎派 worker),reason 准确 ✓
+
+### 结论:后端核心(交付/main永不坏/绝对自治/记忆驱动/可信度/经理边界)real 下符合预期。
+### 上轮修的主动-plan-mode bug 真实生效。代码审查比纯加功能更能逼近「达到要求」—— 挖出 C1 烧钱
+### 漏洞 + H1 假干,都是 simulate 下永远暴露不出来的。下一步修 H2(解耦经理脑 mode)/M1。
