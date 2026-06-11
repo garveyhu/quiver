@@ -33,10 +33,14 @@ fn secret_dirs() -> Vec<PathBuf> {
     let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
         return Vec::new();
     };
-    [".ssh", ".aws", ".config/gh", ".netrc", ".agents", ".config/gcloud", ".kube"]
-        .iter()
-        .map(|s| home.join(s))
-        .collect()
+    [
+        ".ssh", ".aws", ".config/gh", ".netrc", ".agents", ".config/gcloud", ".kube",
+        // 工具链凭据(§8.3 防外带):构建工具的 registry token / 仓库凭据,allow-default 下会被读走。
+        ".docker", ".gnupg", ".config/git", ".npmrc", ".cargo/credentials.toml",
+    ]
+    .iter()
+    .map(|s| home.join(s))
+    .collect()
 }
 
 /// 构建/测试工具普遍要写的工作区**外**缓存/临时目录:py_compile 的字节码缓存(Apple python3 写到
@@ -53,6 +57,12 @@ fn tool_cache_dirs() -> Vec<PathBuf> {
     if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
         v.push(home.join("Library/Caches"));
         v.push(home.join(".cache"));
+        // 非 XDG 惯例、各工具自定的缓存子目录(cargo/npm/go)。**只放缓存子目录、不放整个 ~/.cargo**
+        // (它含 credentials.toml → 那个走 deny_read),让 cargo / npm / go 的 verify 也能写缓存。
+        v.push(home.join(".cargo/registry"));
+        v.push(home.join(".cargo/git"));
+        v.push(home.join(".npm"));
+        v.push(home.join("go/pkg"));
     }
     v
 }
@@ -79,7 +89,9 @@ impl SandboxPolicy {
             restrict_writes: true,
             readable_paths: vec![wt],
             writable_paths: writable,
-            deny_read_paths: Vec::new(),
+            // §8.3:verify 命令是 **worker 改过的测试/构建脚本**,同样不该读密钥/凭据(否则能把它们读出
+            // 来写进产物、随合并外带)。此前 verify 沙箱漏了 deny_read(只 worker 进程 deny 了),这里补齐。
+            deny_read_paths: secret_dirs(),
         }
     }
 
@@ -190,6 +202,10 @@ mod tests {
         assert_eq!(p.writable_paths.first(), Some(&real), "worktree 是第一个可写子树");
         assert!(p.writable_paths.len() > 1, "还放行了工具缓存/临时目录,否则真实 verify 写缓存会被拒");
         assert_eq!(p.readable_paths, vec![real]);
+        // §8.3:verify 命令(worker 改过的脚本)必须 deny 密钥读,防它把凭据写进产物外带。
+        assert!(!p.deny_read_paths.is_empty(), "verify 沙箱必须 deny 密钥/凭据读");
+        let home = std::env::var_os("HOME").map(PathBuf::from).unwrap();
+        assert!(p.deny_read_paths.contains(&home.join(".ssh")), "至少含 ~/.ssh");
     }
 
     #[test]
