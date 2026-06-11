@@ -184,3 +184,54 @@ fn requeue_for_rebase(store: &Arc<Store>, task_id: &str) -> bool {
     }
     ok
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn seed_task(store: &Arc<Store>, id: &str, goal: &str) {
+        store
+            .enqueue_task(&NewTask {
+                id: id.to_string(),
+                project: "p".to_string(),
+                prompt: "做 X".to_string(),
+                mode: "real".to_string(),
+                status: "running".to_string(),
+                created_at: 1,
+            })
+            .unwrap();
+        store.set_task_parent_goal(id, goal, 1).unwrap();
+    }
+
+    #[test]
+    fn requeue_for_rebase_reenqueues_under_same_goal_and_caps_generations() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        seed_task(&store, "task-x", "目标 G");
+        // 第 0 代纯冲突 → 在最新 main 上重做:重新入队一份(第 1 代),挂回同一父目标、同一 prompt。
+        assert!(requeue_for_rebase(&store, "task-x"));
+        let redo = store
+            .list_tasks(Some("p"), Some("queued"))
+            .unwrap()
+            .into_iter()
+            .find(|t| t.id.starts_with("task-rebase-1-"))
+            .expect("第 1 代重做任务应入队");
+        assert_eq!(redo.prompt, "做 X", "重做同一任务");
+        assert_eq!(redo.parent_goal.as_deref(), Some("目标 G"), "挂回父目标,追溯树不断");
+        // 第 1 代又冲突 → 第 2 代(到上限 MAX_REBASE_RETRY=2)。
+        assert!(requeue_for_rebase(&store, &redo.id));
+        let gen2 = store
+            .list_tasks(Some("p"), Some("queued"))
+            .unwrap()
+            .into_iter()
+            .find(|t| t.id.starts_with("task-rebase-2-"))
+            .expect("第 2 代重做任务应入队");
+        // 第 2 代再冲突 → 超上限,不再重做(防重做又撞并行的无限循环)。
+        assert!(!requeue_for_rebase(&store, &gen2.id), "超 MAX_REBASE_RETRY 不再重做");
+    }
+
+    #[test]
+    fn requeue_for_rebase_missing_task_is_false() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        assert!(!requeue_for_rebase(&store, "task-nonexistent"));
+    }
+}
