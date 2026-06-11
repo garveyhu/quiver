@@ -443,6 +443,11 @@ async fn execute_effect(
                             // 下一拍 brief 按 importance 优先召回,下次接类似活别同样硬上(越用越不重犯)。
                             record_failure_lesson(app, project_key, t, &r.status);
                         }
+                    } else {
+                        // 经理拦下一个**通过了验证**的活 = 觉得方向不对、否决它。别留它 verified —— 否则
+                        // 晨报显示「通过·待接受」,CEO 可能误接受经理已否决的产出。标 needs_rebase 进
+                        // 「卡住等你处理」,CEO 看到经理拦了、可带补充打回重做(§5 闭环),状态如实。
+                        let _ = store.update_task_status(&t.id, "needs_rebase", crate::now_ms());
                     }
                 }
                 let _ = app.emit(TASK_EVENT_CHANNEL, project_key);
