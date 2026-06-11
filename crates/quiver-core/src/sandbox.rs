@@ -57,10 +57,11 @@ fn tool_cache_dirs() -> Vec<PathBuf> {
     if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
         v.push(home.join("Library/Caches"));
         v.push(home.join(".cache"));
-        // 非 XDG 惯例、各工具自定的缓存子目录(cargo/npm/go)。**只放缓存子目录、不放整个 ~/.cargo**
-        // (它含 credentials.toml → 那个走 deny_read),让 cargo / npm / go 的 verify 也能写缓存。
-        v.push(home.join(".cargo/registry"));
-        v.push(home.join(".cargo/git"));
+        // 非 XDG 惯例、各工具自定的缓存目录(cargo/npm/go)。cargo 在 ~/.cargo **根**写
+        // .package-cache/.global-cache 等锁与缓存(有依赖时必写,real 实测只放 registry/git 子目录
+        // 不够 → 有依赖的 cargo 仍写根锁被拒),所以放行整个 ~/.cargo;里头的 credentials.toml 走
+        // deny_read 防 token 外带。npm 同理(token 在 ~/.npmrc、不在 ~/.npm)。
+        v.push(home.join(".cargo"));
         v.push(home.join(".npm"));
         v.push(home.join("go/pkg"));
     }
