@@ -25,11 +25,28 @@ function trustRank(trust: string): number {
   return 1;
 }
 
+/** 记忆种类的展示名 + 顺序 —— 让 CEO 看清公司知识的结构:规则 / 避坑 / 现状 / 录入。 */
+const KIND_ORDER = ['约定', '教训', '状态', '知识'];
+const KIND_CN: Record<string, string> = {
+  约定: '约定 · 项目规则',
+  教训: '教训 · 失败避坑',
+  状态: '状态 · 模块现状',
+  知识: '知识 · CEO 注入',
+};
+
 export function MemoryRoom({ open, onClose, onToast }: MemoryRoomProps) {
   const { facts, addFact, retire } = useMemoryRoom(open);
   const sorted = [...facts].sort(
     (a, b) => trustRank(b.trust) - trustRank(a.trust) || b.importance - a.importance,
   );
+  // 按种类分组(组内保持可信度序),组按 约定→教训→状态→知识→其他 排。
+  const byKind = new Map<string, FactRecord[]>();
+  for (const f of sorted) byKind.set(f.kind, [...(byKind.get(f.kind) ?? []), f]);
+  const groups = [...byKind.keys()].sort((a, b) => {
+    const ia = KIND_ORDER.indexOf(a);
+    const ib = KIND_ORDER.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
 
   const submit = (textEl: HTMLInputElement, topicEl: HTMLInputElement | null) => {
     const text = textEl.value.trim();
@@ -67,25 +84,32 @@ export function MemoryRoom({ open, onClose, onToast }: MemoryRoomProps) {
           <div className="rev st-meta">记忆还空 —— 录入一条事实,或跑几单任务让公司沉淀知识。</div>
         ) : (
           <>
-            <div className="trc-count">{sorted.length} 条当前事实</div>
-            {sorted.map((f: FactRecord) => (
-              <div className="rev mem-fact" key={f.id}>
-                <span className={`mem-trust ${trustClass(f.trust)}`}>{f.trust}</span>
-                <span className="grow">{f.text}</span>
-                {f.entity && <span className="mem-topic">{f.entity}</span>}
-                <span className="st-meta">重{f.importance}</span>
-                <button
-                  className="pbtn mem-retire"
-                  type="button"
-                  title="作废这条(记错了/过时了)"
-                  onClick={() =>
-                    void retire(f.id)
-                      .then(() => onToast(`已作废:「${f.text}」`))
-                      .catch(e => onToast(`作废失败:${e instanceof Error ? e.message : String(e)}`))
-                  }
-                >
-                  作废
-                </button>
+            <div className="trc-count">{sorted.length} 条当前事实 · 按种类分组</div>
+            {groups.map(kind => (
+              <div key={kind}>
+                <div className="set-sec">
+                  {KIND_CN[kind] ?? kind} · {byKind.get(kind)!.length} 条
+                </div>
+                {byKind.get(kind)!.map((f: FactRecord) => (
+                  <div className="rev mem-fact" key={f.id}>
+                    <span className={`mem-trust ${trustClass(f.trust)}`}>{f.trust}</span>
+                    <span className="grow">{f.text}</span>
+                    {f.entity && <span className="mem-topic">{f.entity}</span>}
+                    <span className="st-meta">重{f.importance}</span>
+                    <button
+                      className="pbtn mem-retire"
+                      type="button"
+                      title="作废这条(记错了/过时了)"
+                      onClick={() =>
+                        void retire(f.id)
+                          .then(() => onToast(`已作废:「${f.text}」`))
+                          .catch(e => onToast(`作废失败:${e instanceof Error ? e.message : String(e)}`))
+                      }
+                    >
+                      作废
+                    </button>
+                  </div>
+                ))}
               </div>
             ))}
           </>
