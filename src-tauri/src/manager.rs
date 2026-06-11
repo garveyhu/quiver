@@ -442,26 +442,35 @@ async fn execute_effect(
             // §5 双向协作:经理评审完上一轮产出、给了具体指导 → 让**同一任务**的 worker `--resume`
             // 带着指导再跑一轮(迭代改进),而不是闷头一锤子买卖。ref_node 是上一轮完工的节点 →
             // 从待复核队找回它是哪个 task,resume 它的 session_id(worker 记得自己上一轮干了啥)。
-            let found = {
+            // C1 §9 烧钱硬闸:Continue 也派 real worker(--resume),预算耗尽必须挡 —— 否则续跑烧过上限
+            // (此前只 gate Spawn,Continue 是漏的)。
+            let broke = budget_remaining(store, store.get_settings().ok().as_ref()) <= 0.0;
+            let found = if broke {
+                None
+            } else {
                 let reviews = pm.reviews.lock().await;
                 reviews
                     .iter()
                     .find(|r| &r.node_id == ref_node)
                     .map(|r| (r.task_id.clone(), r.round))
             };
-            if let Some((tid, prev_round)) = found {
+            // H1:读不到 task.mode 就**不续跑**(绝不把 real 任务降级 simulate 假干一轮) —— 预算/ref/
+            // mode 任何一关过不了,都走下面 else 回滚名额、这拍不推进,而非猜一个 mode 硬上。
+            let resume = match &found {
+                Some((tid, prev_round)) => store
+                    .get_task(tid)
+                    .ok()
+                    .flatten()
+                    .map(|t| (tid.clone(), *prev_round, t.mode)),
+                None => None,
+            };
+            if let Some((tid, prev_round, mode)) = resume {
                 // 从待复核队摘掉(正在续跑,不再等裁);建新 node→task 映射;标 running。
                 pm.reviews.lock().await.retain(|r| r.task_id != tid);
                 pm.node_tasks
                     .lock()
                     .await
                     .insert(node_id.clone(), tid.clone());
-                let mode = store
-                    .get_task(&tid)
-                    .ok()
-                    .flatten()
-                    .map(|t| t.mode)
-                    .unwrap_or_else(|| "simulate".to_string());
                 let _ = store.update_task_status(&tid, "running", crate::now_ms());
                 node_id_out = Some(node_id.clone());
                 task_id_out = Some(tid.clone());
